@@ -41,7 +41,7 @@ verified by driving the real app (see "GUI testing").
 - `src/devserver/DevServer` runs `tools/devserver/devserver.mjs`; `tools/package.json` pins
   typescript 5.9.3 + typescript-language-server 5.3.0 (installed by `npm ci` during the build).
 - `data/` icons (GResource-embedded), `packages.json` catalog, `.desktop` template. `data/art/` holds the
-  icon sprite sheet and `make_icons.py`, which generates `data/icons/hicolor/*/actions/kevc-*.png` and
+  icon sprite sheet, the C++/C/TypeScript logos (`logos/`, New Project dialog) and `make_icons.py`, which generates `data/icons/hicolor/*/actions/kevc-*.png` and
   `data/kevcpp-ui-icons.gresource.xml` (committed; see docs/ICONS.md). Only the app icon is installed
   into the system icon theme. `data/kevc-theme.css` + `data/styles/kevc-slate.xml` are the Slate colours.
 

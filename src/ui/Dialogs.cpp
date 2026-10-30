@@ -8,16 +8,19 @@ namespace {
 
 struct TemplateInfo {
     ProjectTemplate tmpl;
+    const char* icon;
     const char* title;
     const char* subtitle;
 };
 
 constexpr std::array kTemplates{
-    TemplateInfo{ProjectTemplate::CppConsole, "C++ Console Application", "CMake + g++"},
-    TemplateInfo{ProjectTemplate::CppStatic, "C++ Static Library", "CMake + g++, builds lib<name>.a"},
-    TemplateInfo{ProjectTemplate::CppShared, "C++ Shared Library", "CMake + g++, builds lib<name>.so"},
-    TemplateInfo{ProjectTemplate::CConsole, "C Console Application", "Makefile + gcc"},
-    TemplateInfo{ProjectTemplate::WebTs, "TypeScript Web App", "Served on http://localhost:5465"},
+    TemplateInfo{ProjectTemplate::CppConsole, "kevc-cpp-logo", "C++ Console Application", "CMake + g++"},
+    TemplateInfo{ProjectTemplate::CppStatic, "kevc-static-library", "C++ Static Library",
+                 "CMake + g++, builds lib<name>.a"},
+    TemplateInfo{ProjectTemplate::CppShared, "kevc-shared-library", "C++ Shared Library",
+                 "CMake + g++, builds lib<name>.so"},
+    TemplateInfo{ProjectTemplate::CConsole, "kevc-c-logo", "C Console Application", "Makefile + gcc"},
+    TemplateInfo{ProjectTemplate::WebTs, "kevc-ts-logo", "TypeScript Web App", "Served on http://localhost:5465"},
 };
 
 // Destroys a transient window once GTK is done with it.
@@ -132,15 +135,22 @@ NewProjectDialog::NewProjectDialog(Gtk::Window& parent, const std::filesystem::p
     templates_.set_selection_mode(Gtk::SelectionMode::BROWSE);
     templates_.add_css_class("boxed-list");
     for (const auto& t : kTemplates) {
-        auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+        auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 10);
         row->set_margin(8);
+        auto* icon = Gtk::make_managed<Gtk::Image>();
+        icon->set_from_icon_name(t.icon);
+        icon->set_pixel_size(32);
+        auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+        text->set_valign(Gtk::Align::CENTER);
         auto* title = Gtk::make_managed<Gtk::Label>(t.title);
         title->set_xalign(0.0f);
         auto* subtitle = Gtk::make_managed<Gtk::Label>(t.subtitle);
         subtitle->set_xalign(0.0f);
         subtitle->add_css_class("dim-label");
-        row->append(*title);
-        row->append(*subtitle);
+        text->append(*title);
+        text->append(*subtitle);
+        row->append(*icon);
+        row->append(*text);
         templates_.append(*row);
     }
     templates_.select_row(*templates_.get_row_at_index(0));

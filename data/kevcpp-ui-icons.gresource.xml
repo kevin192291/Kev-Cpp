@@ -9,6 +9,7 @@
     <file>icons/hicolor/16x16/actions/kevc-breakpoint-dot.png</file>
     <file>icons/hicolor/16x16/actions/kevc-build-project.png</file>
     <file>icons/hicolor/16x16/actions/kevc-c-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-c-logo.png</file>
     <file>icons/hicolor/16x16/actions/kevc-call-stack.png</file>
     <file>icons/hicolor/16x16/actions/kevc-char-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-class.png</file>
@@ -20,6 +21,7 @@
     <file>icons/hicolor/16x16/actions/kevc-continue.png</file>
     <file>icons/hicolor/16x16/actions/kevc-copy.png</file>
     <file>icons/hicolor/16x16/actions/kevc-cpp-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-cpp-logo.png</file>
     <file>icons/hicolor/16x16/actions/kevc-cut.png</file>
     <file>icons/hicolor/16x16/actions/kevc-debug.png</file>
     <file>icons/hicolor/16x16/actions/kevc-document.png</file>
@@ -64,6 +66,8 @@
     <file>icons/hicolor/16x16/actions/kevc-save.png</file>
     <file>icons/hicolor/16x16/actions/kevc-save-all.png</file>
     <file>icons/hicolor/16x16/actions/kevc-settings.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-shared-library.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-static-library.png</file>
     <file>icons/hicolor/16x16/actions/kevc-static-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-step-into.png</file>
     <file>icons/hicolor/16x16/actions/kevc-step-out.png</file>
@@ -73,6 +77,7 @@
     <file>icons/hicolor/16x16/actions/kevc-struct.png</file>
     <file>icons/hicolor/16x16/actions/kevc-terminal.png</file>
     <file>icons/hicolor/16x16/actions/kevc-ts-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-ts-logo.png</file>
     <file>icons/hicolor/16x16/actions/kevc-undo.png</file>
     <file>icons/hicolor/16x16/actions/kevc-warning.png</file>
     <file>icons/hicolor/16x16/actions/kevc-watch.png</file>
@@ -84,6 +89,7 @@
     <file>icons/hicolor/24x24/actions/kevc-breakpoint-dot.png</file>
     <file>icons/hicolor/24x24/actions/kevc-build-project.png</file>
     <file>icons/hicolor/24x24/actions/kevc-c-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-c-logo.png</file>
     <file>icons/hicolor/24x24/actions/kevc-call-stack.png</file>
     <file>icons/hicolor/24x24/actions/kevc-char-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-class.png</file>
@@ -95,6 +101,7 @@
     <file>icons/hicolor/24x24/actions/kevc-continue.png</file>
     <file>icons/hicolor/24x24/actions/kevc-copy.png</file>
     <file>icons/hicolor/24x24/actions/kevc-cpp-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-cpp-logo.png</file>
     <file>icons/hicolor/24x24/actions/kevc-cut.png</file>
     <file>icons/hicolor/24x24/actions/kevc-debug.png</file>
     <file>icons/hicolor/24x24/actions/kevc-document.png</file>
@@ -139,6 +146,8 @@
     <file>icons/hicolor/24x24/actions/kevc-save.png</file>
     <file>icons/hicolor/24x24/actions/kevc-save-all.png</file>
     <file>icons/hicolor/24x24/actions/kevc-settings.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-shared-library.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-static-library.png</file>
     <file>icons/hicolor/24x24/actions/kevc-static-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-step-into.png</file>
     <file>icons/hicolor/24x24/actions/kevc-step-out.png</file>
@@ -148,6 +157,7 @@
     <file>icons/hicolor/24x24/actions/kevc-struct.png</file>
     <file>icons/hicolor/24x24/actions/kevc-terminal.png</file>
     <file>icons/hicolor/24x24/actions/kevc-ts-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-ts-logo.png</file>
     <file>icons/hicolor/24x24/actions/kevc-undo.png</file>
     <file>icons/hicolor/24x24/actions/kevc-warning.png</file>
     <file>icons/hicolor/24x24/actions/kevc-watch.png</file>
@@ -159,6 +169,7 @@
     <file>icons/hicolor/32x32/actions/kevc-breakpoint-dot.png</file>
     <file>icons/hicolor/32x32/actions/kevc-build-project.png</file>
     <file>icons/hicolor/32x32/actions/kevc-c-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-c-logo.png</file>
     <file>icons/hicolor/32x32/actions/kevc-call-stack.png</file>
     <file>icons/hicolor/32x32/actions/kevc-char-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-class.png</file>
@@ -170,6 +181,7 @@
     <file>icons/hicolor/32x32/actions/kevc-continue.png</file>
     <file>icons/hicolor/32x32/actions/kevc-copy.png</file>
     <file>icons/hicolor/32x32/actions/kevc-cpp-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-cpp-logo.png</file>
     <file>icons/hicolor/32x32/actions/kevc-cut.png</file>
     <file>icons/hicolor/32x32/actions/kevc-debug.png</file>
     <file>icons/hicolor/32x32/actions/kevc-document.png</file>
@@ -214,6 +226,8 @@
     <file>icons/hicolor/32x32/actions/kevc-save.png</file>
     <file>icons/hicolor/32x32/actions/kevc-save-all.png</file>
     <file>icons/hicolor/32x32/actions/kevc-settings.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-shared-library.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-static-library.png</file>
     <file>icons/hicolor/32x32/actions/kevc-static-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-step-into.png</file>
     <file>icons/hicolor/32x32/actions/kevc-step-out.png</file>
@@ -223,6 +237,7 @@
     <file>icons/hicolor/32x32/actions/kevc-struct.png</file>
     <file>icons/hicolor/32x32/actions/kevc-terminal.png</file>
     <file>icons/hicolor/32x32/actions/kevc-ts-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-ts-logo.png</file>
     <file>icons/hicolor/32x32/actions/kevc-undo.png</file>
     <file>icons/hicolor/32x32/actions/kevc-warning.png</file>
     <file>icons/hicolor/32x32/actions/kevc-watch.png</file>
@@ -234,6 +249,7 @@
     <file>icons/hicolor/48x48/actions/kevc-breakpoint-dot.png</file>
     <file>icons/hicolor/48x48/actions/kevc-build-project.png</file>
     <file>icons/hicolor/48x48/actions/kevc-c-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-c-logo.png</file>
     <file>icons/hicolor/48x48/actions/kevc-call-stack.png</file>
     <file>icons/hicolor/48x48/actions/kevc-char-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-class.png</file>
@@ -245,6 +261,7 @@
     <file>icons/hicolor/48x48/actions/kevc-continue.png</file>
     <file>icons/hicolor/48x48/actions/kevc-copy.png</file>
     <file>icons/hicolor/48x48/actions/kevc-cpp-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-cpp-logo.png</file>
     <file>icons/hicolor/48x48/actions/kevc-cut.png</file>
     <file>icons/hicolor/48x48/actions/kevc-debug.png</file>
     <file>icons/hicolor/48x48/actions/kevc-document.png</file>
@@ -289,6 +306,8 @@
     <file>icons/hicolor/48x48/actions/kevc-save.png</file>
     <file>icons/hicolor/48x48/actions/kevc-save-all.png</file>
     <file>icons/hicolor/48x48/actions/kevc-settings.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-shared-library.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-static-library.png</file>
     <file>icons/hicolor/48x48/actions/kevc-static-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-step-into.png</file>
     <file>icons/hicolor/48x48/actions/kevc-step-out.png</file>
@@ -298,6 +317,7 @@
     <file>icons/hicolor/48x48/actions/kevc-struct.png</file>
     <file>icons/hicolor/48x48/actions/kevc-terminal.png</file>
     <file>icons/hicolor/48x48/actions/kevc-ts-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-ts-logo.png</file>
     <file>icons/hicolor/48x48/actions/kevc-undo.png</file>
     <file>icons/hicolor/48x48/actions/kevc-warning.png</file>
     <file>icons/hicolor/48x48/actions/kevc-watch.png</file>

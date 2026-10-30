@@ -16,6 +16,8 @@ from PIL import Image, ImageDraw, ImageFont
 HERE = Path(__file__).resolve().parent
 DATA = HERE.parent
 SHEET = HERE / "icon-sprite-sheet.png"
+# Language logos for the New Project dialog, from Wikimedia Commons (see docs/ICONS.md).
+LOGOS = {"cpp-logo": "cpp.png", "c-logo": "c.png", "ts-logo": "typescript.png"}
 SIZES = (16, 24, 32, 48)
 GRID = 8
 # Icons are cut from squares at least this big (sheet pixels), so small ones such as Stop keep
@@ -177,6 +179,22 @@ def relabel(page, text, fill, stroke):
     return page
 
 
+def library(pages, gear, gears):
+    """`pages` with gears on it, like the Windows DLL icon: `gears` is a list of
+    (fraction of the side, centre x, centre y), the centre as a fraction of the side too."""
+    out = square(pages)
+    for fraction, cx, cy in gears:
+        g = fit(gear, round(out.width * fraction))
+        out.alpha_composite(g, (round(out.width * cx - g.width / 2), round(out.height * cy - g.height / 2)))
+    return out
+
+
+def logo(path):
+    """A logo with the same margin as the sheet's icons, which keep a few pixels clear of the edge."""
+    img = Image.open(path).convert("RGBA")
+    return square(img, min_side=0, pad=round(max(img.size) * 0.03))
+
+
 def build(sheet):
     icons = {name: square(sheet_icon(sheet, name)) for name in SHEET_NAMES}
     get = lambda name: sheet_icon(sheet, name)
@@ -214,6 +232,12 @@ def build(sheet):
     cpp = get("cpp-file")
     icons["ts-file"] = square(relabel(cpp, "TS", (32, 80, 210, 255), (16, 32, 96, 255)))
     icons["js-file"] = square(relabel(cpp, "JS", (236, 196, 20, 255), OUTLINE))
+
+    gear = get("settings")
+    icons["shared-library"] = library(get("document"), gear, [(0.42, 0.40, 0.40), (0.56, 0.62, 0.68)])
+    icons["static-library"] = library(get("copy"), gear, [(0.56, 0.68, 0.70)])
+    for name, file in LOGOS.items():
+        icons[name] = logo(HERE / "logos" / file)
     return icons
 
 
