@@ -1,5 +1,6 @@
 #include "lsp/LspBridges.h"
 
+#include "core/Icons.h"
 #include "core/Lsp.h"
 #include "lsp/LspManager.h"
 
@@ -13,10 +14,6 @@ namespace {
 
 using json = lsp::json;
 
-std::string badge(const char* letter, const char* colour) {
-    return std::string("<span foreground=\"") + colour + "\" weight=\"bold\">" + letter + "</span>";
-}
-
 std::string markdownOf(const json& documentation) {
     if (documentation.is_string()) return documentation.get<std::string>();
     if (documentation.is_object()) return documentation.value("value", "");
@@ -29,34 +26,6 @@ void setMarkupOrText(GtkLabel* label, const std::string& markup) {
 }
 
 } // namespace
-
-std::string completionKindBadge(int kind) {
-    switch (kind) {
-    case 2: case 3: case 4: return badge("f", "#a347ba");          // method, function, constructor
-    case 5: case 6: case 10: return badge("v", "#3584e4");         // field, variable, property
-    case 7: case 8: case 22: return badge("C", "#e66100");         // class, interface, struct
-    case 9: return badge("N", "#9a9996");                          // module / namespace
-    case 13: case 20: return badge("E", "#2ec27e");                // enum, enum member
-    case 14: return badge("k", "#c01c28");                         // keyword
-    case 21: return badge("c", "#1c71d8");                         // constant
-    case 25: return badge("T", "#e66100");                         // type parameter
-    case 17: case 19: return badge("#", "#9a9996");                // file / folder (includes)
-    default: return badge("·", "#9a9996");
-    }
-}
-
-std::string symbolKindBadge(int kind) {
-    switch (kind) {
-    case 6: case 9: case 12: return badge("f", "#a347ba");
-    case 7: case 8: case 13: return badge("v", "#3584e4");
-    case 5: case 11: case 23: return badge("C", "#e66100");
-    case 2: case 3: case 4: return badge("N", "#9a9996");
-    case 10: case 22: return badge("E", "#2ec27e");
-    case 14: return badge("c", "#1c71d8");
-    case 26: return badge("T", "#e66100");
-    default: return badge("·", "#9a9996");
-    }
-}
 
 } // namespace kevc
 
@@ -315,8 +284,8 @@ static void provider_display(GtkSourceCompletionProvider*, GtkSourceCompletionCo
     const json& raw = *item->item;
     const json details = raw.value("labelDetails", json::object());
     switch (gtk_source_completion_cell_get_column(cell)) {
-    case GTK_SOURCE_COMPLETION_COLUMN_BEFORE:
-        gtk_source_completion_cell_set_markup(cell, kevc::completionKindBadge(raw.value("kind", 1)).c_str());
+    case GTK_SOURCE_COMPLETION_COLUMN_ICON:
+        gtk_source_completion_cell_set_icon_name(cell, kevc::icons::forCompletionKind(raw.value("kind", 1)).c_str());
         break;
     case GTK_SOURCE_COMPLETION_COLUMN_TYPED_TEXT: {
         char* word = gtk_source_completion_context_get_word(context);

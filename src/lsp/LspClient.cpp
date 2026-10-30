@@ -39,8 +39,15 @@ LspClient::~LspClient() {
     self_.reset();
     if (cancellable_) cancellable_->cancel();
     if (process_) {
-        // Servers exit on EOF of stdin, but don't rely on it.
-        if (input_) input_->close();
+        // Servers exit on EOF of stdin, but don't rely on it. close() refuses while a write is
+        // pending (cancelled above, but its callback hasn't run yet); the pipe then closes when
+        // that write releases the stream.
+        if (input_) {
+            try {
+                input_->close();
+            } catch (const Glib::Error&) {
+            }
+        }
         process_->send_signal(SIGTERM);
     }
 }

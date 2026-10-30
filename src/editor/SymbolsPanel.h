@@ -21,7 +21,8 @@ public:
     sigc::signal<void(int line, int utf16)>& signalActivated() { return activated_; }
 
 private:
-    void addSymbol(const lsp::json& symbol, int depth);
+    // `parentKind`: the enclosing symbol's kind (0 at the top), which tells locals from globals.
+    void addSymbol(const lsp::json& symbol, int depth, int parentKind);
 
     Gtk::Box box_{Gtk::Orientation::VERTICAL};
     Gtk::Label message_;

@@ -1,6 +1,6 @@
 #include "editor/SymbolsPanel.h"
 
-#include "lsp/LspBridges.h"
+#include "core/Icons.h"
 
 namespace kevc {
 
@@ -31,14 +31,14 @@ void SymbolsPanel::showMessage(const Glib::ustring& text) {
 void SymbolsPanel::setSymbols(const lsp::json& symbols) {
     while (auto* row = list_.get_row_at_index(0)) list_.remove(*row);
     positions_.clear();
-    for (const auto& s : symbols) addSymbol(s, 0);
+    for (const auto& s : symbols) addSymbol(s, 0, 0);
     const bool empty = positions_.empty();
     if (empty) message_.set_text("No symbols in this file.");
     message_.set_visible(empty);
     list_.set_visible(!empty);
 }
 
-void SymbolsPanel::addSymbol(const lsp::json& symbol, int depth) {
+void SymbolsPanel::addSymbol(const lsp::json& symbol, int depth, int parentKind) {
     // DocumentSymbol has selectionRange/children; SymbolInformation has location.range.
     const lsp::json& range = symbol.contains("selectionRange") ? symbol["selectionRange"]
                            : symbol.contains("location")       ? symbol["location"]["range"]
@@ -49,9 +49,10 @@ void SymbolsPanel::addSymbol(const lsp::json& symbol, int depth) {
     row->set_margin_start(6 + depth * 14);
     row->set_margin_top(1);
     row->set_margin_bottom(1);
-    auto* kind = Gtk::make_managed<Gtk::Label>();
-    kind->set_markup(symbolKindBadge(symbol.value("kind", 0)));
-    kind->set_width_chars(1);
+    const int kindValue = symbol.value("kind", 0);
+    auto* kind = Gtk::make_managed<Gtk::Image>();
+    const lsp::json detail = symbol.value("detail", lsp::json());
+    kind->set_from_icon_name(icons::forSymbolKind(kindValue, parentKind, detail.is_string() ? detail.get<std::string>() : ""));
     auto* name = Gtk::make_managed<Gtk::Label>(symbol.value("name", ""));
     name->set_xalign(0.0f);
     name->set_ellipsize(Pango::EllipsizeMode::END);
@@ -67,7 +68,7 @@ void SymbolsPanel::addSymbol(const lsp::json& symbol, int depth) {
     list_.append(*row);
     positions_.emplace_back(start.value("line", 0), start.value("character", 0));
 
-    for (const auto& child : symbol.value("children", lsp::json::array())) addSymbol(child, depth + 1);
+    for (const auto& child : symbol.value("children", lsp::json::array())) addSymbol(child, depth + 1, kindValue);
 }
 
 } // namespace kevc

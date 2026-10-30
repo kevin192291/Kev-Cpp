@@ -19,14 +19,28 @@ void Application::on_startup() {
     Gtk::Application::on_startup();
     gtk_source_init();
 
+    // The Slate palette (data/kevc-theme.css) is written against GTK's own dark theme, so use that
+    // whatever theme the desktop has; the editor gets the matching styles/kevc-slate.xml.
+    if (auto settings = Gtk::Settings::get_default()) {
+        settings->property_gtk_theme_name() = "Default";
+        settings->property_gtk_application_prefer_dark_theme() = true;
+    }
+    auto palette = Gtk::CssProvider::create();
+    palette->load_from_resource("/org/kevcpp/KevCpp/kevc-theme.css");
+    Gtk::StyleContext::add_provider_for_display(Gdk::Display::get_default(), palette,
+                                                GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    installStyleScheme();
+
     // Some desktop themes don't style GTK4's .monospace class, so set the editor font ourselves.
     auto css = Gtk::CssProvider::create();
     css->load_from_data(".kevc-editor { font-family: \"DejaVu Sans Mono\", \"Liberation Mono\", monospace; "
                         "font-size: 11pt; }\n"
                         ".kevc-log { font-family: \"DejaVu Sans Mono\", monospace; font-size: 10pt; }\n"
-                        ".kevc-error { color: #e01b24; }\n"
-                        ".kevc-warning { color: #e5a50a; }\n"
-                        ".kevc-tab-menu { min-height: 0; min-width: 0; padding: 0 2px; }\n");
+                        ".kevc-error { color: #ff6b6b; }\n"
+                        ".kevc-warning { color: #f0c050; }\n"
+                        ".kevc-tab-menu { min-height: 0; min-width: 0; padding: 0 2px; }\n"
+                        // The left panel's tabs (with icons) fit its width without scrolling.
+                        ".kevc-compact-tabs > header > tabs > tab { padding: 4px 7px; min-width: 0; }\n");
     Gtk::StyleContext::add_provider_for_display(Gdk::Display::get_default(), css,
                                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
@@ -38,6 +52,22 @@ void Application::on_startup() {
     add_action("quit", [this] { quit(); });
 }
 
+void Application::installStyleScheme() {
+    // GtkSourceView 5.12 can list a style scheme in a GResource but not read it, so copy ours to
+    // the cache directory (every start, so it follows upgrades) and look for schemes there.
+    const std::string dir = Glib::build_filename(Glib::get_user_cache_dir(), "kev-cpp", "styles");
+    try {
+        auto bytes = Gio::Resource::lookup_data_global("/org/kevcpp/KevCpp/styles/kevc-slate.xml");
+        gsize size = 0;
+        const auto* data = static_cast<const char*>(bytes->get_data(size));
+        g_mkdir_with_parents(dir.c_str(), 0700);
+        Glib::file_set_contents(Glib::build_filename(dir, "kevc-slate.xml"), data, static_cast<gssize>(size));
+        gtk_source_style_scheme_manager_append_search_path(gtk_source_style_scheme_manager_get_default(), dir.c_str());
+    } catch (const Glib::Error&) {
+        // The editor falls back to Adwaita-dark (see EditorTab).
+    }
+}
+
 void Application::on_activate() {
     if (!toolchain_.missingRequired().empty()) {
         showMissingToolsAndQuit();
@@ -46,12 +76,24 @@ void Application::on_activate() {
     if (!window_) {
         window_ = new MainWindow(*this);
         add_window(*window_);
-        window_->signal_hide().connect([this] {
-            delete window_;
-            window_ = nullptr;
-        });
     }
     window_->present();
+}
+
+void Application::on_window_removed(Gtk::Window* window) {
+    // Closing the main window destroys it without emitting "hide"; GTK just drops it from the
+    // application. Delete it now so ~MainWindow runs: it closes the floating panel windows, which
+    // would otherwise keep the app running, and stops gdb, the language servers and the dev server.
+    if (window && window == window_) {
+        MainWindow* main = window_;
+        window_ = nullptr;
+        hold(); // GTK is still tearing the window down: delete it once that's over, before exiting
+        Glib::signal_idle().connect_once([this, main] {
+            delete main;
+            release();
+        });
+    }
+    Gtk::Application::on_window_removed(window);
 }
 
 void Application::on_open(const type_vec_files& files, const Glib::ustring&) {

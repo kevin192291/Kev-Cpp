@@ -12,6 +12,7 @@
 #include "editor/SymbolsPanel.h"
 #include "lsp/LspManager.h"
 #include "ui/DockManager.h"
+#include "ui/IconWidgets.h"
 #include "terminal/TerminalPane.h"
 
 #include <gtkmm.h>
@@ -78,18 +79,24 @@ private:
     void findNext(bool forward, bool incremental = false);
     void gotoLine();
 
-    // Build & run
+    // Build & run. A Task is the toolbar button that started a build or program: that button shows
+    // Stop until it's over.
+    enum class Task { None, Compile, Rebuild, Clean, CompileRun, Run, Debug };
     BuildConfig currentConfig() const;
     BuildTools buildTools() const;
     // Builds the open project; `then` runs with the result unless the build could not start.
     // `config` overrides the toolbar's Debug/Release choice (debugging always builds Debug).
-    void startBuild(BuildAction action, std::function<void(bool)> then = {},
+    void startBuild(BuildAction action, Task task, std::function<void(bool)> then = {},
                     std::optional<BuildConfig> config = std::nullopt);
     void onBuildLine(const std::string& line, bool isCommand);
     void onBuildFinished(bool success);
-    void runProgram();
-    void compileAndRun();
+    void runProgram(Task task = Task::Run);
+    void compileAndRun(Task task = Task::CompileRun);
     void stopExecution();
+    void stopTask(Task task);
+    bool programRunning() const;
+    // Start/Stop and enabled states of the toolbar buttons, from what is running now.
+    void updateToolbar();
     void appendLog(const std::string& text, const Glib::ustring& tag = {});
     void showBottomPage(Gtk::Widget& page);
 
@@ -159,8 +166,14 @@ private:
     TerminalPane runConsole_;
     TerminalPane shell_;
     Gtk::DropDown* configDrop_ = nullptr;
+    std::map<Task, TaskButton*> taskButtons_;
+    TaskButton* continueButton_ = nullptr; // Continue while paused, Pause while the program runs
+    TaskButton* devServerButton_ = nullptr;
+    std::vector<Gtk::Button*> stepButtons_; // only while paused in the debugger
 
     BuildRunner build_;
+    Task buildTask_ = Task::None;   // which button started the running build
+    Task programTask_ = Task::None; // which button started the running program
     std::unique_ptr<DiagnosticParser> parser_;
     std::function<void(bool)> afterBuild_;
     BuildAction buildAction_ = BuildAction::Build;
@@ -172,7 +185,7 @@ private:
     Gtk::Box serverPage_{Gtk::Orientation::VERTICAL};
     Gtk::Label serverStatus_;
     Gtk::Button serverOpen_{"Open in Browser"};
-    Gtk::Button serverToggle_{"Start"};
+    TaskButton serverToggle_{"kevc-globe", "Start the dev server", "kevc-stop", "Stop the dev server", 16};
     Gtk::TextView serverLog_;
 
     std::shared_ptr<DebugController> debugger_;

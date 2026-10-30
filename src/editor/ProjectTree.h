@@ -3,6 +3,7 @@
 #include <gtkmm.h>
 
 #include <filesystem>
+#include <map>
 
 namespace kevc {
 
@@ -20,6 +21,7 @@ private:
     Glib::RefPtr<Gio::ListModel> directoryModel(const Glib::RefPtr<Gio::File>& dir);
     void onSetupItem(const Glib::RefPtr<Gtk::ListItem>& item);
     void onBindItem(const Glib::RefPtr<Gtk::ListItem>& item);
+    void onUnbindItem(const Glib::RefPtr<Gtk::ListItem>& item);
     void onActivate(guint position);
 
     Gtk::Label placeholder_;
@@ -30,6 +32,8 @@ private:
     Glib::RefPtr<Gtk::Filter> filter_;
     Glib::RefPtr<Gtk::Sorter> sorter_;
     sigc::signal<void(const std::filesystem::path&)> fileActivated_;
+    // Swaps a folder row's icon between open and closed; one per bound row, since GTK reuses rows.
+    std::map<Gtk::ListItem*, sigc::connection> expandWatch_;
 };
 
 } // namespace kevc

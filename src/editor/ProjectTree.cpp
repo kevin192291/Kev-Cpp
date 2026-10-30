@@ -1,5 +1,6 @@
 #include "editor/ProjectTree.h"
 
+#include "core/Icons.h"
 #include "core/ProjectSession.h"
 
 #include <cstring>
@@ -45,6 +46,7 @@ ProjectTree::ProjectTree() {
     auto factory = Gtk::SignalListItemFactory::create();
     factory->signal_setup().connect(sigc::mem_fun(*this, &ProjectTree::onSetupItem));
     factory->signal_bind().connect(sigc::mem_fun(*this, &ProjectTree::onBindItem));
+    factory->signal_unbind().connect(sigc::mem_fun(*this, &ProjectTree::onUnbindItem));
     list_.set_factory(factory);
     list_.signal_activate().connect(sigc::mem_fun(*this, &ProjectTree::onActivate));
     scroller_.set_child(list_);
@@ -103,9 +105,25 @@ void ProjectTree::onBindItem(const Glib::RefPtr<Gtk::ListItem>& item) {
     if (!info || !box) return;
     auto* image = dynamic_cast<Gtk::Image*>(box->get_first_child());
     auto* label = dynamic_cast<Gtk::Label*>(image->get_next_sibling());
-    const bool isDir = info->get_file_type() == Gio::FileType::DIRECTORY;
-    image->set_from_icon_name(isDir ? "folder-symbolic" : "text-x-generic-symbolic");
     label->set_text(info->get_display_name());
+    if (info->get_file_type() != Gio::FileType::DIRECTORY) {
+        image->set_from_icon_name(icons::forFile(info->get_name()));
+        return;
+    }
+    image->set_from_icon_name(icons::forFolder(row->get_expanded()));
+    // Raw pointers: the row owns this connection, and unbinding disconnects it before the image
+    // can go away or be reused for another row.
+    Gtk::TreeListRow* r = row.get();
+    onUnbindItem(item);
+    expandWatch_[item.get()] = row->property_expanded().signal_changed().connect(
+        [r, image] { image->set_from_icon_name(icons::forFolder(r->get_expanded())); });
+}
+
+void ProjectTree::onUnbindItem(const Glib::RefPtr<Gtk::ListItem>& item) {
+    if (auto it = expandWatch_.find(item.get()); it != expandWatch_.end()) {
+        it->second.disconnect();
+        expandWatch_.erase(it);
+    }
 }
 
 void ProjectTree::onActivate(guint position) {

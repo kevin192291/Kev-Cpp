@@ -31,6 +31,18 @@ TerminalPane::TerminalPane() : self_(std::make_shared<TerminalPane*>(this)) {
     PangoFontDescription* font = pango_font_description_from_string("DejaVu Sans Mono 10");
     vte_terminal_set_font(terminal_, font);
     pango_font_description_free(font);
+    // The console colours of the Slate palette: white on PowerShell navy. The 16 colours are
+    // PowerShell's, with blue and magenta lightened: the shell prompt's blue path is unreadable on
+    // navy otherwise.
+    static const char* const kPalette[16] = {"#0c0c0c", "#e74856", "#16c60c", "#e5c100", "#5b9bff", "#c867e0",
+                                             "#3a96dd", "#cccccc", "#767676", "#ff6b78", "#3ee03a", "#f9f1a5",
+                                             "#8ab8ff", "#e08cf0", "#61d6d6", "#f2f2f2"};
+    GdkRGBA palette[16];
+    for (int i = 0; i < 16; ++i) gdk_rgba_parse(&palette[i], kPalette[i]);
+    GdkRGBA fg, bg;
+    gdk_rgba_parse(&fg, "#eeedf0");
+    gdk_rgba_parse(&bg, "#012456");
+    vte_terminal_set_colors(terminal_, &fg, &bg, palette, 16);
     vte_terminal_set_scrollback_lines(terminal_, 10000);
     vte_terminal_set_scroll_on_output(terminal_, TRUE);
     g_signal_connect(terminal_, "child-exited", G_CALLBACK(&TerminalPane::onChildExited), this);

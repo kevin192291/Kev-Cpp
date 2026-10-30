@@ -107,7 +107,7 @@ MainWindow::MainWindow(Application& app)
     hpaned_.set_start_child(buildLeftDock());
     hpaned_.set_end_child(rightPaned_);
     hpaned_.set_resize_start_child(false);
-    hpaned_.set_position(240);
+    hpaned_.set_position(290); // room for the three tabs with their icons
     hpaned_.set_vexpand(true);
 
     root_.append(hpaned_);
@@ -259,11 +259,11 @@ void MainWindow::buildActions() {
     add_action("project-options", [this] { showProjectOptions(false); });
     add_action("packages", [this] { showProjectOptions(true); });
     // Execute
-    add_action("compile", [this] { startBuild(BuildAction::Build); });
+    add_action("compile", [this] { startBuild(BuildAction::Build, Task::Compile); });
     add_action("run", [this] { runProgram(); });
     add_action("compile-run", [this] { compileAndRun(); });
-    add_action("rebuild", [this] { startBuild(BuildAction::Rebuild); });
-    add_action("clean", [this] { startBuild(BuildAction::Clean); });
+    add_action("rebuild", [this] { startBuild(BuildAction::Rebuild, Task::Rebuild); });
+    add_action("clean", [this] { startBuild(BuildAction::Clean, Task::Clean); });
     add_action("stop", [this] { stopExecution(); });
     // Debug
     add_action("debug", [this] { startDebugging(); });
@@ -275,7 +275,8 @@ void MainWindow::buildActions() {
         if (debugger_) debugger_->pause();
     });
     add_action("debug-stop", [this] {
-        if (debugger_) debugger_->terminate();
+        // Also during the build that comes before debugging.
+        if (debugger_ || (build_.running() && buildTask_ == Task::Debug)) stopTask(Task::Debug);
         else setStatus("Not debugging");
     });
     add_action("toggle-breakpoint", [this] { toggleBreakpointAtCursor(); });
@@ -347,55 +348,101 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
 }
 
 Gtk::Widget& MainWindow::buildToolbar() {
-    auto* bar = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
-    bar->set_margin(4);
-    auto button = [bar](const char* icon, const char* action, const char* tooltip) {
+    // Two rows, as in Dev-C++: files, editing and building on top, debugging below.
+    auto* toolbar = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+    toolbar->add_css_class("kevc-toolbar");
+    auto newRow = [toolbar] {
+        auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 1);
+        toolbar->append(*row);
+        return row;
+    };
+    Gtk::Box* bar = newRow(); // the row the helpers below add to
+    // Buttons activate the window's actions (the same as the menus and keys) rather than being
+    // bound to them, so their enabled state is ours to set in updateToolbar().
+    auto button = [this, &bar](const char* icon, const char* action, const char* tooltip) {
+        auto* image = Gtk::make_managed<Gtk::Image>();
+        image->set_from_icon_name(icon);
+        image->set_pixel_size(kToolbarIconSize);
         auto* b = Gtk::make_managed<Gtk::Button>();
-        b->set_icon_name(icon);
-        b->set_action_name(action);
+        b->set_child(*image);
         b->set_tooltip_text(tooltip);
         b->set_has_frame(false);
+        b->set_focus_on_click(false); // keep typing in the editor
+        b->signal_clicked().connect([this, action] { activate_action(action); });
+        bar->append(*b);
+        return b;
+    };
+    // Starts a task, then shows Stop until that task is over.
+    auto task = [this, &bar](Task t, const char* icon, const char* action, const char* tooltip, const char* stopTooltip) {
+        auto* b = Gtk::make_managed<TaskButton>(icon, tooltip, "kevc-stop", stopTooltip);
+        b->signalStart().connect([this, action] { activate_action(action); });
+        b->signalStop().connect([this, t] { stopTask(t); });
+        taskButtons_[t] = b;
         bar->append(*b);
     };
-    auto separator = [bar] {
+    auto separator = [&bar] {
         auto* s = Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::VERTICAL);
         s->set_margin_start(4);
         s->set_margin_end(4);
         bar->append(*s);
     };
 
-    button("folder-new-symbolic", "win.new-project", "New Project (Ctrl+Shift+N)");
-    button("document-new-symbolic", "win.new-file", "New Source File (Ctrl+N)");
-    button("document-open-symbolic", "win.open-project", "Open Project or Folder (Ctrl+O)");
-    button("document-save-symbolic", "win.save", "Save (Ctrl+S)");
+    button("kevc-new-project", "win.new-project", "New Project (Ctrl+Shift+N)");
+    button("kevc-new-file", "win.new-file", "New Source File (Ctrl+N)");
+    button("kevc-open", "win.open-project", "Open Project or Folder (Ctrl+O)");
+    button("kevc-save", "win.save", "Save (Ctrl+S)");
+    button("kevc-save-all", "win.save-all", "Save All (Ctrl+Shift+S)");
     separator();
-    button("edit-find-symbolic", "win.find", "Find (Ctrl+F)");
+    button("kevc-undo", "win.undo", "Undo (Ctrl+Z)");
+    button("kevc-redo", "win.redo", "Redo (Ctrl+Shift+Z)");
     separator();
-    button("system-run-symbolic", "win.compile", "Compile (F9)");
-    button("media-playback-start-symbolic", "win.run", "Run (F10)");
-    button("media-seek-forward-symbolic", "win.compile-run", "Compile & Run (F11)");
-    button("view-refresh-symbolic", "win.rebuild", "Rebuild All (F12)");
-    button("media-playback-stop-symbolic", "win.stop", "Stop build or running program (Ctrl+F2)");
+    button("kevc-find", "win.find", "Find (Ctrl+F)");
+    separator();
+    task(Task::Compile, "kevc-compile", "win.compile", "Compile (F9)", "Stop compiling (Ctrl+F2)");
+    task(Task::Run, "kevc-run", "win.run", "Run (F10)", "Stop the program (Ctrl+F2)");
+    task(Task::CompileRun, "kevc-compile-run", "win.compile-run", "Compile & Run (F11)", "Stop (Ctrl+F2)");
+    task(Task::Rebuild, "kevc-rebuild", "win.rebuild", "Rebuild All (F12)", "Stop rebuilding (Ctrl+F2)");
+    task(Task::Clean, "kevc-clean", "win.clean", "Clean", "Stop cleaning (Ctrl+F2)");
     configDrop_ = Gtk::make_managed<Gtk::DropDown>(std::vector<Glib::ustring>{"Debug", "Release"});
     configDrop_->set_tooltip_text("Build configuration");
+    configDrop_->set_valign(Gtk::Align::CENTER);
     configDrop_->set_margin_start(4);
     bar->append(*configDrop_);
+
+    auto* rowLine = Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL);
+    rowLine->add_css_class("kevc-toolbar-rule");
+    toolbar->append(*rowLine);
+    bar = newRow();
+    task(Task::Debug, "kevc-debug", "win.debug", "Debug (F5)", "Stop debugging (Shift+F5)");
+    continueButton_ = Gtk::make_managed<TaskButton>("kevc-continue", "Continue (F8)", "kevc-pause", "Pause");
+    continueButton_->signalStart().connect([this] { activate_action("win.debug-continue"); });
+    continueButton_->signalStop().connect([this] { activate_action("win.debug-pause"); });
+    bar->append(*continueButton_);
+    stepButtons_ = {button("kevc-step-over", "win.step-over", "Step Over (F6)"),
+                    button("kevc-step-into", "win.step-into", "Step Into (F7)"),
+                    button("kevc-step-out", "win.step-out", "Step Out (Shift+F7)")};
+    button("kevc-breakpoint", "win.toggle-breakpoint", "Toggle Breakpoint (Ctrl+F5)");
+    button("kevc-watch", "win.add-watch", "Add Watch");
     separator();
-    button("media-record-symbolic", "win.debug", "Debug (F5)");
-    button("go-next-symbolic", "win.step-over", "Step Over (F6)");
-    button("go-down-symbolic", "win.step-into", "Step Into (F7)");
-    button("go-up-symbolic", "win.step-out", "Step Out (Shift+F7)");
-    button("media-skip-forward-symbolic", "win.debug-continue", "Continue (F8)");
-    button("process-stop-symbolic", "win.debug-stop", "Stop Debugging (Shift+F5)");
-    separator();
-    button("network-server-symbolic", "win.dev-server", "TypeScript Dev Server on port 5465");
-    return *bar;
+    button("kevc-project", "win.project-options", "Project Options (Alt+P)");
+    devServerButton_ = Gtk::make_managed<TaskButton>("kevc-globe", "Start the TypeScript dev server (port 5465)",
+                                                     "kevc-stop", "Stop the dev server");
+    devServerButton_->signalStart().connect([this] { startDevServer(false); });
+    devServerButton_->signalStop().connect([this] {
+        if (devServer_) devServer_->stop();
+    });
+    bar->append(*devServerButton_);
+    updateToolbar();
+    return *toolbar;
 }
 
 Gtk::Widget& MainWindow::buildLeftDock() {
-    leftDock_.append_page(projectTree_, "Project");
-    leftDock_.append_page(symbols_, "Classes");
-    leftDock_.append_page(watches_, "Debug");
+    // Scrollable tabs, so a narrow pane scrolls them rather than clipping the whole panel.
+    leftDock_.set_scrollable(true);
+    leftDock_.add_css_class("kevc-compact-tabs");
+    leftDock_.append_page(projectTree_, *makeIconLabel("kevc-project", "Project"));
+    leftDock_.append_page(symbols_, *makeIconLabel("kevc-class", "Classes"));
+    leftDock_.append_page(watches_, *makeIconLabel("kevc-watch", "Debug"));
     leftDock_.set_size_request(180, -1);
     return leftDock_;
 }
@@ -458,21 +505,21 @@ Gtk::Widget& MainWindow::buildBottomDock() {
     auto buffer = compileLog_.get_buffer();
     buffer->create_tag("command")->property_weight() = Pango::Weight::BOLD;
     buffer->create_tag("summary")->property_weight() = Pango::Weight::BOLD;
-    buffer->create_tag("error")->property_foreground() = "#e01b24";
-    buffer->create_tag("warning")->property_foreground() = "#e5a50a";
-    buffer->create_tag("success")->property_foreground() = "#2ec27e";
+    buffer->create_tag("error")->property_foreground() = "#ff6b6b";
+    buffer->create_tag("warning")->property_foreground() = "#f0c050";
+    buffer->create_tag("success")->property_foreground() = "#7bd88f";
     logEnd_ = buffer->create_mark("end", buffer->end(), false);
 
     // Every panel can be dragged to the right dock or out into its own window, or moved from the
     // menu on its tab.
     docks_ = std::make_unique<DockManager>(*this, bottomDock_, rightDock_, rightPaned_);
-    docks_->add("compiler", "Compiler", compilerPanel_);
-    docks_->add("compile-log", "Compile Log", *logScroller);
-    docks_->add("run", "Run", runConsole_);
-    docks_->add("debug", "Debug", debugPanel_);
-    docks_->add("find", "Find Results", placeholder("Search results appear here."));
-    docks_->add("terminal", "Terminal", shell_);
-    docks_->add("dev-server", "Dev Server", buildServerPage());
+    docks_->add("compiler", "Compiler", compilerPanel_, "kevc-error-list");
+    docks_->add("compile-log", "Compile Log", *logScroller, "kevc-compile");
+    docks_->add("run", "Run", runConsole_, "kevc-run");
+    docks_->add("debug", "Debug", debugPanel_, "kevc-debug");
+    docks_->add("find", "Find Results", placeholder("Search results appear here."), "kevc-find-in-files");
+    docks_->add("terminal", "Terminal", shell_, "kevc-terminal");
+    docks_->add("dev-server", "Dev Server", buildServerPage(), "kevc-globe");
     bottomDock_.set_size_request(-1, 120);
     docks_->acceptFloatingDrops(root_);
     // Put panels back where they were last time, once the main window is up.
@@ -577,6 +624,7 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     projectTree_.setRoot(folder_);
     shell_.startShell(folder_);
     updateTitle();
+    updateToolbar(); // web projects run by serving
 
     watcher_ = std::make_unique<SourceWatcher>(*session_);
     watcher_->signalSynced().connect(sigc::mem_fun(*this, &MainWindow::onProjectSynced));
@@ -605,6 +653,7 @@ void MainWindow::setPlainFolder(const fs::path& root) {
     projectTree_.setRoot(folder_);
     shell_.startShell(folder_);
     updateTitle();
+    updateToolbar(); // web projects run by serving
     setStatus("Opened folder " + root.string());
 }
 
@@ -868,7 +917,8 @@ void MainWindow::appendLog(const std::string& text, const Glib::ustring& tag) {
     compileLog_.scroll_to(logEnd_);
 }
 
-void MainWindow::startBuild(BuildAction action, std::function<void(bool)> then, std::optional<BuildConfig> config) {
+void MainWindow::startBuild(BuildAction action, Task task, std::function<void(bool)> then,
+                            std::optional<BuildConfig> config) {
     if (!session_) {
         setStatus("Open a Kev-C++ project to build it");
         return;
@@ -911,7 +961,9 @@ void MainWindow::startBuild(BuildAction action, std::function<void(bool)> then, 
               "summary");
     showBottomPage(*compileLog_.get_parent());
     setStatus(std::string(verb) + "…");
+    buildTask_ = task;
     build_.start(std::move(commands));
+    updateToolbar();
 }
 
 void MainWindow::onBuildLine(const std::string& line, bool isCommand) {
@@ -971,9 +1023,10 @@ void MainWindow::onBuildFinished(bool success) {
     if (errors > 0 || (warnings > 0 && success)) showBottomPage(compilerPanel_);
 
     if (auto then = std::move(afterBuild_)) then(success);
+    updateToolbar(); // after `then`, which may have started the program or the debugger
 }
 
-void MainWindow::runProgram() {
+void MainWindow::runProgram(Task task) {
     if (!session_) {
         setStatus("Open a Kev-C++ project to run it");
         return;
@@ -997,20 +1050,28 @@ void MainWindow::runProgram() {
     std::error_code ec;
     if (!fs::exists(*output, ec)) {
         setStatus("Not built yet, compiling first…");
-        compileAndRun();
+        compileAndRun(task);
+        return;
+    }
+    if (runConsole_.childRunning()) {
+        setStatus("The program is already running; stop it first (Ctrl+F2)");
         return;
     }
     showBottomPage(runConsole_);
+    programTask_ = task;
     runConsole_.runProgram({output->string()}, session_->root(), [this](const std::string& outcome) {
         setStatus(outcome);
+        programTask_ = Task::None;
+        updateToolbar();
     });
     runConsole_.focusTerminal();
     setStatus("Running " + output->filename().string() + "…");
+    updateToolbar();
 }
 
-void MainWindow::compileAndRun() {
-    startBuild(BuildAction::Build, [this](bool success) {
-        if (success) runProgram();
+void MainWindow::compileAndRun(Task task) {
+    startBuild(BuildAction::Build, task, [this, task](bool success) {
+        if (success) runProgram(task);
     });
 }
 
@@ -1018,6 +1079,60 @@ void MainWindow::stopExecution() {
     if (build_.running()) build_.cancel();
     else if (runConsole_.childRunning()) runConsole_.stopChild();
     else setStatus("Nothing is running");
+}
+
+void MainWindow::stopTask(Task task) {
+    if (build_.running() && buildTask_ == task) {
+        build_.cancel();
+        return;
+    }
+    switch (task) {
+    case Task::Debug:
+        if (debugger_) debugger_->terminate();
+        break;
+    case Task::Run:
+    case Task::CompileRun:
+        if (runConsole_.childRunning()) runConsole_.stopChild();
+        else if (devServer_ && devServer_->running()) devServer_->stop(); // Run serves web projects
+        break;
+    default:
+        break;
+    }
+}
+
+bool MainWindow::programRunning() const {
+    return runConsole_.childRunning();
+}
+
+void MainWindow::updateToolbar() {
+    if (taskButtons_.empty()) return; // still building the window
+    const bool building = build_.running();
+    const bool program = programRunning();
+    const bool debugging = static_cast<bool>(debugger_);
+    const bool serving = devServer_ && devServer_->running();
+    const bool web = session_ && session_->project().kind == ProjectKind::WebTs;
+    auto set = [&](Task t, bool running, bool enabled) {
+        TaskButton* b = taskButtons_.at(t);
+        b->setRunning(running);
+        b->set_sensitive(running || enabled);
+    };
+    auto builtBy = [&](Task t) { return building && buildTask_ == t; };
+    // Only one build at a time, and the Run tab runs one program (or the program being debugged).
+    set(Task::Compile, builtBy(Task::Compile), !building);
+    set(Task::Rebuild, builtBy(Task::Rebuild), !building);
+    set(Task::Clean, builtBy(Task::Clean), !building);
+    set(Task::CompileRun, builtBy(Task::CompileRun) || (program && programTask_ == Task::CompileRun),
+        !building && !program && !debugging);
+    set(Task::Run, builtBy(Task::Run) || (program && programTask_ == Task::Run) || (web && serving),
+        !building && !program && !debugging);
+    set(Task::Debug, builtBy(Task::Debug) || debugging, !building && !program);
+
+    const auto state = debugging ? debugger_->state() : DebugController::State::Finished;
+    continueButton_->setRunning(state == DebugController::State::Running);
+    continueButton_->set_sensitive(state == DebugController::State::Running ||
+                                   state == DebugController::State::Stopped);
+    for (Gtk::Button* b : stepButtons_) b->set_sensitive(state == DebugController::State::Stopped);
+    devServerButton_->setRunning(serving);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1030,7 +1145,11 @@ Gtk::Widget& MainWindow::buildServerPage() {
     serverStatus_.set_hexpand(true);
     serverStatus_.set_ellipsize(Pango::EllipsizeMode::END);
     serverOpen_.signal_clicked().connect([this] { openInBrowser(); });
-    serverToggle_.signal_clicked().connect([this] { toggleDevServer(); });
+    serverToggle_.setLabels("Start", "Stop");
+    serverToggle_.signalStart().connect([this] { startDevServer(false); });
+    serverToggle_.signalStop().connect([this] {
+        if (devServer_) devServer_->stop();
+    });
     bar->append(serverStatus_);
     bar->append(serverOpen_);
     bar->append(serverToggle_);
@@ -1053,7 +1172,8 @@ Gtk::Widget& MainWindow::buildServerPage() {
 void MainWindow::updateServerPage() {
     const bool running = devServer_ && devServer_->running();
     const bool ready = running && devServer_->ready();
-    serverToggle_.set_label(running ? "Stop" : "Start");
+    serverToggle_.setRunning(running);
+    updateToolbar();
     serverOpen_.set_sensitive(ready);
     if (ready) serverStatus_.set_markup("Serving <b>" + Glib::Markup::escape_text(devServer_->root().filename().string()) +
                                         "</b> at <a href=\"" + Glib::Markup::escape_text(devServer_->url()) + "\">" +
@@ -1159,7 +1279,7 @@ void MainWindow::startDebugging() {
         return;
     }
     // Always a Debug build (-O0 -g), whatever the toolbar says.
-    startBuild(BuildAction::Build, [this](bool ok) {
+    startBuild(BuildAction::Build, Task::Debug, [this](bool ok) {
         if (ok) launchDebugger();
     }, BuildConfig::Debug);
 }
@@ -1176,6 +1296,7 @@ void MainWindow::launchDebugger() {
     debugger_->signalFinished().connect(sigc::mem_fun(*this, &MainWindow::onDebugFinished));
     debugger_->signalConsole().connect([this](const std::string& text) { debugPanel_.appendConsole(text); });
     debugger_->signalStateChanged().connect([this](DebugController::State state) {
+        updateToolbar(); // Continue/Pause and the step buttons
         if (state != DebugController::State::Running) return;
         ++stopGeneration_;
         clearExecutionLine();
@@ -1193,6 +1314,7 @@ void MainWindow::launchDebugger() {
     setStatus("Debugging " + exe->filename().string() +
               (bps.empty() ? " (no breakpoints set: it will run to the end)" : ""));
     debugger_->start(bps);
+    updateToolbar();
 }
 
 void MainWindow::debugStep(void (DebugController::*step)()) {
@@ -1244,7 +1366,10 @@ void MainWindow::onDebugFinished(const std::string& outcome) {
         sigc::track_obj([this, outcome] { runConsole_.feedText("\n\x1b[2m[" + outcome + "]\x1b[0m\n"); }, *this), 1500);
     setStatus(outcome);
     // We are inside one of the controller's signals: drop it once that returns.
-    Glib::signal_idle().connect_once([this] { debugger_.reset(); });
+    Glib::signal_idle().connect_once([this] {
+        debugger_.reset();
+        updateToolbar();
+    });
 }
 
 void MainWindow::refreshDebugViews() {
@@ -1403,7 +1528,8 @@ void MainWindow::setupIntelliSense(EditorTab* tab) {
     GtkSourceCompletionProvider* provider = newLspCompletionProvider(lsp_.get(), tab);
     gtk_source_completion_add_provider(completion, provider);
     g_object_unref(provider);
-    g_object_set(completion, "show-icons", FALSE, "select-on-show", TRUE, "page-size", 10, nullptr);
+    // Icons on: the ICON column shows the kind of each proposal (class, method, variable, ...).
+    g_object_set(completion, "show-icons", TRUE, "select-on-show", TRUE, "page-size", 10, nullptr);
 
     GtkSourceHover* hover = gtk_source_view_get_hover(tab->view());
     GtkSourceHoverProvider* hoverProvider = newLspHoverProvider(lsp_.get(), tab);

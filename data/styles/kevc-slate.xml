@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Kev-C++ Slate: the editor colours of Embarcadero Dev-C++ 6's dark style. -->
+<style-scheme id="kevc-slate" name="Kev-C++ Slate" version="1.0">
+  <author>Kev-C++</author>
+  <description>Slate background, steel-blue keywords, orange strings and gold numbers.</description>
+
+  <color name="bg" value="#293134"/>
+  <color name="fg" value="#d4d9d7"/>
+  <color name="gutter" value="#2f383c"/>
+  <color name="line-number" value="#71858b"/>
+  <color name="keyword" value="#6c9ccc"/>
+  <color name="comment" value="#6f838a"/>
+  <color name="string" value="#e07a24"/>
+  <color name="number" value="#d9ad32"/>
+  <color name="preprocessor" value="#9fb88f"/>
+  <color name="selection" value="#3d6e94"/>
+
+  <style name="text" foreground="fg" background="bg"/>
+  <style name="selection" foreground="#ffffff" background="selection"/>
+  <style name="cursor" foreground="#e8ecea"/>
+  <style name="current-line" background="#000000"/>
+  <style name="line-numbers" foreground="line-number" background="gutter"/>
+  <style name="current-line-number" foreground="#c9d3d6" background="gutter"/>
+  <style name="bracket-match" background="#4b5a62" bold="true"/>
+  <style name="bracket-mismatch" foreground="#ffffff" background="#8e1315"/>
+  <style name="search-match" background="#6b5a1f"/>
+  <style name="right-margin" foreground="#3a454a"/>
+  <style name="draw-spaces" foreground="#4b5a62"/>
+
+  <!-- The def: styles, which the C, C++, JavaScript and TypeScript languages map to. -->
+  <style name="def:comment" foreground="comment" italic="true"/>
+  <style name="def:shebang" foreground="comment" bold="true"/>
+  <style name="def:keyword" foreground="keyword"/>
+  <style name="def:type" foreground="keyword"/>
+  <style name="def:builtin" foreground="keyword"/>
+  <style name="def:statement" foreground="keyword"/>
+  <style name="def:string" foreground="string"/>
+  <style name="def:character" foreground="string"/>
+  <style name="def:special-char" foreground="number"/>
+  <style name="def:number" foreground="number"/>
+  <style name="def:decimal" foreground="number"/>
+  <style name="def:floating-point" foreground="number"/>
+  <style name="def:base-n-integer" foreground="number"/>
+  <style name="def:boolean" foreground="number"/>
+  <style name="def:constant" foreground="number"/>
+  <style name="def:preprocessor" foreground="preprocessor"/>
+  <style name="def:identifier" foreground="fg"/>
+  <style name="def:function" foreground="fg"/>
+  <style name="def:operator" foreground="fg"/>
+  <style name="def:error" foreground="#ff6b6b" underline="error"/>
+  <style name="def:note" foreground="#ffffff" background="selection" bold="true"/>
+  <style name="def:net-address" foreground="keyword" underline="single"/>
+  <style name="def:underlined" underline="single"/>
+  <style name="def:emphasis" italic="true"/>
+  <style name="def:strong-emphasis" bold="true"/>
+  <style name="def:heading" foreground="keyword" bold="true"/>
+  <style name="def:link-text" foreground="string"/>
+</style-scheme>

@@ -1,6 +1,8 @@
 #include "debug/DebugViews.h"
 
+#include "core/Icons.h"
 #include "core/Mi.h"
+#include "ui/IconWidgets.h"
 
 #include <algorithm>
 
@@ -64,8 +66,10 @@ VarNode::VarNode(std::weak_ptr<DebugController> debugger, VarInfo info, int dept
     type_.set_valign(Gtk::Align::START);
     type_.set_margin_top(2);
     type_.set_text(info_.type);
+    icon_.set_from_icon_name(icons::forType(info_.type));
 
     header_.append(expander_);
+    header_.append(icon_);
     header_.append(text_);
     header_.append(type_);
     append(header_);
@@ -99,8 +103,10 @@ VarNode::VarNode(const std::string& name, const std::string& message) : Gtk::Box
     text_.set_xalign(0.0f);
     text_.set_wrap(true);
     text_.add_css_class("kevc-log");
-    text_.set_markup("<b>" + esc(name) + "</b>  <span foreground=\"#c01c28\">" + esc(message) + "</span>");
+    text_.set_markup("<b>" + esc(name) + "</b>  <span foreground=\"#ff6b6b\">" + esc(message) + "</span>");
+    icon_.set_from_icon_name("kevc-error");
     header_.append(expander_);
+    header_.append(icon_);
     header_.append(text_);
     append(header_);
 }
@@ -117,12 +123,12 @@ VarNode::~VarNode() {
 void VarNode::updateHeader() {
     std::string markup = "<b>" + esc(info_.name) + "</b> = ";
     if (info_.isPointer && mi::isNullPointer(info_.value)) {
-        markup += "<span foreground=\"#9a9996\">nullptr</span>";
+        markup += "<span foreground=\"#a3b1b7\">nullptr</span>";
     } else {
         markup += esc(info_.value.empty() ? "{…}" : info_.value);
         if (!pointee_.empty())
-            markup += pointeeOk_ ? "  <span foreground=\"#26a269\">→ " + esc(pointee_) + "</span>"
-                                 : "  <span foreground=\"#c01c28\">→ &lt;" + esc(pointee_) + "&gt;</span>";
+            markup += pointeeOk_ ? "  <span foreground=\"#7bd88f\">→ " + esc(pointee_) + "</span>"
+                                 : "  <span foreground=\"#ff6b6b\">→ &lt;" + esc(pointee_) + "&gt;</span>";
     }
     text_.set_markup(markup);
     text_.set_tooltip_text(info_.value + (pointee_.empty() ? "" : "\n→ " + pointee_));
@@ -166,7 +172,7 @@ DebugPanel::DebugPanel() {
     localsMessage_.set_wrap(true);
     locals_.append(localsMessage_);
     localsScroller_.set_child(locals_);
-    append_page(localsScroller_, "Locals");
+    append_page(localsScroller_, *makeIconLabel("kevc-local-variable", "Locals"));
 
     stack_.set_activate_on_single_click(true);
     stack_.signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
@@ -174,7 +180,7 @@ DebugPanel::DebugPanel() {
         if (i >= 0 && static_cast<size_t>(i) < stackLevels_.size()) frameActivated_.emit(stackLevels_[i]);
     });
     stackScroller_.set_child(stack_);
-    append_page(stackScroller_, "Call Stack");
+    append_page(stackScroller_, *makeIconLabel("kevc-call-stack", "Call Stack"));
 
     breakpoints_.set_activate_on_single_click(false);
     breakpoints_.signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
@@ -182,7 +188,7 @@ DebugPanel::DebugPanel() {
         if (i >= 0 && static_cast<size_t>(i) < bpItems_.size()) bpActivated_.emit(bpItems_[i].first, bpItems_[i].second);
     });
     bpScroller_.set_child(breakpoints_);
-    append_page(bpScroller_, "Breakpoints");
+    append_page(bpScroller_, *makeIconLabel("kevc-breakpoint", "Breakpoints"));
 
     consoleView_.set_editable(false);
     consoleView_.set_cursor_visible(false);
@@ -200,7 +206,7 @@ DebugPanel::DebugPanel() {
     });
     console_.append(consoleScroller_);
     console_.append(consoleEntry_);
-    append_page(console_, "GDB Console");
+    append_page(console_, *makeIconLabel("kevc-terminal", "GDB Console"));
 
     showMessage("Press F5 to debug. Click a line number to set a breakpoint.");
     setBreakpoints({});
@@ -235,7 +241,7 @@ void DebugPanel::setFrames(const std::vector<StackFrame>& frames, int selected) 
         auto* label = Gtk::make_managed<Gtk::Label>();
         std::string where = f.file.empty() ? "no source" : f.file.filename().string() + ":" + std::to_string(f.line);
         label->set_markup((f.level == selected ? "<b>" : "") + std::string("#") + std::to_string(f.level) + "  " +
-                          esc(f.function) + "  <span foreground=\"#9a9996\">" + esc(where) + "</span>" +
+                          esc(f.function) + "  <span foreground=\"#a3b1b7\">" + esc(where) + "</span>" +
                           (f.level == selected ? "</b>" : ""));
         label->set_xalign(0.0f);
         label->set_margin(4);
@@ -313,7 +319,7 @@ void WatchPanel::showPlaceholders() {
     std::vector<Gtk::Widget*> rows;
     for (const auto& e : expressions_) {
         auto* l = Gtk::make_managed<Gtk::Label>();
-        l->set_markup("<b>" + esc(e) + "</b>  <span foreground=\"#9a9996\">(not debugging)</span>");
+        l->set_markup("<b>" + esc(e) + "</b>  <span foreground=\"#a3b1b7\">(not debugging)</span>");
         l->set_xalign(0.0f);
         l->add_css_class("kevc-log");
         rows.push_back(l);

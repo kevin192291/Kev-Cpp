@@ -10,7 +10,7 @@ namespace kevc {
 // Tool panels (Compiler, Run, Terminal, ...) that live in the bottom dock, the right dock, or a
 // window of their own. Tabs can be dragged between docks or out of the window, or moved with the
 // menu on each tab. The arrangement is saved in ~/.config/kev-cpp/layout.json.
-class DockManager {
+class DockManager : public sigc::trackable {
 public:
     enum class Area { Bottom, Right, Floating };
 
@@ -18,7 +18,8 @@ public:
     DockManager(Gtk::ApplicationWindow& main, Gtk::Notebook& bottom, Gtk::Notebook& right, Gtk::Paned& rightPaned);
     ~DockManager();
 
-    void add(const std::string& id, const Glib::ustring& title, Gtk::Widget& widget);
+    // `icon` is a kevc-* icon name, shown on the panel's tab.
+    void add(const std::string& id, const Glib::ustring& title, Gtk::Widget& widget, const char* icon);
     void move(Gtk::Widget& widget, Area area);
     // Brings a panel to the front: selects its tab and raises its window if it floats.
     void show(Gtk::Widget& widget);
@@ -32,6 +33,7 @@ private:
         std::string id;
         Glib::ustring title;
         Gtk::Widget* widget;
+        const char* icon;
     };
     struct Floating {
         Gtk::Window* window;
@@ -40,6 +42,8 @@ private:
 
     Panel* find(Gtk::Widget& widget);
     Panel* find(const std::string& id);
+    // The panel a drag carries (its widget, as a GValue), or nullptr.
+    Panel* panelOf(const Glib::ValueBase& value);
     Gtk::Notebook* notebookOf(Gtk::Widget& widget);
     Area areaOf(const Gtk::Notebook* notebook) const;
     void setupNotebook(Gtk::Notebook& notebook);
@@ -50,7 +54,11 @@ private:
     void updateVisibility();
     void saveLayoutSoon();
     void saveLayout();
-    static GtkNotebook* onCreateWindow(GtkNotebook* notebook, GtkWidget* page, gpointer self);
+    // Puts a panel into `to` before tab `position` (-1: at the end), from wherever it is.
+    void moveTo(Gtk::Widget& widget, Gtk::Notebook& to, int position);
+    // The tab a drop at (x, y) on `notebook` lands before, or -1 for the end.
+    int dropPosition(Gtk::Notebook& notebook, double x, double y);
+    bool isDock(const Gtk::Notebook* notebook) const;
 
     Gtk::ApplicationWindow& main_;
     Gtk::Notebook& bottom_;

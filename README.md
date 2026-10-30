@@ -6,7 +6,8 @@ are served by a built-in dev server on port 5465.
 
 ## Requirements
 
-Ubuntu 24.04 / Linux Mint 22 or newer:
+Debian-family systems with GTK 4.10 or newer: Ubuntu 24.04 / Linux Mint 22 or newer, Debian 13,
+Devuan 6 (and LCOS, which is built on it):
 
 ```sh
 sudo apt install build-essential cmake ninja-build gdb git pkg-config \
@@ -14,8 +15,11 @@ sudo apt install build-essential cmake ninja-build gdb git pkg-config \
                  nlohmann-json3-dev libgtest-dev clangd
 ```
 
-Node.js 20 or newer (with npm) is also required. The build installs the TypeScript language server and
-compiler into `tools/node_modules` with `npm ci` (pinned in `tools/package-lock.json`).
+Node.js 20 or newer (with npm) is also required. Debian 13 and Devuan 6 package it (`install.sh`
+installs it from there); Ubuntu 24.04 / Mint 22 only package Node 18, so use
+[nvm](https://github.com/nvm-sh/nvm) there. The build installs the TypeScript language server and
+compiler into `tools/node_modules` with `npm ci` (pinned in `tools/package-lock.json`), which needs
+internet access.
 
 ## Build, test, run
 
@@ -26,13 +30,19 @@ ctest --test-dir build          # unit + integration tests (needs gcc, g++, make
 ./build/kev-cpp [project-folder]
 ```
 
-To install it into your applications menu (with its icon):
+## Install
 
 ```sh
-cmake --install build --prefix ~/.local     # re-run after rebuilding to update the installed copy
+./install.sh                # installs into ~/.local; menu entry under Programming
+./install.sh --system       # or for all users, into /usr/local (uses sudo)
+./install.sh --uninstall
 ```
 
-Uninstall with `xargs rm < build/install_manifest.txt`.
+`install.sh` apt-installs any missing packages from the list above (and Node.js when the distribution's
+is new enough), builds a Release copy in
+`build/release` and installs it with its icon and menu entry. Re-run it after pulling changes to update
+the installed copy. If `node` comes from a version manager such as nvm, the menu launcher is pointed at
+that Node, because programs started from the menu don't get the PATH that `~/.bashrc` sets up.
 
 ## Features
 
@@ -50,6 +60,11 @@ Uninstall with `xargs rm < build/install_manifest.txt`.
   symbol list, from clangd (C/C++) and typescript-language-server (JS/TS).
 - **Build & run**: errors and warnings are listed in the Compiler tab (double-click to jump); programs run in
   the Run tab; the Terminal tab is a shell in the project folder.
+- **Slate colours**: the dark slate palette of Embarcadero Dev-C++ 6, for the window and the editor,
+  whatever the desktop theme is.
+- **Dev-C++-style toolbar**: pixel icons in the Dev-C++ style (see [docs/ICONS.md](docs/ICONS.md)). Each
+  button that starts something (Compile, Run, Compile & Run, Rebuild All, Clean, Debug, the dev server)
+  turns into a Stop button while it runs; Continue turns into Pause while the debugged program runs.
 - **Movable panels**: every bottom panel can be docked at the bottom, docked on the right, or opened in
   its own window. Drag its tab, or use the ⋮ menu on the tab. Closing a panel window docks its panels
   back at the bottom. The layout is remembered (`~/.config/kev-cpp/layout.json`); View → Reset Panel

@@ -20,9 +20,11 @@ protected:
     void on_startup() override;
     void on_activate() override;
     void on_open(const type_vec_files& files, const Glib::ustring& hint) override;
+    void on_window_removed(Gtk::Window* window) override;
 
 private:
     void showMissingToolsAndQuit();
+    void installStyleScheme();
     void setupAccelerators();
 
     Toolchain toolchain_;

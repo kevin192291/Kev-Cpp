@@ -2,6 +2,8 @@
 <gresources>
   <gresource prefix="/org/kevcpp/KevCpp">
     <file>packages.json</file>
+    <file>kevc-theme.css</file>
+    <file>styles/kevc-slate.xml</file>
     <file>icons/hicolor/16x16/apps/org.kevcpp.KevCpp.png</file>
     <file>icons/hicolor/24x24/apps/org.kevcpp.KevCpp.png</file>
     <file>icons/hicolor/32x32/apps/org.kevcpp.KevCpp.png</file>

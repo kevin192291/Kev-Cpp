@@ -3,7 +3,6 @@
 #include "lsp/LspManager.h"
 
 #include <algorithm>
-#include <cmath>
 #include <stdexcept>
 
 namespace kevc {
@@ -12,26 +11,6 @@ namespace {
 
 constexpr const char* kBreakpointCategory = "kevc-breakpoint";
 constexpr const char* kExecutionCategory = "kevc-execution";
-
-// A red, anti-aliased dot for the gutter (GTK 4 has no cairo-to-pixbuf helper, so draw it by hand).
-GdkPixbuf* breakpointDot() {
-    static GdkPixbuf* dot = [] {
-        constexpr int size = 32;
-        GdkPixbuf* pb = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, size, size);
-        const int stride = gdk_pixbuf_get_rowstride(pb);
-        guchar* px = gdk_pixbuf_get_pixels(pb);
-        const double c = (size - 1) / 2.0, r = size * 0.36;
-        for (int y = 0; y < size; ++y)
-            for (int x = 0; x < size; ++x) {
-                const double d = std::hypot(x - c, y - c);
-                const double a = std::clamp(r + 0.5 - d, 0.0, 1.0);
-                guchar* p = px + y * stride + x * 4;
-                p[0] = 0xe0; p[1] = 0x1b; p[2] = 0x24; p[3] = static_cast<guchar>(a * 255);
-            }
-        return pb;
-    }();
-    return dot;
-}
 
 GtkSourceLanguage* languageFor(const std::filesystem::path& file, bool cppHeaders) {
     GtkSourceLanguageManager* lm = gtk_source_language_manager_get_default();
@@ -43,15 +22,10 @@ GtkSourceLanguage* languageFor(const std::filesystem::path& file, bool cppHeader
 } // namespace
 
 GtkSourceStyleScheme* preferredStyleScheme() {
-    auto settings = Gtk::Settings::get_default();
-    bool dark = settings && settings->property_gtk_application_prefer_dark_theme().get_value();
-    if (settings && !dark) {
-        std::string theme = settings->property_gtk_theme_name().get_value();
-        std::transform(theme.begin(), theme.end(), theme.begin(), ::tolower);
-        dark = theme.find("dark") != std::string::npos;
-    }
-    return gtk_source_style_scheme_manager_get_scheme(gtk_source_style_scheme_manager_get_default(),
-                                                      dark ? "Adwaita-dark" : "Adwaita");
+    // Kev-C++'s own scheme (data/styles/kevc-slate.xml), to match the window's Slate palette.
+    auto* manager = gtk_source_style_scheme_manager_get_default();
+    if (auto* slate = gtk_source_style_scheme_manager_get_scheme(manager, "kevc-slate")) return slate;
+    return gtk_source_style_scheme_manager_get_scheme(manager, "Adwaita-dark");
 }
 
 EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_(file) {
@@ -91,12 +65,12 @@ EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_
     gdk_rgba_parse(&breakpointBg, "rgba(224,27,36,0.18)");
     gdk_rgba_parse(&executionBg, "rgba(246,211,45,0.45)");
     GtkSourceMarkAttributes* bp = gtk_source_mark_attributes_new();
-    gtk_source_mark_attributes_set_pixbuf(bp, breakpointDot());
+    gtk_source_mark_attributes_set_icon_name(bp, "kevc-breakpoint-dot");
     gtk_source_mark_attributes_set_background(bp, &breakpointBg);
     gtk_source_view_set_mark_attributes(view_, kBreakpointCategory, bp, 10);
     g_object_unref(bp);
     GtkSourceMarkAttributes* exec = gtk_source_mark_attributes_new();
-    gtk_source_mark_attributes_set_icon_name(exec, "go-next-symbolic");
+    gtk_source_mark_attributes_set_icon_name(exec, "kevc-exec-arrow");
     gtk_source_mark_attributes_set_background(exec, &executionBg);
     gtk_source_view_set_mark_attributes(view_, kExecutionCategory, exec, 20);
     g_object_unref(exec);

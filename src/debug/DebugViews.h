@@ -49,6 +49,7 @@ private:
 
     Gtk::Box header_{Gtk::Orientation::HORIZONTAL, 4};
     Gtk::Button expander_;
+    Gtk::Image icon_; // what kind of value: int, pointer, array, string, ...
     Gtk::Label text_;
     Gtk::Label type_;
     Gtk::Box children_{Gtk::Orientation::VERTICAL};

@@ -163,7 +163,7 @@ NewProjectDialog::NewProjectDialog(Gtk::Window& parent, const std::filesystem::p
     location_.set_text(defaultLocation.string());
     location_.set_hexpand(true);
     auto* browse = Gtk::make_managed<Gtk::Button>();
-    browse->set_icon_name("folder-open-symbolic");
+    browse->set_icon_name("kevc-open");
     browse->set_tooltip_text("Choose folder");
     browse->signal_clicked().connect([this] { this->browse(); });
     grid->attach(*nameLabel, 0, 0);

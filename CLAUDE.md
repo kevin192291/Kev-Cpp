@@ -3,14 +3,18 @@
 A Dev-C++-style IDE for Linux (GTK 4 / gtkmm 4.10, C++20). C++ projects build with **CMake + g++**,
 C projects with **Make + gcc**, TypeScript projects are served by a Node dev server on **port 5465**.
 See README.md for features and keys; docs/PLAN.md is the original plan the code was built from.
-The repo folder is still called `dev-k++` (the project was renamed to Kev-C++ partway through).
+The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 
 ## Build & test
 
 ```sh
 cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 75 tests
-cmake --install build --prefix ~/.local    # updates the copy in the user's applications menu
+./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
+
+`install.sh` patches the installed launcher's Exec to prepend node's directory when node isn't in a
+standard bin dir (nvm): menu launches get the session PATH, where `node` is Ubuntu's v18, which is too
+old for typescript-language-server 5. A plain `cmake --install` overwrites the launcher without that.
 
 Tests: GoogleTest for `src/core` (headless, includes real cmake/g++/make/gcc/gdb/tsc/git runs) plus
 `node --test tools/devserver/devserver.test.mjs` (registered in ctest). Everything GTK-dependent is
@@ -22,7 +26,8 @@ verified by driving the real app (see "GUI testing").
   marker-delimited block we own inside CMakeLists.txt/Makefile), `BuildFiles` (CMake/Make generators,
   compile_commands.json for C), `BuildPlan` (commands per action/config), `Diagnostics` (gcc/ld/CMake/
   make/tsc output parser), `Packages` (catalog, pkg-config, FetchContent target detection), `Lsp`
-  (framing, URIs, UTF-16 columns, markdown→Pango), `Mi` (GDB/MI parser, expression-under-cursor).
+  (framing, URIs, UTF-16 columns, markdown→Pango), `Mi` (GDB/MI parser, expression-under-cursor),
+  `Icons` (which kevc-* icon a file, LSP symbol/completion kind or gdb type gets).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon), `MainWindow`
   (everything wired together: menus, actions, build/run, debugging, IntelliSense, dev server).
 - `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), ProjectTree, SymbolsPanel.
@@ -32,10 +37,13 @@ verified by driving the real app (see "GUI testing").
   Debug panel, Watches), DebugHover (hover provider).
 - `src/build/` BuildRunner (sequential subprocesses, line streaming), CompilerPanel.
 - `src/ui/` Dialogs, ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
-  bottom/right/floating; layout in `~/.config/kev-cpp/layout.json`).
+  bottom/right/floating; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton, icon tab labels).
 - `src/devserver/DevServer` runs `tools/devserver/devserver.mjs`; `tools/package.json` pins
   typescript 5.9.3 + typescript-language-server 5.3.0 (installed by `npm ci` during the build).
-- `data/` icons (GResource-embedded), `packages.json` catalog, `.desktop` template.
+- `data/` icons (GResource-embedded), `packages.json` catalog, `.desktop` template. `data/art/` holds the
+  icon sprite sheet and `make_icons.py`, which generates `data/icons/hicolor/*/actions/kevc-*.png` and
+  `data/kevcpp-ui-icons.gresource.xml` (committed; see docs/ICONS.md). Only the app icon is installed
+  into the system icon theme. `data/kevc-theme.css` + `data/styles/kevc-slate.xml` are the Slate colours.
 
 ## Decisions worth keeping
 
@@ -58,6 +66,21 @@ verified by driving the real app (see "GUI testing").
   module, exits code 2 if the port is taken, and exits when its stdin pipe closes (IDE crash).
 - **Keys GTK steals**: F10 opens the menubar and Alt+letter triggers mnemonics, so MainWindow claims
   F10 and Alt+P in a capture-phase key controller.
+- **Toolbar**: buttons activate the `win.*` actions (not bound to them) so `updateToolbar()` owns their
+  enabled state. A `Task` records which button started the running build (`buildTask_`) or program
+  (`programTask_`); that button shows Stop until it ends. Call `updateToolbar()` after anything that
+  starts or ends a build, program, debug session (or changes its state) or the dev server.
+- **Slate theme** (colours of Embarcadero Dev-C++ 6's dark style): `Application` switches the app to
+  GTK's built-in "Default" dark theme whatever the desktop uses and layers `kevc-theme.css` on top,
+  so it looks the same everywhere. The editor scheme is copied to `~/.cache/kev-cpp/styles/` at
+  startup because GtkSourceView 5.12 can't read schemes from a GResource. The toolbar is a lighter
+  slate than the rest so the icons' black outlines show.
+- **Docking**: panel tabs are dragged with DockManager's own `Gtk::DragSource` (the content is the
+  panel widget as a GTK_TYPE_WIDGET value), not GtkNotebook's detachable tabs. GTK 4.14's notebook
+  drag offers the tab to other programs; if one reads it mid-drag (Cinnamon's desktop does) and the
+  tab is then dropped on another notebook, GTK dereferences a cleared `detached_tab` and crashes.
+  Drop targets: every dock notebook (insert before the tab under the pointer), the main window
+  (`acceptFloatingDrops` → own window), and a cancelled drag (dropped outside) → own window.
 - **Async safety**: callbacks from gdb/LSP/processes capture a `weak_ptr` token, never raw `this`
   alone (`sigc::track_obj` only protects sigc slots, not `std::function`).
 
@@ -70,8 +93,12 @@ verified by driving the real app (see "GUI testing").
 - Never trigger file dialogs (Ctrl+O, Browse…) in tests: GTK routes them through the desktop portal,
   so they appear on the user's real screen and block the app. Open projects via the command line.
 - Don't press F10/Open in Browser on web projects in tests (it opens the user's real browser).
-- Dropping a dragged tab on the bare X11 root window hangs GTK 4's drag (GDK_DRAG_PROTO_ROOTWIN);
-  in-app drops are caught by `DockManager::acceptFloatingDrops`.
+- Drag panel tabs with an XTest press, small motion steps and a release (see a scratch `drag.py`);
+  dropping on the bare desktop is safe now that panels use their own drag (see Docking).
+- The app picks its own theme, so tests look like the user's desktop without extra setup. Don't set
+  `GTK_THEME` in tests: it overrides the app's choice.
+- Stop test instances by their command line (the test project path), never by name (`pkill kev-cpp`,
+  `pgrep -x gdb`): the user may have their own Kev-C++ or gdb running.
 
 ## State and known gaps
 

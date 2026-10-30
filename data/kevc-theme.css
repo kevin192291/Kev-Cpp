@@ -1,0 +1,144 @@
+/* Kev-C++ Slate: the colours of Embarcadero Dev-C++ 6's dark style, with Kev-C++'s own icons.
+   Written against GTK's built-in dark theme, which Application selects whatever the desktop uses,
+   so it looks the same on every computer. The editor's colours are in styles/kevc-slate.xml. */
+
+@define-color kevc_chrome #37474f;  /* menu bar, tab strips, status bar */
+@define-color kevc_panel #4b5a62;   /* panels, lists, the selected tab, buttons */
+@define-color kevc_deep #263238;    /* borders and separators */
+@define-color kevc_code #293134;    /* the editor, logs and text fields */
+@define-color kevc_toolbar #5a6e78; /* lighter, so the icons' black outlines show */
+@define-color kevc_fg #e6ebed;
+@define-color kevc_dim #a3b1b7;
+@define-color kevc_hover #5a6b74;
+@define-color kevc_accent #3d6e94;  /* selection */
+
+window.background {
+  background-color: @kevc_chrome;
+  color: @kevc_fg;
+}
+
+.dim-label {
+  color: @kevc_dim;
+  opacity: 1;
+}
+
+separator,
+paned > separator {
+  background-color: @kevc_deep;
+}
+
+/* Menus */
+menubar {
+  background-color: @kevc_chrome;
+  box-shadow: none;
+}
+menubar > item:hover,
+menubar > item:selected {
+  background-color: @kevc_hover;
+}
+popover > contents,
+popover > arrow {
+  background-color: @kevc_panel;
+  color: @kevc_fg;
+  border-color: @kevc_deep;
+}
+popover modelbutton:hover,
+popover modelbutton:selected {
+  background-color: @kevc_accent;
+}
+
+/* Toolbar */
+.kevc-toolbar {
+  background-color: @kevc_toolbar;
+  padding: 3px;
+  border-bottom: 1px solid @kevc_deep;
+}
+.kevc-toolbar-rule {
+  min-height: 1px;
+  margin: 2px 0;
+  background-color: @kevc_deep;
+}
+.kevc-toolbar button.flat:hover {
+  background-color: alpha(white, 0.18);
+}
+
+/* Tabs */
+notebook > header {
+  background-color: @kevc_chrome;
+  border-color: @kevc_deep;
+}
+notebook > header > tabs > tab {
+  color: @kevc_dim;
+}
+notebook > header > tabs > tab:hover {
+  background-color: @kevc_hover;
+}
+notebook > header > tabs > tab:checked {
+  background-color: @kevc_panel;
+  color: @kevc_fg;
+}
+notebook > stack {
+  background-color: @kevc_panel;
+}
+
+/* Lists, trees and panels */
+/* (Not .view: the editor is a view too, and its colours come from its style scheme.) */
+list,
+listview,
+scrolledwindow > viewport {
+  background-color: @kevc_panel;
+  color: @kevc_fg;
+}
+list > row:hover,
+listview > row:hover {
+  background-color: @kevc_hover;
+}
+list > row:selected,
+listview > row:selected {
+  background-color: @kevc_accent;
+  color: white;
+}
+
+/* Logs and consoles */
+textview.kevc-log > text,
+textview.kevc-log {
+  background-color: @kevc_code;
+  color: @kevc_fg;
+}
+
+/* Buttons, fields and drop-downs */
+button {
+  background-image: none;
+  background-color: @kevc_panel;
+  color: @kevc_fg;
+  border-color: @kevc_deep;
+  box-shadow: none;
+}
+button:hover {
+  background-color: @kevc_hover;
+}
+button.flat {
+  background-color: transparent;
+  border-color: transparent;
+}
+button.flat:hover {
+  background-color: alpha(white, 0.12);
+}
+entry,
+searchbar > revealer > box {
+  background-color: @kevc_code;
+  color: @kevc_fg;
+  border-color: @kevc_deep;
+}
+
+/* Scroll bars */
+scrollbar {
+  background-color: @kevc_chrome;
+  border-color: @kevc_deep;
+}
+scrollbar slider {
+  background-color: #5f6b71;
+}
+scrollbar slider:hover {
+  background-color: #77858c;
+}
