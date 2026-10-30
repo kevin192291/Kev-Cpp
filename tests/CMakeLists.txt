@@ -1,0 +1,22 @@
+find_package(GTest REQUIRED)
+include(GoogleTest)
+
+add_executable(kevc_tests
+  BuildFilesTest.cpp
+  BuildPlanTest.cpp
+  DiagnosticsTest.cpp
+  LspTest.cpp
+  ManagedBlockTest.cpp
+  MiTest.cpp
+  PackagesTest.cpp
+  ProjectSessionTest.cpp
+  ToolchainTest.cpp
+)
+target_link_libraries(kevc_tests PRIVATE kevc_core GTest::gtest_main)
+target_compile_definitions(kevc_tests PRIVATE KEVC_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+gtest_discover_tests(kevc_tests)
+
+find_program(NODE_EXECUTABLE node)
+if(NODE_EXECUTABLE)
+  add_test(NAME devserver COMMAND ${NODE_EXECUTABLE} --test ${CMAKE_SOURCE_DIR}/tools/devserver/devserver.test.mjs)
+endif()

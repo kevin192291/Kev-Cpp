@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Kev-C++
+GenericName=C/C++ and TypeScript IDE
+Comment=Lightweight IDE for C, C++, JavaScript and TypeScript
+Exec=@BINDIR@/kev-cpp %F
+Icon=org.kevcpp.KevCpp
+Terminal=false
+Categories=Development;IDE;GTK;
+Keywords=c;c++;cpp;cmake;make;gcc;typescript;ide;
+StartupWMClass=kev-cpp

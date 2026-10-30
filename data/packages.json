@@ -1,0 +1,15 @@
+{
+  "packages": [
+    {"name": "fmt", "description": "Fast, safe string formatting (std::format style)", "category": "Utilities", "git": "https://github.com/fmtlib/fmt.git", "tag": "11.0.2", "targets": ["fmt::fmt"], "include": "<fmt/core.h>"},
+    {"name": "spdlog", "description": "Fast logging library", "category": "Utilities", "git": "https://github.com/gabime/spdlog.git", "tag": "v1.14.1", "targets": ["spdlog::spdlog"], "include": "<spdlog/spdlog.h>"},
+    {"name": "nlohmann_json", "description": "JSON for Modern C++", "category": "Data", "git": "https://github.com/nlohmann/json.git", "tag": "v3.11.3", "targets": ["nlohmann_json::nlohmann_json"], "include": "<nlohmann/json.hpp>"},
+    {"name": "CLI11", "description": "Command line argument parser", "category": "Utilities", "git": "https://github.com/CLIUtils/CLI11.git", "tag": "v2.4.2", "targets": ["CLI11::CLI11"], "include": "<CLI/CLI.hpp>"},
+    {"name": "magic_enum", "description": "Static reflection for enums (to/from string, iteration)", "category": "Utilities", "git": "https://github.com/Neargye/magic_enum.git", "tag": "v0.9.6", "targets": ["magic_enum::magic_enum"], "include": "<magic_enum.hpp>"},
+    {"name": "glm", "description": "OpenGL Mathematics: vectors and matrices", "category": "Graphics", "git": "https://github.com/g-truc/glm.git", "tag": "1.0.1", "targets": ["glm::glm"], "options": {"GLM_BUILD_TESTS": "OFF"}, "include": "<glm/glm.hpp>"},
+    {"name": "googletest", "description": "Google Test and Google Mock unit testing", "category": "Testing", "git": "https://github.com/google/googletest.git", "tag": "v1.15.2", "targets": ["GTest::gtest", "GTest::gmock"], "options": {"INSTALL_GTEST": "OFF"}, "include": "<gtest/gtest.h>"},
+    {"name": "Catch2", "description": "Catch2 v3 unit testing (bring your own main)", "category": "Testing", "git": "https://github.com/catchorg/Catch2.git", "tag": "v3.7.1", "targets": ["Catch2::Catch2"], "include": "<catch2/catch_test_macros.hpp>"},
+    {"name": "glfw", "description": "Windows, OpenGL contexts and input", "category": "Graphics", "git": "https://github.com/glfw/glfw.git", "tag": "3.4", "targets": ["glfw"], "options": {"GLFW_BUILD_EXAMPLES": "OFF", "GLFW_BUILD_TESTS": "OFF", "GLFW_BUILD_DOCS": "OFF", "GLFW_BUILD_WAYLAND": "OFF"}, "notes": "Needs X11 headers: sudo apt install xorg-dev", "include": "<GLFW/glfw3.h>"},
+    {"name": "raylib", "description": "Simple library for games and graphics", "category": "Graphics", "git": "https://github.com/raysan5/raylib.git", "tag": "5.5", "targets": ["raylib"], "options": {"BUILD_EXAMPLES": "OFF", "GLFW_BUILD_WAYLAND": "OFF"}, "notes": "Needs X11 headers: sudo apt install xorg-dev", "include": "<raylib.h>"},
+    {"name": "SDL3", "description": "Windows, input, audio and 2D rendering", "category": "Graphics", "git": "https://github.com/libsdl-org/SDL.git", "tag": "release-3.2.0", "targets": ["SDL3::SDL3"], "options": {"SDL_TEST_LIBRARY": "OFF"}, "notes": "Needs X11/audio headers for full features: sudo apt install xorg-dev libasound2-dev libpulse-dev", "include": "<SDL3/SDL.h>"}
+  ]
+}

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/kevcpp/KevCpp">
+    <file>packages.json</file>
+    <file>icons/hicolor/16x16/apps/org.kevcpp.KevCpp.png</file>
+    <file>icons/hicolor/24x24/apps/org.kevcpp.KevCpp.png</file>
+    <file>icons/hicolor/32x32/apps/org.kevcpp.KevCpp.png</file>
+    <file>icons/hicolor/48x48/apps/org.kevcpp.KevCpp.png</file>
+    <file>icons/hicolor/64x64/apps/org.kevcpp.KevCpp.png</file>
+    <file>icons/hicolor/128x128/apps/org.kevcpp.KevCpp.png</file>
+    <file>icons/hicolor/256x256/apps/org.kevcpp.KevCpp.png</file>
+    <file>icons/hicolor/512x512/apps/org.kevcpp.KevCpp.png</file>
+  </gresource>
+</gresources>

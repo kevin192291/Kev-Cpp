@@ -1,0 +1,141 @@
+cmake_minimum_required(VERSION 3.20)
+project(kevcpp VERSION 0.1.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif()
+
+option(KEVC_BUILD_TESTS "Build unit tests" ON)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GTKMM REQUIRED IMPORTED_TARGET gtkmm-4.0)
+pkg_check_modules(GTKSOURCEVIEW REQUIRED IMPORTED_TARGET gtksourceview-5)
+pkg_check_modules(VTE REQUIRED IMPORTED_TARGET vte-2.91-gtk4)
+find_package(nlohmann_json 3.10 REQUIRED)
+
+# Pure logic with no GTK dependency, so it can be unit tested headlessly.
+add_library(kevc_core STATIC
+  src/core/BuildFiles.cpp
+  src/core/BuildPlan.cpp
+  src/core/Diagnostics.cpp
+  src/core/Lsp.cpp
+  src/core/ManagedBlock.cpp
+  src/core/Mi.cpp
+  src/core/Packages.cpp
+  src/core/Project.cpp
+  src/core/ProjectSession.cpp
+  src/core/Toolchain.cpp
+)
+target_include_directories(kevc_core PUBLIC src)
+target_link_libraries(kevc_core PUBLIC nlohmann_json::nlohmann_json)
+target_compile_options(kevc_core PRIVATE -Wall -Wextra)
+
+# Icons are embedded so the app shows its icon without being installed.
+find_program(GLIB_COMPILE_RESOURCES glib-compile-resources REQUIRED)
+set(KEVC_RESOURCE_XML ${CMAKE_SOURCE_DIR}/data/kevcpp.gresource.xml)
+set(KEVC_RESOURCE_C ${CMAKE_BINARY_DIR}/kevcpp-resources.c)
+execute_process(
+  COMMAND ${GLIB_COMPILE_RESOURCES} --generate-dependencies ${KEVC_RESOURCE_XML}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/data
+  OUTPUT_VARIABLE KEVC_RESOURCE_DEPS_RAW)
+string(REPLACE "\n" ";" KEVC_RESOURCE_DEPS "${KEVC_RESOURCE_DEPS_RAW}")
+list(FILTER KEVC_RESOURCE_DEPS EXCLUDE REGEX "^$")
+list(TRANSFORM KEVC_RESOURCE_DEPS PREPEND ${CMAKE_SOURCE_DIR}/data/)
+add_custom_command(
+  OUTPUT ${KEVC_RESOURCE_C}
+  COMMAND ${GLIB_COMPILE_RESOURCES} --generate-source --target=${KEVC_RESOURCE_C}
+          --sourcedir=${CMAKE_SOURCE_DIR}/data ${KEVC_RESOURCE_XML}
+  DEPENDS ${KEVC_RESOURCE_XML} ${KEVC_RESOURCE_DEPS}
+  COMMENT "Compiling GResources")
+
+add_executable(kev-cpp
+  ${KEVC_RESOURCE_C}
+  src/main.cpp
+  src/app/Application.cpp
+  src/app/MainWindow.cpp
+  src/build/BuildRunner.cpp
+  src/build/CompilerPanel.cpp
+  src/debug/DebugController.cpp
+  src/debug/DebugHover.cpp
+  src/debug/DebugViews.cpp
+  src/debug/GdbSession.cpp
+  src/devserver/DevServer.cpp
+  src/editor/EditorTab.cpp
+  src/editor/ProjectTree.cpp
+  src/editor/SymbolsPanel.cpp
+  src/lsp/LspBridges.cpp
+  src/lsp/LspClient.cpp
+  src/lsp/LspManager.cpp
+  src/project/SourceWatcher.cpp
+  src/terminal/TerminalPane.cpp
+  src/ui/Dialogs.cpp
+  src/ui/DockManager.cpp
+  src/ui/ProjectOptionsDialog.cpp
+)
+target_link_libraries(kev-cpp PRIVATE
+  kevc_core
+  PkgConfig::GTKMM
+  PkgConfig::GTKSOURCEVIEW
+  PkgConfig::VTE
+)
+target_compile_options(kev-cpp PRIVATE -Wall -Wextra)
+target_compile_definitions(kev-cpp PRIVATE
+  KEVC_VERSION="${PROJECT_VERSION}"
+  KEVC_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
+# ELF binaries can't embed an icon, but file managers that honour GIO's metadata::custom-icon (Nemo)
+# show one. Set it after every build; harmless where gio or a desktop session isn't available.
+find_program(GIO_EXECUTABLE gio)
+if(GIO_EXECUTABLE)
+  add_custom_command(TARGET kev-cpp POST_BUILD
+    COMMAND sh -c "\"$0\" set \"$1\" metadata::custom-icon \"$2\" 2>/dev/null || true"
+            ${GIO_EXECUTABLE} $<TARGET_FILE:kev-cpp>
+            "file://${CMAKE_SOURCE_DIR}/data/icons/hicolor/256x256/apps/org.kevcpp.KevCpp.png"
+    VERBATIM)
+endif()
+
+include(GNUInstallDirs)
+install(TARGETS kev-cpp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY data/icons/ DESTINATION ${CMAKE_INSTALL_DATADIR}/icons)
+# The launcher points at the installed binary by full path (~/.local/bin is often not on the desktop
+# session's PATH). Written at install time so `cmake --install --prefix ...` gets the right path.
+install(CODE "
+  set(prefix \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
+  file(READ \"${CMAKE_SOURCE_DIR}/data/org.kevcpp.KevCpp.desktop.in\" desktop)
+  string(REPLACE \"@BINDIR@\" \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\" desktop \"\${desktop}\")
+  file(WRITE \"\${prefix}/${CMAKE_INSTALL_DATADIR}/applications/org.kevcpp.KevCpp.desktop\" \"\${desktop}\")
+  message(STATUS \"Installing: \${prefix}/${CMAKE_INSTALL_DATADIR}/applications/org.kevcpp.KevCpp.desktop\")
+  # Let the menu and panels pick up the new launcher and icon right away (best effort).
+  execute_process(COMMAND gtk-update-icon-cache -f -t \"\${prefix}/${CMAKE_INSTALL_DATADIR}/icons/hicolor\" OUTPUT_QUIET ERROR_QUIET)
+  execute_process(COMMAND update-desktop-database \"\${prefix}/${CMAKE_INSTALL_DATADIR}/applications\" OUTPUT_QUIET ERROR_QUIET)
+  # File-manager icon for the installed binary too (see the POST_BUILD step above).
+  execute_process(COMMAND gio set \"\${prefix}/${CMAKE_INSTALL_BINDIR}/kev-cpp\" metadata::custom-icon
+                          \"file://\${prefix}/${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps/org.kevcpp.KevCpp.png\"
+                  OUTPUT_QUIET ERROR_QUIET)
+")
+install(DIRECTORY tools/ DESTINATION ${CMAKE_INSTALL_DATADIR}/kev-cpp/tools)
+
+# typescript-language-server + typescript for JS/TS IntelliSense, pinned in tools/package-lock.json.
+find_program(NPM_EXECUTABLE npm)
+if(NPM_EXECUTABLE)
+  add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/tools/node_modules/.package-lock.json
+    COMMAND ${NPM_EXECUTABLE} ci --no-audit --no-fund
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools
+    DEPENDS ${CMAKE_SOURCE_DIR}/tools/package.json ${CMAKE_SOURCE_DIR}/tools/package-lock.json
+    COMMENT "Installing the TypeScript language server (npm ci)")
+  add_custom_target(kevc_node_tools ALL DEPENDS ${CMAKE_SOURCE_DIR}/tools/node_modules/.package-lock.json)
+else()
+  message(WARNING "npm not found: TypeScript IntelliSense will be unavailable")
+endif()
+
+if(KEVC_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
+endif()

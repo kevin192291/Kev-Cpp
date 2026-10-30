@@ -1,0 +1,4 @@
+build/
+.cache/
+tools/node_modules/
+*.swp
