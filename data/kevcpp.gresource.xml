@@ -5,6 +5,7 @@
     <file>kevc-theme.css</file>
     <file>styles/kevc-slate.xml</file>
     <file>language-specs/svelte.lang</file>
+    <file>designer/catalog.json</file>
     <file>icons/hicolor/16x16/apps/org.kevcpp.KevCpp.png</file>
     <file>icons/hicolor/24x24/apps/org.kevcpp.KevCpp.png</file>
     <file>icons/hicolor/32x32/apps/org.kevcpp.KevCpp.png</file>

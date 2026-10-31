@@ -11,7 +11,7 @@
 namespace kevc {
 
 // SvelteKit apps are made by the official `sv create` (see svCreateCommand), not by create() below.
-enum class ProjectTemplate { CppConsole, CppStatic, CppShared, CConsole, WebTs, SvelteKit };
+enum class ProjectTemplate { CppConsole, CppStatic, CppShared, CConsole, GtkmmApp, GtkCApp, WebTs, SvelteKit };
 
 // Directories never scanned for sources or shown in the project tree.
 bool isIgnoredDirName(const std::string& name);

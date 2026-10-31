@@ -35,6 +35,9 @@ add_library(kevc_core STATIC
   src/core/Settings.cpp
   src/core/SvelteKit.cpp
   src/core/TestReport.cpp
+  src/core/UiCodegen.cpp
+  src/core/UiDocument.cpp
+  src/core/UiEdit.cpp
   src/core/ToolLocator.cpp
   src/core/Version.cpp
   src/core/Toolchain.cpp
@@ -85,6 +88,10 @@ add_executable(kev-cpp
   src/debug/GdbSession.cpp
   src/debug/JsDebugger.cpp
   src/devserver/DevServer.cpp
+  src/designer/DesignerCode.cpp
+  src/designer/DesignerEditing.cpp
+  src/designer/DesignerPage.cpp
+  src/designer/DesignerTypes.cpp
   src/editor/EditorTab.cpp
   src/editor/ProjectTree.cpp
   src/editor/RoutesPanel.cpp

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "editor/DocumentPage.h"
+
 #include <gtkmm.h>
 #include <gtksourceview/gtksource.h>
 
@@ -11,25 +13,27 @@ namespace kevc {
 struct LspDiagnostic;
 
 // One open file: a GtkSourceView in a scroller, plus the widget shown on its notebook tab.
-class EditorTab : public Gtk::ScrolledWindow {
+class EditorTab : public Gtk::ScrolledWindow, public DocumentPage {
 public:
     // Throws Glib::Error / std::runtime_error if the file cannot be read or is not UTF-8.
     // `cppHeaders` highlights .h files as C++ rather than C.
     EditorTab(const std::filesystem::path& file, bool cppHeaders);
     ~EditorTab() override;
 
-    const std::filesystem::path& path() const { return path_; }
-    bool modified() const;
+    const std::filesystem::path& path() const override { return path_; }
+    bool modified() const override;
     // Throws Glib::Error on failure.
-    void save();
+    void save() override;
 
-    Gtk::Widget& tabLabel() { return tabBox_; }
+    Gtk::Widget& pageWidget() override { return *this; }
+    Gtk::Widget& tabLabel() override { return tabBox_; }
+    void focusPage() override { focusEditor(); }
     GtkSourceView* view() const { return view_; }
     GtkSourceBuffer* buffer() const { return buffer_; }
 
     void focusEditor();
     void gotoLine(int line, int column = 0); // 1-based line and column
-    void activateTextAction(const char* action); // "text.undo", "clipboard.copy", ...
+    void activateTextAction(const char* action) override; // "text.undo", "clipboard.copy", ...
     void placeCursor(const GtkTextIter& iter);   // moves, scrolls to and focuses
     // Squiggly underlines for language-server diagnostics (replaces the previous set).
     void showDiagnostics(const std::vector<LspDiagnostic>& diagnostics);
@@ -48,7 +52,7 @@ public:
     int matchCount() const;
     void clearSearch();
 
-    sigc::signal<void()>& signalCloseRequested() { return closeRequested_; }
+    sigc::signal<void()>& signalCloseRequested() override { return closeRequested_; }
     sigc::signal<void(bool)>& signalModifiedChanged() { return modifiedChanged_; }
     sigc::signal<void(int)>& signalMatchCountChanged() { return matchCountChanged_; }
     sigc::signal<void()>& signalSaved() { return saved_; }

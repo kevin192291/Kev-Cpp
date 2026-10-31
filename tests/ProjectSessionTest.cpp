@@ -213,3 +213,38 @@ TEST_F(ProjectSessionTest, GeneratedStaticLibraryBuilds) {
     ASSERT_EQ(run("cmake --build " + root + "/build/debug"), 0);
     EXPECT_TRUE(fs::exists(s.root() / "build/debug/libmylib.a"));
 }
+
+TEST_F(ProjectSessionTest, GtkmmApplicationStartsWithADesignedWindow) {
+    auto s = ProjectSession::create(dir_, "my notes", ProjectTemplate::GtkmmApp);
+    for (const char* f : {"src/main.cpp", "src/main_window.ui", "src/main_window.ui.h", "src/main_window.ui.cpp",
+                          "src/main_window.h", "src/main_window.cpp"})
+        EXPECT_TRUE(fs::exists(s.root() / f)) << f;
+    ASSERT_EQ(s.project().packages.size(), 1u);
+    EXPECT_EQ(s.project().packages[0].name, "gtkmm-4.0");
+    EXPECT_EQ(s.project().packages[0].source, Package::Source::System);
+    EXPECT_NE(slurp(s.root() / "src/main_window.ui").find("<property name=\"title\">my notes</property>"), std::string::npos);
+    EXPECT_NE(slurp(s.root() / "src/main_window.cpp").find("greeting->set_text("), std::string::npos);
+    EXPECT_NE(slurp(s.root() / "src/main.cpp").find("Gtk::Application::create(\"org.kevcpp.my_notes\")"), std::string::npos);
+    EXPECT_NE(slurp(s.root() / "CMakeLists.txt").find("gtkmm-4.0"), std::string::npos);
+
+    if (run("pkg-config --exists gtkmm-4.0") != 0) GTEST_SKIP() << "gtkmm-4.0 development files aren't installed";
+    const std::string root = "'" + s.root().string() + "'";
+    ASSERT_EQ(run("cmake -S " + root + " -B " + root + "/build/debug -DCMAKE_BUILD_TYPE=Debug"
+                  " -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++"), 0);
+    ASSERT_EQ(run("cmake --build " + root + "/build/debug"), 0);
+    EXPECT_TRUE(fs::exists(s.root() / "build/debug" / s.project().effectiveOutputName()));
+}
+
+TEST_F(ProjectSessionTest, GtkCApplicationBuildsWithMake) {
+    auto s = ProjectSession::create(dir_, "cnotes", ProjectTemplate::GtkCApp);
+    for (const char* f : {"src/main.c", "src/main_window.ui", "src/main_window-ui.h", "src/main_window-ui.c", "src/main_window.c"})
+        EXPECT_TRUE(fs::exists(s.root() / f)) << f;
+    EXPECT_NE(slurp(s.root() / "src/main_window.c").find("gtk_label_set_text(ui->greeting"), std::string::npos);
+    ASSERT_EQ(s.project().packages.size(), 1u);
+    EXPECT_EQ(s.project().packages[0].name, "gtk4");
+
+    if (run("pkg-config --exists gtk4") != 0) GTEST_SKIP() << "gtk4 development files aren't installed";
+    const std::string root = "'" + s.root().string() + "'";
+    ASSERT_EQ(run("make -C " + root + " DEBUG=1"), 0);
+    EXPECT_TRUE(fs::exists(s.root() / "build/debug/cnotes"));
+}

@@ -101,6 +101,27 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
 - **Toolbars and panels to suit the project**: View → Toolbars shows or hides each group of toolbar
   buttons, and View → Panels (or Close Panel on a tab's ⋮ menu) each panel, separately for each kind of
   project (C++, C, web…). The web toolbar and web panels only show for web projects by default.
+- **GTK designer**: GtkBuilder `.ui` files (GTK 4) open in a design view with a live preview of the
+  window. Click a widget to select it; the outline lists every object and the property list shows the
+  selected one's properties by class, with the values written in the file in bold. Edits can be undone
+  (Ctrl+Z, Ctrl+Shift+Z), and saving changes only the lines that were edited. The XML tab shows the file
+  as text, opened at the selected object. Classes Kev-C++ doesn't have (your own widgets, libadwaita's)
+  show as labelled placeholders, and nothing in the preview reacts to clicks or keys.
+  Widgets come from the palette on the left: drag one into the design (an orange line or area shows
+  where it will go: between a box's children, a free grid cell, a header bar's start or end, an empty
+  window) or click it to add it to the selection. Dragging a widget in the design moves it. Right-click
+  for cut, copy, paste, delete, Wrap in Box/Grid/Scrolled Window/Frame and Move Up/Down (Delete and
+  Ctrl+C/X/V work too). The Signals tab names a handler for each signal, and a widget in a grid shows
+  its cell (column, row, spans) with its properties.
+- **Code for your designs**: the designer's Code menu writes a gtkmm class (`main_window.ui.h/.cpp`:
+  a `MainWindowUi` base with a member for each widget with an id and a virtual method for each
+  handler) or C functions (`main_window-ui.h/.c`: a struct of widget pointers and
+  `main_window_ui_new()`). These are rewritten every time you save the design, and the project gets
+  the gtkmm-4.0 or gtk4 package. Your code goes in `main_window.h/.cpp` (or `main_window.c`), which
+  Kev-C++ writes once and never touches again, except that the → button next to a handler in the Signals tab adds
+  the handler if it's missing and opens it. Code → Export Blueprint writes a `.blp` copy of the design.
+  New Project has **GTK 4 Application (gtkmm)** and **GTK 4 Application (C)**: a window made in the
+  designer that builds and runs with F11.
 
 ### Web projects (SvelteKit, Svelte, Vite)
 

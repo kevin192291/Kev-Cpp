@@ -15,6 +15,7 @@ TEST(Icons, FilesByExtension) {
     EXPECT_EQ(icons::forFile("app.mjs"), "kevc-js-file");
     EXPECT_EQ(icons::forFile("src/routes/+page.svelte"), "kevc-svelte-file");
     EXPECT_EQ(icons::forFile("logo.png"), "kevc-resource-file");
+    EXPECT_EQ(icons::forFile("src/main_window.ui"), "kevc-resource-file");
     EXPECT_EQ(icons::forFile("demo.kevc"), "kevc-project");
     EXPECT_EQ(icons::forFile("CMakeLists.txt"), "kevc-document");
     EXPECT_EQ(icons::forFile("Makefile"), "kevc-document");

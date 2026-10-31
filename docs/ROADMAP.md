@@ -17,7 +17,7 @@ asked for by name:
 Decisions from the user:
 - **Premium** means pro-grade features, **all free**. There are no licence keys and no feature gating.
 - **Order:** a short Foundations milestone, then the **SvelteKit track**, then STM32, the GTK designer and
-  general C/C++ features.
+  general C/C++ features. (On 2026-10-31 the user moved the GTK designer ahead of STM32.)
 - **GTK designer:** **native, inside Kev-C++**, generating **gtkmm C++, plain C and Blueprint** code.
 
 ## What the research found
@@ -139,15 +139,21 @@ These facts shape the STM32 track.
   - grid cells.
 
   A drop resolves to (parent, slot, index).
-- **D7 Generated code never overwrites the user's code.** This is the generation-gap pattern.
-  - **Generated files** are wholly owned and rewritten whenever the `.ui` is saved: `name.ui.h/.cpp`,
-    `name-ui.h/.c`, and `name.blp`.
+- **D7 Generated code never overwrites the user's code.** This is the generation-gap pattern. (As built
+  in G3.)
+  - **Generated files** are wholly owned and rewritten whenever the `.ui` is saved, once the user has
+    written code for the design the first time (Code menu): `name.ui.h/.cpp` or `name-ui.h/.c`.
   - **User files** are created once and never rewritten. "Go to handler" only adds a missing stub.
-  - **gtkmm:** a base class with typed widget members and `virtual` handlers, connected with sigc. When a
-    signal is removed, the stale `override` turns into a compile error instead of deleted code.
-  - **C:** a struct of widget pointers, with `GtkBuilderCScope` callbacks.
-  - **Blueprint:** written from the model and never read back.
-  - The `.ui` is embedded as a string, so it works with both CMake and Make projects.
+  - **gtkmm:** a base class with typed widget members and `virtual` handlers. The handlers are connected
+    with `g_signal_connect_data` to a lambda that calls the virtual method, so any signal works
+    without a table of gtkmm signal methods; handlers take no arguments. When a signal is removed,
+    the stale `override` turns into a compile error instead of deleted code.
+  - **C:** a struct of widget pointers, with the handlers connected by `g_signal_connect`. Weak empty
+    stand-ins let a project link before its handlers are written. (This replaced the planned
+    `GtkBuilderCScope`, which needs every handler to exist.)
+  - **Blueprint:** exported on request (`name.blp`), written from the model and never read back.
+  - The `.ui` is embedded as a string (without its `<signal>`s), so it works with both CMake and Make
+    projects.
   - `ManagedBlock` stays for build files only. Its markers are `#` comments and it allows one block per file.
 - **D8 Toolbar groups** each have Auto, Shown or Hidden visibility, remembered per project type. Hiding the
   STM32 toolbar in one STM32 project hides it for STM32 projects only.
@@ -156,7 +162,17 @@ These facts shape the STM32 track.
 
 ## Milestones (each builds, runs and ships on its own)
 
-**Status (2026-10-31):** M0 and W1–W5 are done. Next up is S1.
+**Status (2026-10-31):** M0, W1–W5 and G1–G3 are done. Next up is S1.
+
+**Also done along the way** (not milestones):
+- **Versions and updates:** a build's version is its commit's UTC date and time plus its hash. Every
+  push to master builds, tests and publishes a GitHub release, and Help → Check for Updates downloads and
+  installs the newest one.
+- **Old GPUs:** without OpenGL 3.3, Kev-C++ switches GTK to its cairo renderer (XLibre + Mesa crocus
+  crashed otherwise).
+- **`kev PATH`** opens a project or folder from a terminal.
+- **Editor pages:** a `DocumentPage` interface, so MainWindow saves and closes text editors and the
+  designer the same way.
 
 ### Foundations
 
@@ -250,23 +266,35 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
 
 ### GTK designer (native)
 
-**G1 Model, preview, properties**
+**G1 Model, preview, properties** (done)
 - **Design page:** `.ui` files open as a Design | XML page in the editor area.
 - **Editing:** selection, an outline, a property editor and undo.
 - **Saving:** a save changes only what was edited.
+- **As built:** `core/UiDocument` keeps every node's original text and writes untouched nodes back as
+  they were (checked against every GtkBuilder file under /usr/share). Undo stores whole-text snapshots.
+  A child's layout properties (grid cells, packing) aren't editable yet; they come with G2's slots.
 
-**G2 Palette and drag-and-drop**
+**G2 Palette and drag-and-drop** (done)
 - **Palette:** a widget palette.
 - **Layout editing:**
   - Drop widgets into any container slot, move them, and place them in grid cells.
   - Cut, copy and paste.
   - "Wrap in Box/Grid/ScrolledWindow".
 - **Signals:** a Signals tab with handler names.
+- **As built:** `data/designer/catalog.json` lists the palette and each container's slots; `core/UiEdit`
+  places, moves, wraps and removes objects to match. A drop goes to the innermost container under the
+  pointer with room for it. Moving is by drag in the design or Move Up/Down (not in the outline yet).
 
-**G3 Code-behind and GTK app projects**
+**G3 Code-behind and GTK app projects** (done)
 - **Generators:** gtkmm, C and Blueprint, plus "Go to handler".
 - **Templates:** new "GTK 4 Application (gtkmm)" and "GTK 4 Application (C)".
 - **End result:** a designed window builds and runs with F11.
+- **As built:** `core/UiCodegen`. Code is generated for windows with an id, not templates. Both
+  languages embed the .ui without its `<signal>`s and connect the handlers in code. gtkmm handlers take
+  no arguments and return void or bool; the widgets are members. C uses `g_signal_connect`, and weak
+  empty stand-ins make a project link before its handlers are written (instead of a
+  GtkBuilderCScope). Generated files are rewritten on save once they exist; the user's files are
+  created if missing. The tests compile and link the generated code against the real gtkmm and GTK.
 
 ### C/C++ pro
 
@@ -292,6 +320,12 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
 - A Svelte component playground.
 - Remote build and debug over SSH.
 - Designer support for templates and custom widgets.
+- Designer follow-ups from G1–G3:
+  - Drag and drop in the outline (moving is by drag in the design or Move Up/Down today).
+  - gtkmm handlers that receive the signal's arguments.
+  - A light/dark switch for the preview: it shows GTK's dark theme, where the app may run light.
+  - Showing other stack and notebook pages in the preview, not only the visible one.
+  - Checking the Blueprint export with blueprint-compiler when it's installed.
 - Existing gaps: Replace, Find Results, saved breakpoints and recent projects.
 - ESLint and Tailwind language servers (from W2). LspManager has to route one file to several
   servers and merge their diagnostics.
@@ -316,7 +350,8 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
 - Reading live values while the target runs depends on the backend.
 
 **Designer**
-- The gtkmm 4.10 headers are older than the GTK 4.14 runtime.
+- The gtkmm 4.10 headers are older than the GTK 4.14 runtime. (Handled: generated code only names a
+  gtkmm class whose header is installed, else `Gtk::Widget`.)
 - Some widget combinations may misbehave in an in-process preview.
 - Blueprint syntax is still changing.
 

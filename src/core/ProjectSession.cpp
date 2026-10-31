@@ -3,6 +3,7 @@
 #include "core/BuildFiles.h"
 #include "core/ManagedBlock.h"
 #include "core/ProjectKinds.h"
+#include "core/UiCodegen.h"
 
 #include <algorithm>
 #include <array>
@@ -79,6 +80,75 @@ struct TemplateFile {
     std::string content;
 };
 
+// The window a GTK 4 application project starts with, made in the GTK designer.
+std::string gtkWindowUi(const Project& p) {
+    const std::string title = ui::escape(p.name);
+    return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+           "<interface>\n"
+           "  <requires lib=\"gtk\" version=\"4.0\"/>\n"
+           "  <object class=\"GtkApplicationWindow\" id=\"main_window\">\n"
+           "    <property name=\"title\">" + title + "</property>\n"
+           "    <property name=\"default-width\">480</property>\n"
+           "    <property name=\"default-height\">320</property>\n"
+           "    <child type=\"titlebar\">\n"
+           "      <object class=\"GtkHeaderBar\" id=\"header_bar\"/>\n"
+           "    </child>\n"
+           "    <child>\n"
+           "      <object class=\"GtkBox\" id=\"content\">\n"
+           "        <property name=\"orientation\">vertical</property>\n"
+           "        <property name=\"spacing\">12</property>\n"
+           "        <property name=\"halign\">center</property>\n"
+           "        <property name=\"valign\">center</property>\n"
+           "        <child>\n"
+           "          <object class=\"GtkLabel\" id=\"greeting\">\n"
+           "            <property name=\"label\">Hello from " + title + "!</property>\n"
+           "          </object>\n"
+           "        </child>\n"
+           "        <child>\n"
+           "          <object class=\"GtkButton\" id=\"hello_button\">\n"
+           "            <property name=\"label\">Click Me</property>\n"
+           "            <signal name=\"clicked\" handler=\"on_hello_button_clicked\"/>\n"
+           "            <style>\n"
+           "              <class name=\"suggested-action\"/>\n"
+           "            </style>\n"
+           "          </object>\n"
+           "        </child>\n"
+           "      </object>\n"
+           "    </child>\n"
+           "  </object>\n"
+           "</interface>\n";
+}
+
+// An application id GTK accepts: org.kevcpp.<target>, with only letters, digits and _.
+std::string applicationId(const Project& p) {
+    return "org.kevcpp." + ui::identifier(p.targetName);
+}
+
+// main_window.ui and the code the designer writes for it (as it would on saving the .ui), with the
+// button's handler filled in so the new app does something.
+std::vector<TemplateFile> gtkWindowFiles(const Project& p, bool cpp) {
+    const std::string uiText = gtkWindowUi(p);
+    const ui::UiDocument doc = ui::UiDocument::parse(uiText);
+    const ui::Code code = cpp ? ui::generateGtkmm(doc, "main_window.ui", ui::basicGtkTypes())
+                              : ui::generateC(doc, "main_window.ui", ui::basicGtkTypes());
+    std::vector<TemplateFile> files{{"src/main_window.ui", uiText}};
+    for (const auto& f : code.generated) files.push_back({"src/" + f.name, f.text});
+    for (auto f : code.user) {
+        if (cpp) {
+            const std::string stub = "void MainWindow::on_hello_button_clicked() {\n}\n";
+            if (auto at = f.text.find(stub); at != std::string::npos)
+                f.text.replace(at, stub.size(), "void MainWindow::on_hello_button_clicked() {\n"
+                                                "    greeting->set_text(\"You clicked the button.\");\n}\n");
+        } else {
+            const std::string body = "    (void) self;\n    (void) ui;\n}\n";
+            if (auto at = f.text.find(body); at != std::string::npos)
+                f.text.replace(at, body.size(), "    (void) self;\n    gtk_label_set_text(ui->greeting, \"You clicked the button.\");\n}\n");
+        }
+        files.push_back({"src/" + f.name, f.text});
+    }
+    return files;
+}
+
 std::vector<TemplateFile> templateFiles(const Project& p, ProjectTemplate tmpl) {
     const std::string& t = p.targetName;
     switch (tmpl) {
@@ -111,6 +181,43 @@ std::vector<TemplateFile> templateFiles(const Project& p, ProjectTemplate tmpl) 
                  "    printf(\"Hello from " + p.name + "!\\n\");\n"
                  "    return 0;\n"
                  "}\n"}};
+    case ProjectTemplate::GtkmmApp: {
+        auto files = gtkWindowFiles(p, true);
+        files.push_back({"src/main.cpp",
+                         "#include \"main_window.h\"\n\n"
+                         "int main(int argc, char* argv[]) {\n"
+                         "    auto app = Gtk::Application::create(\"" + applicationId(p) + "\");\n"
+                         "    app->signal_activate().connect([&app] {\n"
+                         "        // The window is designed in main_window.ui: open it to change it.\n"
+                         "        auto* window = MainWindow::create();\n"
+                         "        app->add_window(*window);\n"
+                         "        window->signal_hide().connect([window] { delete window; });\n"
+                         "        window->present();\n"
+                         "    });\n"
+                         "    return app->run(argc, argv);\n"
+                         "}\n"});
+        return files;
+    }
+    case ProjectTemplate::GtkCApp: {
+        auto files = gtkWindowFiles(p, false);
+        files.push_back({"src/main.c",
+                         "#include \"main_window-ui.h\"\n\n"
+                         "static void activate(GtkApplication *app, gpointer user_data) {\n"
+                         "    (void) user_data;\n"
+                         "    /* The window is designed in main_window.ui: open it to change it. */\n"
+                         "    MainWindowUi *ui = main_window_ui_new();\n"
+                         "    gtk_window_set_application(GTK_WINDOW(ui->main_window), app);\n"
+                         "    gtk_window_present(GTK_WINDOW(ui->main_window));\n"
+                         "}\n\n"
+                         "int main(int argc, char *argv[]) {\n"
+                         "    GtkApplication *app = gtk_application_new(\"" + applicationId(p) + "\", G_APPLICATION_DEFAULT_FLAGS);\n"
+                         "    g_signal_connect(app, \"activate\", G_CALLBACK(activate), NULL);\n"
+                         "    int status = g_application_run(G_APPLICATION(app), argc, argv);\n"
+                         "    g_object_unref(app);\n"
+                         "    return status;\n"
+                         "}\n"});
+        return files;
+    }
     case ProjectTemplate::SvelteKit:
         return {}; // sv writes the files
     case ProjectTemplate::WebTs:
@@ -202,6 +309,14 @@ ProjectSession ProjectSession::create(const fs::path& parentDir, const std::stri
         p.includeDirs = {"include"};
         break;
     case ProjectTemplate::CConsole: p.kind = ProjectKind::C; break;
+    case ProjectTemplate::GtkmmApp:
+        p.kind = ProjectKind::Cpp;
+        p.packages.push_back(Package{Package::Source::System, "gtkmm-4.0", {}, {}, {}, {}});
+        break;
+    case ProjectTemplate::GtkCApp:
+        p.kind = ProjectKind::C;
+        p.packages.push_back(Package{Package::Source::System, "gtk4", {}, {}, {}, {}});
+        break;
     case ProjectTemplate::WebTs:
     case ProjectTemplate::SvelteKit:
         p.kind = ProjectKind::WebTs;

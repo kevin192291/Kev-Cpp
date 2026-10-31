@@ -16,6 +16,9 @@ add_executable(kevc_tests
   SvelteKitTest.cpp
   ToolLocatorTest.cpp
   ToolchainTest.cpp
+  UiCodegenTest.cpp
+  UiDocumentTest.cpp
+  UiEditTest.cpp
   VersionTest.cpp
   WebProjectTest.cpp
   WebReportsTest.cpp

@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 124 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 164 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -32,10 +32,18 @@ verified by driving the real app (see "GUI testing").
   `ProjectKinds` (per-kind traits, toolbar/panel visibility per profile), `WebProject` (package.json
   flavour, package manager, Vite/svelte-check/sv commands), `SvelteKit` (routes, exports, load keys,
   data flow, `$env` report), `Dap` (js-debug launch configs, DAP replies), `TestReport` (Vitest/
-  Playwright JSON), `WebReports` (OTLP spans → waterfall, npm outdated/audit).
+  Playwright JSON), `WebReports` (OTLP spans → waterfall, npm outdated/audit), `UiDocument` (GtkBuilder
+  `.ui` model that writes untouched text back verbatim, plus the designer's preview copy), `UiEdit`
+  (the designer's catalog of container slots; placing, moving, wrapping, removing objects; signals),
+  `UiCodegen` (gtkmm/C code and Blueprint from a design; Go to handler stubs).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon), `MainWindow`
   (everything wired together: menus, actions, build/run, debugging, IntelliSense, dev server).
-- `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), ProjectTree, SymbolsPanel.
+- `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), ProjectTree, SymbolsPanel, and
+  DocumentPage, the interface MainWindow saves and closes editor-area pages through.
+- `src/designer/` DesignerPage: the GTK designer's page for `.ui` files (preview, outline, properties,
+  signals, XML); DesignerEditing.cpp holds its palette, drag and drop, clipboard and context menu;
+  DesignerCode.cpp its Code menu, regeneration on save and Go to handler;
+  DesignerTypes (GType lookups, the catalog from `data/designer/catalog.json` in the GResource).
 - `src/lsp/` LspClient (JSON-RPC over stdio), LspManager (documents ↔ servers), LspBridges
   (GObject completion/hover providers for GtkSourceView, written in C style).
 - `src/debug/` GdbSession (MI process), DebugController (session state), DebugViews (VarNode tree,
@@ -129,6 +137,25 @@ verified by driving the real app (see "GUI testing").
   for Updates: curl GitHub's releases/latest, `core/Version` compares by commit time, the download and
   `install.sh --prefix <prefix of the running binary>` run in the Run tab (sudo prompts work there).
   `KEVC_PRETEND_VERSION=2026.01.01.0000-0000000` makes a build look old, to test updating.
+- **GTK designer**: the `.ui` file is the only model. `UiDocument` keeps each node's source text and
+  rewrites only edited nodes (new ones are indented like their neighbours); uids are unique in the
+  process, and undo reparses a text snapshot, finding the selection again by its child-index path. The
+  preview is GtkBuilder building `makePreview()`'s copy in-process: windows become boxes, templates
+  objects, unknown classes labelled placeholders; signals, closures and event controllers are dropped.
+  Its frame can't be targeted or focused, so a click layer above it picks widgets
+  (`gtk_widget_pick` with NON_TARGETABLE). Mnemonics are stripped (Alt+key would otherwise fire them in
+  the IDE window) and empty action groups shadow `win.*`/`app.*` for action-name buttons. Theme CSS
+  under `.kevc-design-frame` restores GTK's Default look where the Slate rules would restyle the design.
+  Drags carry "new:<class>" or "move:<uid>"; the page remembers which (`dragging_`) since a drop
+  target only sees the data on drop. Rebuilding the property list destroys the focused field, whose
+  focus-out would commit stale text: every commit returns while `syncing_` is set.
+- **Designer code**: generated files (`x.ui.h/.cpp` gtkmm, `x-ui.h/.c` C) are rewritten on every save
+  once they exist (that's the opt-in); the user's files are only created when missing. gtkmm windows
+  come from `Gtk::Builder::get_widget_derived`, and signals connect with `g_signal_connect_data`
+  (swapped) to a lambda calling the virtual handler, so any signal works without a gtkmm signal
+  table. C stand-ins are `__attribute__((weak))`. TypeInfo (`designer::gtkTypes()`) asks GType for
+  signal signatures and property kinds, and checks gtkmm's headers via pkg-config; the project templates use
+  `ui::basicGtkTypes()`. `MainWindow::addSystemPackage` adds gtkmm-4.0/gtk4 when code is written.
 - **Async safety**: callbacks from gdb/LSP/processes capture a `weak_ptr` token, never raw `this`
   alone (`sigc::track_obj` only protects sigc slots, not `std::function`).
 
@@ -155,8 +182,10 @@ debugger, dev server) plus docking panels. Not done yet: Replace (Ctrl+R) and Fi
 placeholders; breakpoints/watches aren't saved between sessions; the dev server can't resolve npm
 packages; floating panel window positions aren't remembered (GTK 4 can't position windows).
 
-Roadmap: docs/ROADMAP.md. Done: M0 (foundations) and W1–W5 (web/SvelteKit, including server and
-browser debugging, checked end to end). Next: S1 (STM32). Each milestone gets its own plan first.
+Roadmap: docs/ROADMAP.md. Done: M0 (foundations), W1–W5 (web/SvelteKit, including server and
+browser debugging, checked end to end) G1–G3 (GTK designer: model, preview, properties; palette, drag and
+drop, signals; gtkmm/C code, GTK 4 app templates). Next: S1 (STM32). Each milestone gets its own plan
+first.
 
 ## Conventions
 

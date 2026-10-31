@@ -2,6 +2,7 @@
 
 #include "app/Application.h"
 #include "app/BuildInfo.h"
+#include "designer/DesignerPage.h"
 #include "editor/EditorTab.h"
 #include "core/Mi.h"
 #include "core/ProjectKinds.h"
@@ -134,7 +135,7 @@ MainWindow::MainWindow(Application& app)
     root_.append(buildStatusBar());
     set_child(root_);
 
-    projectTree_.signalFileActivated().connect([this](const fs::path& file) { openFile(file); });
+    projectTree_.signalFileActivated().connect([this](const fs::path& file) { openDocument(file); });
     routesPanel_.signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
     routesPanel_.signalOpenInBrowser().connect([this](const std::string& url) { openRoute(url); });
     routesPanel_.signalNewRoute().connect([this] { newRoute(); });
@@ -263,8 +264,8 @@ MainWindow::MainWindow(Application& app)
     signal_close_request().connect(
         [this] {
             if (closeConfirmed_) return false;
-            auto eds = editors();
-            if (std::none_of(eds.begin(), eds.end(), [](EditorTab* t) { return t->modified(); })) return false;
+            auto docs = documents();
+            if (std::none_of(docs.begin(), docs.end(), [](DocumentPage* d) { return d->modified(); })) return false;
             closeAllEditors([this] {
                 closeConfirmed_ = true;
                 close();
@@ -305,7 +306,7 @@ void MainWindow::buildActions() {
     add_action("save", [this] { saveCurrent(); });
     add_action("save-all", [this] { saveAll(); });
     add_action("close-tab", [this] {
-        if (auto* tab = currentEditor()) closeEditor(tab);
+        if (auto* page = currentDocument()) closeEditor(page);
     });
     // Edit (forwarded to the focused editor's own GtkTextView actions)
     add_action("undo", [this] { forwardToEditor("text.undo"); });
@@ -764,7 +765,7 @@ void MainWindow::openPath(const fs::path& path) {
     const fs::path abs = fs::absolute(path, ec);
     if (fs::is_directory(abs, ec)) openFolder(abs);
     else if (abs.extension() == ".kevc") openFolder(abs.parent_path());
-    else if (fs::is_regular_file(abs, ec)) openFile(abs);
+    else if (fs::is_regular_file(abs, ec)) openDocument(abs);
     else showError(*this, "Cannot open " + abs.string(), "The path does not exist.");
 }
 
@@ -890,6 +891,13 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     });
     if (main != sources.end()) openFile(folder_ / *main);
     else if (!sources.empty()) openFile(folder_ / sources.front());
+    // A GTK application's window design (as the GTK 4 Application templates make), in the designer.
+    std::error_code ec;
+    for (const char* design : {"src/main_window.ui", "main_window.ui"})
+        if (fs::exists(folder_ / design, ec)) {
+            openDesigner(folder_ / design);
+            break;
+        }
     setStatus("Opened " + session_->project().name + " (" + traitsOf(session_->project().kind).label + ")");
 }
 
@@ -952,16 +960,77 @@ std::vector<EditorTab*> MainWindow::editors() {
     return out;
 }
 
+DocumentPage* MainWindow::currentDocument() {
+    const int page = editors_.get_current_page();
+    return page < 0 ? nullptr : dynamic_cast<DocumentPage*>(editors_.get_nth_page(page));
+}
+
+std::vector<DocumentPage*> MainWindow::documents() {
+    std::vector<DocumentPage*> out;
+    for (int i = 0; i < editors_.get_n_pages(); ++i)
+        if (auto* page = dynamic_cast<DocumentPage*>(editors_.get_nth_page(i))) out.push_back(page);
+    return out;
+}
+
+DocumentPage* MainWindow::findDocument(const fs::path& file) {
+    std::error_code ec;
+    const fs::path canonical = fs::weakly_canonical(file, ec);
+    for (DocumentPage* page : documents())
+        if (fs::weakly_canonical(page->path(), ec) == canonical) return page;
+    return nullptr;
+}
+
+void MainWindow::openDocument(const fs::path& file) {
+    if (file.extension() == ".ui") openDesigner(file);
+    else openFile(file);
+}
+
+void MainWindow::addDocumentPage(DocumentPage& page) {
+    if (welcomePage_) {
+        editors_.remove_page(*welcomePage_);
+        welcomePage_ = nullptr;
+    }
+    const int index = editors_.append_page(page.pageWidget(), page.tabLabel());
+    editors_.set_tab_reorderable(page.pageWidget(), true);
+    page.signalCloseRequested().connect([this, &page] { closeEditor(&page); });
+    editors_.set_current_page(index);
+}
+
+DesignerPage* MainWindow::openDesigner(const fs::path& file) {
+    if (DocumentPage* open = findDocument(file)) {
+        editors_.set_current_page(editors_.page_num(open->pageWidget()));
+        open->focusPage();
+        return dynamic_cast<DesignerPage*>(open);
+    }
+    std::error_code ec;
+    const fs::path canonical = fs::weakly_canonical(file, ec);
+    DesignerPage* page = nullptr;
+    try {
+        page = Gtk::make_managed<DesignerPage>(canonical);
+    } catch (const Glib::Error& e) {
+        showError(*this, "Cannot open " + file.filename().string(), e.what());
+        return nullptr;
+    } catch (const std::exception& e) {
+        showError(*this, "Cannot open " + file.filename().string(), e.what());
+        return nullptr;
+    }
+    page->signalStatus().connect([this](const Glib::ustring& text) { setStatus(text); });
+    page->signalOpenFile().connect([this](const fs::path& file, int line, int column) { openFile(file, line, column); });
+    page->signalCodeWritten().connect([this](const std::string& module) { addSystemPackage(module); });
+    addDocumentPage(*page);
+    page->focusPage();
+    return page;
+}
+
 EditorTab* MainWindow::openFile(const fs::path& file, int line, int column) {
     std::error_code ec;
     const fs::path canonical = fs::weakly_canonical(file, ec);
-    for (EditorTab* tab : editors()) {
-        if (fs::weakly_canonical(tab->path(), ec) == canonical) {
-            editors_.set_current_page(editors_.page_num(*tab));
-            if (line > 0) tab->gotoLine(line, column);
-            else tab->focusEditor();
-            return tab;
-        }
+    if (DocumentPage* open = findDocument(canonical)) {
+        editors_.set_current_page(editors_.page_num(open->pageWidget()));
+        auto* tab = dynamic_cast<EditorTab*>(open);
+        if (tab && line > 0) tab->gotoLine(line, column);
+        else open->focusPage();
+        return tab; // nullptr when the file is open in the designer
     }
 
     EditorTab* tab = nullptr;
@@ -976,27 +1045,35 @@ EditorTab* MainWindow::openFile(const fs::path& file, int line, int column) {
         return nullptr;
     }
 
-    if (welcomePage_) {
-        editors_.remove_page(*welcomePage_);
-        welcomePage_ = nullptr;
-    }
     if (folder_.empty() && lspRootForLooseFiles_.empty()) {
         // A file opened on its own: give the language servers its folder as the workspace.
         lspRootForLooseFiles_ = canonical.parent_path();
         lsp_->setWorkspace(lspRootForLooseFiles_, nullptr);
     }
     setupIntelliSense(tab);
-    const int page = editors_.append_page(*tab, tab->tabLabel());
-    editors_.set_tab_reorderable(*tab, true);
-    tab->signalCloseRequested().connect([this, tab] { closeEditor(tab); });
+    addDocumentPage(*tab);
     tab->signalMatchCountChanged().connect([this, tab](int count) {
         if (tab == currentEditor() && findBar_.get_search_mode())
             findCount_.set_text(count < 0 ? "" : std::to_string(count) + (count == 1 ? " match" : " matches"));
     });
-    editors_.set_current_page(page);
     if (line > 0) tab->gotoLine(line, column);
     else tab->focusEditor();
     return tab;
+}
+
+// The designer wrote gtkmm or C code: the project has to build against the library it uses.
+void MainWindow::addSystemPackage(const std::string& module) {
+    if (!session_ || session_->project().kind == ProjectKind::WebTs) return;
+    auto& packages = session_->project().packages;
+    if (std::any_of(packages.begin(), packages.end(), [&](const Package& p) { return p.name == module; })) return;
+    packages.push_back(Package{Package::Source::System, module, {}, {}, {}, {}});
+    try {
+        session_->saveAndRegenerate();
+        lsp_->setWorkspace(session_->root(), &session_->project());
+        setStatus("Added the " + module + " package to the project (pkg-config)");
+    } catch (const std::exception& e) {
+        showError(*this, "Could not add " + module + " to the project", e.what());
+    }
 }
 
 void MainWindow::newFile() {
@@ -1020,32 +1097,32 @@ void MainWindow::newFile() {
                    } catch (const std::exception& e) {
                        return e.what();
                    }
-                   openFile(*target);
+                   openDocument(*target);
                    // The SourceWatcher adds it to the build file shortly after.
                    return {};
                });
 }
 
 void MainWindow::saveCurrent() {
-    EditorTab* tab = currentEditor();
-    if (!tab) return;
+    DocumentPage* page = currentDocument();
+    if (!page) return;
     try {
-        tab->save();
-        setStatus("Saved " + tab->path().filename().string());
+        page->save();
+        setStatus("Saved " + page->path().filename().string());
     } catch (const Glib::Error& e) {
-        showError(*this, "Could not save " + tab->path().filename().string(), e.what());
+        showError(*this, "Could not save " + page->path().filename().string(), e.what());
     }
 }
 
 bool MainWindow::saveAll() {
     int saved = 0;
-    for (EditorTab* tab : editors()) {
-        if (!tab->modified()) continue;
+    for (DocumentPage* page : documents()) {
+        if (!page->modified()) continue;
         try {
-            tab->save();
+            page->save();
             ++saved;
         } catch (const Glib::Error& e) {
-            showError(*this, "Could not save " + tab->path().filename().string(), e.what());
+            showError(*this, "Could not save " + page->path().filename().string(), e.what());
             return false;
         }
     }
@@ -1053,30 +1130,30 @@ bool MainWindow::saveAll() {
     return true;
 }
 
-void MainWindow::closeEditor(EditorTab* tab) {
-    if (!tab->modified()) {
-        removeEditor(tab);
+void MainWindow::closeEditor(DocumentPage* page) {
+    if (!page->modified()) {
+        removeEditor(page);
         return;
     }
-    askChoice(*this, "Save changes to " + tab->path().filename().string() + "?", "Unsaved changes will be lost.",
-              {"Cancel", "Discard", "Save"}, 0, 2, [this, tab](int choice) {
+    askChoice(*this, "Save changes to " + page->path().filename().string() + "?", "Unsaved changes will be lost.",
+              {"Cancel", "Discard", "Save"}, 0, 2, [this, page](int choice) {
                   if (choice == 2) {
                       try {
-                          tab->save();
+                          page->save();
                       } catch (const Glib::Error& e) {
-                          showError(*this, "Could not save " + tab->path().filename().string(), e.what());
+                          showError(*this, "Could not save " + page->path().filename().string(), e.what());
                           return;
                       }
                   }
-                  if (choice == 1 || choice == 2) removeEditor(tab);
+                  if (choice == 1 || choice == 2) removeEditor(page);
               });
 }
 
 void MainWindow::closeAllEditors(std::function<void()> then) {
-    auto eds = editors();
-    const auto unsaved = std::count_if(eds.begin(), eds.end(), [](EditorTab* t) { return t->modified(); });
+    auto docs = documents();
+    const auto unsaved = std::count_if(docs.begin(), docs.end(), [](DocumentPage* d) { return d->modified(); });
     auto closeAll = [this, then] {
-        for (EditorTab* tab : editors()) removeEditor(tab);
+        for (DocumentPage* page : documents()) removeEditor(page);
         then();
     };
     if (unsaved == 0) {
@@ -1091,15 +1168,17 @@ void MainWindow::closeAllEditors(std::function<void()> then) {
               });
 }
 
-void MainWindow::removeEditor(EditorTab* tab) {
-    syncBreakpoints(tab);
-    if (execTab_ == tab) execTab_ = nullptr;
-    lsp_->detach(tab);
-    editors_.remove_page(*tab);
+void MainWindow::removeEditor(DocumentPage* page) {
+    if (auto* tab = dynamic_cast<EditorTab*>(page)) {
+        syncBreakpoints(tab);
+        if (execTab_ == tab) execTab_ = nullptr;
+        lsp_->detach(tab);
+    }
+    editors_.remove_page(page->pageWidget());
 }
 
 void MainWindow::forwardToEditor(const char* action) {
-    if (auto* tab = currentEditor()) tab->activateTextAction(action);
+    if (auto* page = currentDocument()) page->activateTextAction(action);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -39,7 +39,8 @@ std::string forFile(const std::filesystem::path& file) {
     if (oneOf(ext, std::array{".ts", ".tsx", ".mts", ".cts"})) return "kevc-ts-file";
     if (oneOf(ext, std::array{".js", ".jsx", ".mjs", ".cjs"})) return "kevc-js-file";
     if (ext == ".svelte") return "kevc-svelte-file";
-    if (oneOf(ext, std::array{".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".ico", ".webp", ".rc"}))
+    // .ui and .blp: GTK window designs, which ship as resources like images.
+    if (oneOf(ext, std::array{".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".ico", ".webp", ".rc", ".ui", ".blp"}))
         return "kevc-resource-file";
     if (ext == ".kevc") return "kevc-project";
     return "kevc-document";

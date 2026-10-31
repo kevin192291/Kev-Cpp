@@ -36,6 +36,8 @@
 namespace kevc {
 
 class Application;
+class DesignerPage;
+class DocumentPage;
 class EditorTab;
 class SourceWatcher;
 
@@ -73,17 +75,26 @@ private:
     void onProjectSynced(const ProjectSession::SyncResult& result);
     void updateTitle();
 
-    // Editors
+    // Editors. Every page in the editor area is a DocumentPage (a file being edited); text files
+    // are EditorTabs, .ui files open in the GTK designer.
     EditorTab* currentEditor();
     std::vector<EditorTab*> editors();
+    DocumentPage* currentDocument();
+    std::vector<DocumentPage*> documents();
+    DocumentPage* findDocument(const std::filesystem::path& file);
+    // Opens a file the way its type wants: .ui files in the designer, anything else as text.
+    void openDocument(const std::filesystem::path& file);
     EditorTab* openFile(const std::filesystem::path& file, int line = 0, int column = 0);
+    DesignerPage* openDesigner(const std::filesystem::path& file);
+    void addDocumentPage(DocumentPage& page);
+    void addSystemPackage(const std::string& module);
     void newFile();
     void saveCurrent();
     bool saveAll();
-    void closeEditor(EditorTab* tab);
+    void closeEditor(DocumentPage* page);
     // Closes every editor, asking about unsaved changes first; runs `then` unless cancelled.
     void closeAllEditors(std::function<void()> then);
-    void removeEditor(EditorTab* tab);
+    void removeEditor(DocumentPage* page);
     void forwardToEditor(const char* action);
 
     // Search
