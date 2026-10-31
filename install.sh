@@ -208,9 +208,10 @@ Kev-C++ is installed.
   Program:   $PREFIX/bin/kev-cpp
   Launcher:  $PREFIX/share/applications/$DESKTOP_ID
   Menu:      Programming → Kev-C++
+  Terminal:  kev [folder]   (opens its .kevc project, or the folder; package.json → TypeScript)
 Uninstall with: ./install.sh --uninstall
 EOF
 case ":$PATH:" in
     *":$PREFIX/bin:"*) ;;
-    *) echo "Note: $PREFIX/bin isn't on your PATH, so start it from the menu or by full path." ;;
+    *) echo "Note: $PREFIX/bin isn't on your PATH, so start it from the menu or by full path ($PREFIX/bin/kev)." ;;
 esac

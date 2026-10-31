@@ -44,6 +44,16 @@ is new enough), builds a Release copy in
 the installed copy. If `node` comes from a version manager such as nvm, the menu launcher is pointed at
 that Node, because programs started from the menu don't get the PATH that `~/.bashrc` sets up.
 
+It also installs `kev`, which opens a folder from a terminal and gives the terminal back:
+
+```sh
+kev ~/code/my-app    # its .kevc project if it has one; otherwise the folder itself
+kev                  # the current folder
+```
+
+A folder with a `package.json` but no `.kevc` opens as a TypeScript project (Run serves it, Compile
+type-checks it) without Kev-C++ writing anything into it.
+
 ## Features
 
 - **Projects**: File → New Project creates C++ (console, static or shared library), C console or

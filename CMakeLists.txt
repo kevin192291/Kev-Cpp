@@ -110,6 +110,8 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS kev-cpp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# `kev PATH` opens a project or folder from a terminal; it finds kev-cpp beside itself.
+install(PROGRAMS data/kev DESTINATION ${CMAKE_INSTALL_BINDIR})
 # Only the app icon goes into the system icon theme; the kevc-* action icons stay embedded.
 install(DIRECTORY data/icons/ DESTINATION ${CMAKE_INSTALL_DATADIR}/icons
         PATTERN "actions" EXCLUDE)

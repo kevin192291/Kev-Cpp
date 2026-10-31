@@ -240,6 +240,23 @@ ProjectSession ProjectSession::adoptCMake(const fs::path& rootIn) {
     return session;
 }
 
+ProjectSession ProjectSession::openWebFolder(const fs::path& rootIn) {
+    fs::path root = fs::absolute(rootIn).lexically_normal();
+    if (root.filename().empty()) root = root.parent_path(); // "dir/" → "dir"
+
+    Project p;
+    p.name = root.filename().empty() ? root.string() : root.filename().string();
+    p.kind = ProjectKind::WebTs;
+    p.targetName = sanitizeTargetName(p.name);
+    p.standard = "20";
+
+    const fs::path unsaved = root / (p.name + ".kevc"); // the constructor takes the root from it
+    ProjectSession session(std::move(p), unsaved);
+    session.projectFile_.clear();
+    session.project_.setSources(session.scanSources());
+    return session;
+}
+
 fs::path ProjectSession::buildFile() const {
     fs::path name = project_.buildFileName();
     return name.empty() ? fs::path{} : root_ / name;
@@ -278,7 +295,7 @@ ProjectSession::SyncResult ProjectSession::sync() {
 
 ProjectSession::SyncResult ProjectSession::saveAndRegenerate() {
     SyncResult result;
-    project_.save(projectFile_);
+    if (!projectFile_.empty()) project_.save(projectFile_);
     result.buildFileWritten = writeBuildFile(result.warnings);
     if (project_.kind == ProjectKind::C) writeCompileCommands();
     return result;

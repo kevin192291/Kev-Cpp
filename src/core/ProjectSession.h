@@ -36,10 +36,14 @@ public:
     static ProjectSession create(const std::filesystem::path& parentDir, const std::string& name, ProjectTemplate tmpl);
     // Adds a .kevc and a managed block to a CMake project that Kev-C++ did not create.
     static ProjectSession adoptCMake(const std::filesystem::path& root);
+    // A TypeScript project for a folder with a package.json but no .kevc. It lives in memory only:
+    // nothing is written to the folder, so opening someone's npm project leaves it as it was.
+    static ProjectSession openWebFolder(const std::filesystem::path& root);
 
     const Project& project() const { return project_; }
     Project& project() { return project_; }
     const std::filesystem::path& root() const { return root_; }
+    // Empty for a session from openWebFolder.
     const std::filesystem::path& projectFile() const { return projectFile_; }
     std::filesystem::path buildFile() const;
 

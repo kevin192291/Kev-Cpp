@@ -144,6 +144,26 @@ TEST_F(ProjectSessionTest, AdoptExistingCMakeProject) {
     EXPECT_NE(cmake.find("target_sources(tool PRIVATE\n    main.cpp\n    util.cpp\n)"), std::string::npos);
 }
 
+TEST_F(ProjectSessionTest, PackageJsonFolderOpensAsTypeScriptWithoutWritingAnything) {
+    touch(dir_ / "webapp/package.json", "{\"name\": \"webapp\"}\n");
+    touch(dir_ / "webapp/src/main.ts");
+    touch(dir_ / "webapp/index.html");
+    touch(dir_ / "webapp/node_modules/lib/index.js");
+
+    auto s = ProjectSession::openWebFolder(dir_ / "webapp/");
+    EXPECT_EQ(s.project().kind, ProjectKind::WebTs);
+    EXPECT_EQ(s.project().name, "webapp");
+    EXPECT_EQ(s.root(), dir_ / "webapp");
+    EXPECT_TRUE(s.projectFile().empty());
+    EXPECT_EQ(s.project().sources, (std::vector<std::string>{"index.html", "src/main.ts"}));
+
+    touch(dir_ / "webapp/src/util.ts");
+    const auto result = s.sync();
+    EXPECT_EQ(result.added, std::vector<std::string>{"src/util.ts"});
+    s.saveAndRegenerate();
+    EXPECT_FALSE(ProjectSession::findProjectFile(dir_ / "webapp"));
+}
+
 // End-to-end: generated projects must actually build with gcc/g++.
 TEST_F(ProjectSessionTest, GeneratedCppProjectBuildsWithCMakeAndGxx) {
     auto s = ProjectSession::create(dir_, "built", ProjectTemplate::CppConsole);

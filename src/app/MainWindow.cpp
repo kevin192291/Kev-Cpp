@@ -600,6 +600,9 @@ void MainWindow::openFolder(const fs::path& root) {
                                   showError(*this, "Could not enable Kev-C++ management", e.what());
                               }
                           });
+            } else if (fs::exists(root / "package.json", ec)) {
+                setProject(std::make_unique<ProjectSession>(ProjectSession::openWebFolder(root)));
+                setStatus("Opened " + session_->project().name + " as a TypeScript project (it has a package.json)");
             } else {
                 setPlainFolder(root);
                 if (fs::exists(root / "Makefile", ec))

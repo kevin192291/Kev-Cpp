@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 75 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 80 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -50,6 +50,10 @@ verified by driving the real app (see "GUI testing").
 - **Build files**: the IDE owns only the `# >>> Kev-C++ managed` … `# <<< Kev-C++ managed` block and
   regenerates it from the `.kevc`; user text outside it is preserved byte-for-byte (tested). Sources
   are listed explicitly (no GLOB). `SourceWatcher` resyncs on file create/delete/rename (250 ms debounce).
+- **Opening a folder** (`openFolder`, also `kev PATH` from a terminal): a `.kevc` opens that project;
+  else CMakeLists.txt asks to adopt it; else a `package.json` makes it a TypeScript project kept in
+  memory only (`ProjectSession::openWebFolder`, no `.kevc` written); else a plain folder. `data/kev`
+  is a shell script installed next to kev-cpp; it runs the IDE under `setsid -f` so the terminal is freed.
 - **IntelliSense** = clangd (`--query-driver=gcc,g++` so gcc's headers are used) + typescript-language-server.
   Completion follows GtkSourceView's model: populate returns SortListModel(FilterListModel(store)),
   refilter only updates the filter. When the server says `isIncomplete`, refilter re-requests.

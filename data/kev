@@ -1,0 +1,41 @@
+#!/bin/sh
+# kev [PATH]: opens PATH in Kev-C++ from a terminal and gives the terminal back.
+# Installed next to kev-cpp (see CMakeLists.txt), so it finds the IDE without a fixed path.
+set -eu
+
+usage() {
+    cat <<EOF
+Usage: kev [PATH]
+
+Opens PATH in Kev-C++ (the current folder if PATH is left out).
+  a folder with a .kevc file   opens that project
+  a folder with a package.json opens it as a TypeScript project
+  any other folder             opens the folder
+  a .kevc or source file       opens that project or file
+EOF
+}
+
+case ${1-} in
+    -h | --help) usage; exit 0 ;;
+esac
+if [ $# -gt 1 ]; then
+    usage >&2
+    exit 2
+fi
+
+target=${1:-.}
+if [ ! -e "$target" ]; then
+    echo "kev: $target: no such file or directory" >&2
+    exit 1
+fi
+# Absolute, so the IDE never mistakes a path for an option ("-x") or a URI ("a:b").
+target=$(realpath -- "$target")
+
+ide=$(dirname -- "$(readlink -f -- "$0")")/kev-cpp
+if [ ! -x "$ide" ]; then
+    echo "kev: $ide not found; reinstall Kev-C++ with ./install.sh" >&2
+    exit 1
+fi
+# A session of its own, so closing the terminal doesn't close the IDE, and GTK's console
+# warnings don't end up in the terminal.
+setsid -f "$ide" "$target" >/dev/null 2>&1 </dev/null
