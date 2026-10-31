@@ -15,16 +15,20 @@ struct SpawnContext {
     std::weak_ptr<TerminalPane*> pane;
 };
 
-// PATH for what runs in the terminal: the folder Kev-C++ is installed in comes first, so `kev`
-// works here even when the desktop session's PATH lacks ~/.local/bin (Debian-based desktops don't
-// read ~/.profile at login). Only an installed Kev-C++ has `kev` next to it; a build folder is left out.
-std::string terminalPath() {
+// Environment for what runs in the terminal: the folder Kev-C++ is installed in comes first on
+// PATH, so `kev` works here even when the desktop session's PATH lacks ~/.local/bin (Debian-based
+// desktops don't read ~/.profile at login). Only an installed Kev-C++ has `kev` next to it; a build
+// folder is left out. KEVC_TERMINAL_PATH_ADDED names the folder, so the installer (run here by
+// Help → Check for Updates) can tell other terminals won't have it.
+std::vector<std::string> terminalEnvironment() {
     const char* inherited = std::getenv("PATH");
     const std::string path = inherited ? inherited : "";
     std::error_code ec;
     const std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", ec);
-    if (ec || !std::filesystem::exists(exe.parent_path() / "kev", ec)) return path;
-    return prependToPath(path, exe.parent_path().string());
+    if (ec || !std::filesystem::exists(exe.parent_path() / "kev", ec)) return {};
+    const std::string dir = exe.parent_path().string(), added = prependToPath(path, dir);
+    if (added == path) return {};
+    return {"PATH=" + added, "KEVC_TERMINAL_PATH_ADDED=" + dir};
 }
 
 std::string describeStatus(int status) {
@@ -116,10 +120,12 @@ void TerminalPane::start(Launch launch) {
     args.push_back(nullptr);
     auto* ctx = new SpawnContext{self_};
     // VTE adds these to the environment the child inherits.
-    std::string path = "PATH=" + terminalPath();
-    char* env[] = {path.data(), nullptr};
+    std::vector<std::string> variables = terminalEnvironment();
+    std::vector<char*> env;
+    for (auto& v : variables) env.push_back(v.data());
+    env.push_back(nullptr);
     // SEARCH_PATH: programs are full paths, but package.json scripts run as plain `npm run …`.
-    vte_terminal_spawn_async(terminal_, VTE_PTY_DEFAULT, launch.cwd.c_str(), args.data(), env, G_SPAWN_SEARCH_PATH,
+    vte_terminal_spawn_async(terminal_, VTE_PTY_DEFAULT, launch.cwd.c_str(), args.data(), env.data(), G_SPAWN_SEARCH_PATH,
                              nullptr, nullptr, nullptr, -1, nullptr, &TerminalPane::onSpawned, ctx);
 }
 

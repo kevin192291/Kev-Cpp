@@ -54,9 +54,10 @@ kev                  # the current folder
 A folder with a `package.json` but no `.kevc` opens as a TypeScript project (Run serves it, Compile
 type-checks it) without Kev-C++ writing anything into it.
 
-`kev` is in `~/.local/bin`. Kev-C++'s own Terminal tab always finds it, but other terminals only do if
-that folder is on your PATH. Debian-based desktops (Devuan, MX…) don't read `~/.profile` when you log
-in, so there `kev` needs `~/.local/bin` added to the desktop's PATH, or the full path.
+`kev` goes in `~/.local/bin`, which terminals only search if the login put it on PATH. Debian-based
+desktops (Devuan, MX, LCOS…) don't read `~/.profile` when you log in, so there the installer offers
+to link `kev` into `/usr/local/bin` (with sudo), and every terminal finds it. Kev-C++'s own
+Terminal tab always finds it.
 
 ## Updates
 

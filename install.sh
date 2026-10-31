@@ -78,6 +78,13 @@ uninstall() {
     "${sudo[@]}" gtk-update-icon-cache -f -t "$prefix/share/icons/hicolor" >/dev/null 2>&1 || true
     "${sudo[@]}" update-desktop-database "$prefix/share/applications" >/dev/null 2>&1 || true
     rm -f "$manifest"
+    # The link that makes kev work in every terminal (see link_kev), if it's ours.
+    local link=${KEVC_LINK_DIR:-/usr/local/bin}/kev
+    if [[ -L $link && $(readlink "$link") == "$prefix/bin/kev" ]]; then
+        local link_sudo=()
+        writable "$(dirname "$link")" || link_sudo=(sudo)
+        "${link_sudo[@]}" rm -f "$link"
+    fi
     echo "Kev-C++ is uninstalled. Settings in ~/.config/kev-cpp were left in place."
 }
 
@@ -177,6 +184,40 @@ patch_launcher() {
     echo "Menu launcher uses Node from $node_dir (re-run ./install.sh if you switch Node versions)"
 }
 
+# `kev` from any terminal. ~/.local/bin is only on PATH where the login reads ~/.profile, and
+# Debian-based desktops (Devuan, MX, LCOS…) don't: there kev is linked into /usr/local/bin, which
+# every PATH has (asking first: it needs sudo). KEVC_LINK_DIR changes where, for testing.
+link_kev() {
+    local bin=$PREFIX/bin dir=${KEVC_LINK_DIR:-/usr/local/bin} path=":$PATH:" answer
+    # Kev-C++'s Terminal and Run tabs put its own folder on PATH and say so: other terminals don't get it.
+    if [[ -n ${KEVC_TERMINAL_PATH_ADDED-} ]]; then path=${path/":$KEVC_TERMINAL_PATH_ADDED:"/:}; fi
+    case $path in *":$bin:"*) return 0 ;; esac
+    local link=$dir/kev
+    if [[ -L $link && $(readlink -f "$link") == "$(readlink -f "$bin/kev")" ]]; then return 0; fi
+    if [[ -e $link && ! -L $link ]]; then
+        warn "$link already exists and isn't Kev-C++'s link; run $bin/kev by its full path"
+        return 0
+    fi
+    if ((!ASSUME_YES)); then
+        if [[ ! -t 0 ]]; then
+            echo "Note: $bin isn't on your PATH, so terminals won't find kev; run $bin/kev by its full path."
+            return 0
+        fi
+        read -r -p "Terminals won't find kev: $bin isn't on your PATH. Link it into $dir? [Y/n] " answer || answer=n
+        if [[ -n $answer && $answer != [Yy]* ]]; then
+            echo "Not linked: run $bin/kev by its full path."
+            return 0
+        fi
+    fi
+    local sudo=()
+    writable "$dir" || sudo=(sudo)
+    if "${sudo[@]}" mkdir -p "$dir" && "${sudo[@]}" ln -sfn "$bin/kev" "$link"; then
+        echo "Linked $link → $bin/kev, so kev works in every terminal"
+    else
+        warn "couldn't link $link; run $bin/kev by its full path"
+    fi
+}
+
 if ((UNINSTALL)); then
     uninstall
     exit 0
@@ -211,7 +252,4 @@ Kev-C++ is installed.
   Terminal:  kev [folder]   (opens its .kevc project, or the folder; package.json → TypeScript)
 Uninstall with: ./install.sh --uninstall
 EOF
-case ":$PATH:" in
-    *":$PREFIX/bin:"*) ;;
-    *) echo "Note: $PREFIX/bin isn't on your PATH, so start it from the menu or by full path ($PREFIX/bin/kev)." ;;
-esac
+link_kev

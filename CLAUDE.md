@@ -78,6 +78,9 @@ verified by driving the real app (see "GUI testing").
   is a shell script installed next to kev-cpp; it runs the IDE under `setsid -f` so the terminal is freed.
   The Terminal tab puts the folder an installed kev-cpp runs from (one with `kev` beside it) first on
   its shell's PATH: Debian-based desktops don't read `~/.profile`, so `~/.local/bin` is often missing.
+  It sets KEVC_TERMINAL_PATH_ADDED to that folder. Both installers' `link_kev` ignore that entry
+  when checking PATH (updates run in the Run tab), and offer a `/usr/local/bin/kev` symlink.
+  `KEVC_LINK_DIR` redirects the link for tests.
 - **IntelliSense** = clangd (`--query-driver=gcc,g++` so gcc's headers are used) + typescript-language-server.
   Completion follows GtkSourceView's model: populate returns SortListModel(FilterListModel(store)),
   refilter only updates the filter. When the server says `isIncomplete`, refilter re-requests.

@@ -78,6 +78,40 @@ if (($(node_major) < 20)); then
     warn "(https://github.com/nvm-sh/nvm installs one without root)"
 fi
 
+# `kev` from any terminal. ~/.local/bin is only on PATH where the login reads ~/.profile, and
+# Debian-based desktops (Devuan, MX, LCOS…) don't: there kev is linked into /usr/local/bin, which
+# every PATH has (asking first: it needs sudo). KEVC_LINK_DIR changes where, for testing.
+link_kev() {
+    local bin=$PREFIX/bin dir=${KEVC_LINK_DIR:-/usr/local/bin} path=":$PATH:" answer
+    # Kev-C++'s Terminal and Run tabs put its own folder on PATH and say so: other terminals don't get it.
+    if [[ -n ${KEVC_TERMINAL_PATH_ADDED-} ]]; then path=${path/":$KEVC_TERMINAL_PATH_ADDED:"/:}; fi
+    case $path in *":$bin:"*) return 0 ;; esac
+    local link=$dir/kev
+    if [[ -L $link && $(readlink -f "$link") == "$(readlink -f "$bin/kev")" ]]; then return 0; fi
+    if [[ -e $link && ! -L $link ]]; then
+        warn "$link already exists and isn't Kev-C++'s link; run $bin/kev by its full path"
+        return 0
+    fi
+    if ((!ASSUME_YES)); then
+        if [[ ! -t 0 ]]; then
+            echo "Note: $bin isn't on your PATH, so terminals won't find kev; run $bin/kev by its full path."
+            return 0
+        fi
+        read -r -p "Terminals won't find kev: $bin isn't on your PATH. Link it into $dir? [Y/n] " answer || answer=n
+        if [[ -n $answer && $answer != [Yy]* ]]; then
+            echo "Not linked: run $bin/kev by its full path."
+            return 0
+        fi
+    fi
+    local sudo=()
+    writable "$dir" || sudo=(sudo)
+    if "${sudo[@]}" mkdir -p "$dir" && "${sudo[@]}" ln -sfn "$bin/kev" "$link"; then
+        echo "Linked $link → $bin/kev, so kev works in every terminal"
+    else
+        warn "couldn't link $link; run $bin/kev by its full path"
+    fi
+}
+
 # --- Files ---
 step "Installing Kev-C++ $VERSION into $PREFIX"
 # Write next to the target and rename over it: replacing a program that's running is fine that way.
@@ -139,6 +173,7 @@ cat <<EOF
 
 Kev-C++ $VERSION is installed.
   Program:   $PREFIX/bin/kev-cpp
-  Terminal:  $PREFIX/bin/kev [folder]
+  Terminal:  kev [folder]   (opens its .kevc project, or the folder; package.json → TypeScript)
   Menu:      Programming → Kev-C++
 EOF
+link_kev
