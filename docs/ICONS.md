@@ -96,6 +96,7 @@ Rows and columns as on the sheet; the icon is `kevc-<name>`.
 | `globe` | Dev server | Drawn |
 | `terminal` | Terminal and GDB Console tabs | Drawn |
 | `exec-arrow` | Current line while debugging | Drawn: green arrow |
+| `pinned`, `unpinned` | Welcome tab: pinned and not pinned projects | Drawn: red pushpin, and the same in light grey |
 | `ts-file`, `js-file` | TypeScript and JavaScript files | The C++ page relabelled |
 | `svelte-file` | Svelte components (`.svelte`), the Routes tab | The C++ page relabelled "SV" in Svelte orange |
 | `shared-library` | New Project: C++ Shared Library | Generic document with two Settings gears, like the Windows DLL icon |

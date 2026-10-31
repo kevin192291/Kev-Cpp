@@ -52,6 +52,7 @@
     <file>icons/hicolor/16x16/actions/kevc-parameter.png</file>
     <file>icons/hicolor/16x16/actions/kevc-paste.png</file>
     <file>icons/hicolor/16x16/actions/kevc-pause.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-pinned.png</file>
     <file>icons/hicolor/16x16/actions/kevc-pointer-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-print.png</file>
     <file>icons/hicolor/16x16/actions/kevc-private-member.png</file>
@@ -81,6 +82,7 @@
     <file>icons/hicolor/16x16/actions/kevc-ts-file.png</file>
     <file>icons/hicolor/16x16/actions/kevc-ts-logo.png</file>
     <file>icons/hicolor/16x16/actions/kevc-undo.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-unpinned.png</file>
     <file>icons/hicolor/16x16/actions/kevc-warning.png</file>
     <file>icons/hicolor/16x16/actions/kevc-watch.png</file>
     <file>icons/hicolor/16x16/actions/kevc-workspace.png</file>
@@ -134,6 +136,7 @@
     <file>icons/hicolor/24x24/actions/kevc-parameter.png</file>
     <file>icons/hicolor/24x24/actions/kevc-paste.png</file>
     <file>icons/hicolor/24x24/actions/kevc-pause.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-pinned.png</file>
     <file>icons/hicolor/24x24/actions/kevc-pointer-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-print.png</file>
     <file>icons/hicolor/24x24/actions/kevc-private-member.png</file>
@@ -163,6 +166,7 @@
     <file>icons/hicolor/24x24/actions/kevc-ts-file.png</file>
     <file>icons/hicolor/24x24/actions/kevc-ts-logo.png</file>
     <file>icons/hicolor/24x24/actions/kevc-undo.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-unpinned.png</file>
     <file>icons/hicolor/24x24/actions/kevc-warning.png</file>
     <file>icons/hicolor/24x24/actions/kevc-watch.png</file>
     <file>icons/hicolor/24x24/actions/kevc-workspace.png</file>
@@ -216,6 +220,7 @@
     <file>icons/hicolor/32x32/actions/kevc-parameter.png</file>
     <file>icons/hicolor/32x32/actions/kevc-paste.png</file>
     <file>icons/hicolor/32x32/actions/kevc-pause.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-pinned.png</file>
     <file>icons/hicolor/32x32/actions/kevc-pointer-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-print.png</file>
     <file>icons/hicolor/32x32/actions/kevc-private-member.png</file>
@@ -245,6 +250,7 @@
     <file>icons/hicolor/32x32/actions/kevc-ts-file.png</file>
     <file>icons/hicolor/32x32/actions/kevc-ts-logo.png</file>
     <file>icons/hicolor/32x32/actions/kevc-undo.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-unpinned.png</file>
     <file>icons/hicolor/32x32/actions/kevc-warning.png</file>
     <file>icons/hicolor/32x32/actions/kevc-watch.png</file>
     <file>icons/hicolor/32x32/actions/kevc-workspace.png</file>
@@ -298,6 +304,7 @@
     <file>icons/hicolor/48x48/actions/kevc-parameter.png</file>
     <file>icons/hicolor/48x48/actions/kevc-paste.png</file>
     <file>icons/hicolor/48x48/actions/kevc-pause.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-pinned.png</file>
     <file>icons/hicolor/48x48/actions/kevc-pointer-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-print.png</file>
     <file>icons/hicolor/48x48/actions/kevc-private-member.png</file>
@@ -327,6 +334,7 @@
     <file>icons/hicolor/48x48/actions/kevc-ts-file.png</file>
     <file>icons/hicolor/48x48/actions/kevc-ts-logo.png</file>
     <file>icons/hicolor/48x48/actions/kevc-undo.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-unpinned.png</file>
     <file>icons/hicolor/48x48/actions/kevc-warning.png</file>
     <file>icons/hicolor/48x48/actions/kevc-watch.png</file>
     <file>icons/hicolor/48x48/actions/kevc-workspace.png</file>

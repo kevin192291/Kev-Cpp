@@ -5,6 +5,7 @@
 #include "core/BuildPlan.h"
 #include "core/Diagnostics.h"
 #include "core/ProjectSession.h"
+#include "core/RecentProjects.h"
 #include "core/Version.h"
 #include "core/WebProject.h"
 #include "debug/DebugController.h"
@@ -87,6 +88,11 @@ private:
     EditorTab* openFile(const std::filesystem::path& file, int line = 0, int column = 0);
     DesignerPage* openDesigner(const std::filesystem::path& file);
     void addDocumentPage(DocumentPage& page);
+    // The Welcome tab, shown when no file is open: pinned and recent projects, and the main keys.
+    void showWelcome();
+    void refreshWelcome();
+    Gtk::Widget& welcomeRow(const std::filesystem::path& folder, bool pinned, Gtk::ListBox& list);
+    void rememberFolder(const std::filesystem::path& root);
     void addSystemPackage(const std::string& module);
     void newFile();
     void saveCurrent();
@@ -186,6 +192,7 @@ private:
     void showProjectOptions(bool packagesPage);
 
     Application& app_;
+    RecentProjects recent_; // the Welcome tab's recent and pinned projects
     // Async callbacks (subprocesses) hold a weak_ptr to this and do nothing once the window is gone.
     std::shared_ptr<int> lifetime_ = std::make_shared<int>(0);
     std::filesystem::path toolsDir_; // bundled Node tools: language server, tsc, dev server
@@ -221,6 +228,8 @@ private:
     Gtk::Box editorArea_{Gtk::Orientation::VERTICAL};
     Gtk::Notebook editors_;
     Gtk::Widget* welcomePage_ = nullptr;
+    Gtk::Box* welcomeLists_ = nullptr; // pinned and recent projects, left of the shortcuts
+    std::map<Gtk::ListBoxRow*, std::filesystem::path> welcomeRows_;
     Gtk::SearchBar findBar_;
     Gtk::SearchEntry findEntry_;
     Gtk::CheckButton findCase_{"Match case"};

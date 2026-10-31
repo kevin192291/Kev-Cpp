@@ -32,6 +32,7 @@ add_library(kevc_core STATIC
   src/core/Project.cpp
   src/core/ProjectKinds.cpp
   src/core/ProjectSession.cpp
+  src/core/RecentProjects.cpp
   src/core/Settings.cpp
   src/core/SvelteKit.cpp
   src/core/TestReport.cpp

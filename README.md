@@ -74,6 +74,9 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
 
 ## Features
 
+- **Welcome tab**: the projects and folders you opened lately, to the left of the main shortcuts.
+  Click one to open it, and click its pin to keep it in the Pinned list at the top. The tab comes
+  back when you close the last file.
 - **Projects**: File → New Project creates C++ (console, static or shared library), C console or
   TypeScript web projects. Each has a `<name>.kevc` project file.
 - **Managed build files**: Kev-C++ owns one marked block in `CMakeLists.txt` / `Makefile` and keeps it

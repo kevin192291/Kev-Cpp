@@ -12,6 +12,7 @@ add_executable(kevc_tests
   MiTest.cpp
   PackagesTest.cpp
   ProjectSessionTest.cpp
+  RecentProjectsTest.cpp
   SettingsTest.cpp
   SvelteKitTest.cpp
   ToolLocatorTest.cpp

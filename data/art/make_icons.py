@@ -161,6 +161,35 @@ def draw_exec_arrow():
     return img
 
 
+def draw_pin():
+    """A red pushpin, head up and to the right, its needle to the bottom left (Welcome page pins)."""
+    img = Image.new("RGBA", (160, 160), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    red, dark, light = (222, 44, 44, 255), (160, 20, 24, 255), (255, 140, 130, 255)
+    d.line([(80, 96), (80, 150)], fill=OUTLINE, width=12)                   # needle, outlined
+    d.line([(80, 96), (80, 148)], fill=(196, 200, 210, 255), width=5)
+    d.rounded_rectangle((46, 82, 114, 100), radius=8, fill=red, outline=OUTLINE, width=6)   # collar
+    d.polygon([(60, 36), (100, 36), (94, 84), (66, 84)], fill=dark, outline=OUTLINE, width=6)  # body
+    d.rounded_rectangle((44, 10, 116, 40), radius=12, fill=red, outline=OUTLINE, width=6)   # head
+    d.rounded_rectangle((54, 16, 74, 24), radius=4, fill=light)            # highlight
+    d.line([(74, 44), (72, 78)], fill=(205, 60, 60, 255), width=5)         # body highlight
+    img = img.rotate(-40, resample=Image.BICUBIC, expand=True)
+    return img.crop(img.getchannel("A").getbbox())
+
+
+def greyed(img):
+    """The same icon in light grey: the "not pinned" state."""
+    out = img.copy()
+    px = out.load()
+    for y in range(out.height):
+        for x in range(out.width):
+            r, g, b, a = px[x, y]
+            v = round(0.3 * r + 0.59 * g + 0.11 * b)
+            v = 110 + v // 2  # lighter, so it reads as off next to the red one
+            px[x, y] = (v, v, v + 6, a)
+    return out
+
+
 def relabel(page, text, fill, stroke):
     """A source-file page (the C++ one) with its label replaced, for JS and TS files."""
     page = page.copy()
@@ -228,6 +257,9 @@ def build(sheet):
     icons["globe"] = square(draw_globe(), min_side=0)
     icons["terminal"] = square(draw_terminal(), min_side=0)
     icons["exec-arrow"] = square(draw_exec_arrow(), min_side=0)
+    pin = draw_pin()
+    icons["pinned"] = square(pin, min_side=0)
+    icons["unpinned"] = square(greyed(pin), min_side=0)
 
     cpp = get("cpp-file")
     icons["ts-file"] = square(relabel(cpp, "TS", (32, 80, 210, 255), (16, 32, 96, 255)))

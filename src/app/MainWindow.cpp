@@ -14,6 +14,8 @@
 #include "ui/Dialogs.h"
 #include "ui/ProjectOptionsDialog.h"
 
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -102,7 +104,8 @@ std::optional<fs::path> resolveInside(const fs::path& root, const std::string& r
 } // namespace
 
 MainWindow::MainWindow(Application& app)
-    : app_(app), toolsDir_(findToolsDir()), lsp_(std::make_unique<LspManager>(app.toolchain(), toolsDir_)) {
+    : app_(app), recent_(app.settings()), toolsDir_(findToolsDir()),
+      lsp_(std::make_unique<LspManager>(app.toolchain(), toolsDir_)) {
     set_default_size(1280, 800);
     updateTitle();
 
@@ -693,12 +696,7 @@ Gtk::Widget& MainWindow::buildEditorArea() {
 
     editors_.set_scrollable(true);
     editors_.set_vexpand(true);
-    welcomePage_ = &placeholder("Welcome to Kev-C++\n\n"
-                                "Ctrl+Shift+N  new project\n"
-                                "Ctrl+O        open a project or folder\n"
-                                "F9 / F10 / F11  compile / run / compile & run\n"
-                                "F5            debug   (F6 step over, F7 step into, F8 continue)");
-    editors_.append_page(*welcomePage_, "Welcome");
+    showWelcome();
 
     editorArea_.append(findBar_);
     editorArea_.append(editors_);
@@ -852,6 +850,7 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     tracesPanel_.setTraces(traces_);
     session_ = std::move(session);
     folder_ = session_->root();
+    rememberFolder(folder_);
     refreshWebProject();
     refreshKit();
     lsp_->setWorkspace(folder_, &session_->project());
@@ -922,6 +921,7 @@ void MainWindow::setPlainFolder(const fs::path& root) {
     updateTitle();
     applyProfile();
     updateToolbar(); // web projects run by serving
+    rememberFolder(folder_);
     setStatus("Opened folder " + root.string());
 }
 
@@ -989,6 +989,8 @@ void MainWindow::addDocumentPage(DocumentPage& page) {
     if (welcomePage_) {
         editors_.remove_page(*welcomePage_);
         welcomePage_ = nullptr;
+        welcomeLists_ = nullptr;
+        welcomeRows_.clear();
     }
     const int index = editors_.append_page(page.pageWidget(), page.tabLabel());
     editors_.set_tab_reorderable(page.pageWidget(), true);
@@ -1175,6 +1177,134 @@ void MainWindow::removeEditor(DocumentPage* page) {
         lsp_->detach(tab);
     }
     editors_.remove_page(page->pageWidget());
+    if (editors_.get_n_pages() == 0) showWelcome(); // so the recent projects are a click away again
+}
+
+// ---------------------------------------------------------------------------------------------
+// Welcome
+
+void MainWindow::showWelcome() {
+    if (welcomePage_) return;
+    auto* shortcuts = Gtk::make_managed<Gtk::Label>("Welcome to Kev-C++\n\n"
+                                                    "Ctrl+Shift+N  new project\n"
+                                                    "Ctrl+O        open a project or folder\n"
+                                                    "F9 / F10 / F11  compile / run / compile & run\n"
+                                                    "F5            debug   (F6 step over, F7 step into, F8 continue)");
+    shortcuts->add_css_class("dim-label");
+    shortcuts->set_xalign(0);
+    shortcuts->set_valign(Gtk::Align::START);
+    shortcuts->set_margin_top(20); // level with the first list, under its heading
+
+    welcomeLists_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+    welcomeLists_->set_size_request(380, -1);
+    welcomeLists_->set_valign(Gtk::Align::START);
+    welcomeLists_->add_css_class("kevc-welcome-projects");
+
+    auto* columns = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 48);
+    columns->set_halign(Gtk::Align::CENTER);
+    columns->set_valign(Gtk::Align::CENTER);
+    columns->set_margin(24);
+    columns->append(*welcomeLists_);
+    columns->append(*shortcuts);
+    auto* scroller = Gtk::make_managed<Gtk::ScrolledWindow>();
+    scroller->set_child(*columns);
+    welcomePage_ = scroller;
+    editors_.append_page(*welcomePage_, "Welcome");
+    refreshWelcome();
+}
+
+void MainWindow::refreshWelcome() {
+    if (!welcomeLists_) return;
+    while (Gtk::Widget* child = welcomeLists_->get_first_child()) welcomeLists_->remove(*child);
+    welcomeRows_.clear();
+    std::error_code ec;
+    auto section = [&](const Glib::ustring& title, const std::vector<fs::path>& folders, bool pinned) {
+        if (folders.empty()) return;
+        auto* heading = Gtk::make_managed<Gtk::Label>();
+        heading->set_markup("<b>" + Glib::Markup::escape_text(title) + "</b>");
+        heading->set_xalign(0);
+        heading->set_margin_top(welcomeLists_->get_first_child() ? 12 : 0);
+        welcomeLists_->append(*heading);
+        auto* list = Gtk::make_managed<Gtk::ListBox>();
+        list->set_selection_mode(Gtk::SelectionMode::NONE);
+        list->add_css_class("kevc-welcome-list");
+        for (const auto& folder : folders) list->append(welcomeRow(folder, pinned, *list));
+        list->signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
+            auto it = welcomeRows_.find(row);
+            if (it == welcomeRows_.end()) return;
+            const fs::path folder = it->second;
+            std::error_code missing;
+            if (!fs::is_directory(folder, missing)) {
+                setStatus(folder.string() + " no longer exists");
+                return;
+            }
+            openPath(folder);
+        });
+        welcomeLists_->append(*list);
+    };
+    section("Pinned", recent_.pinned(), true);
+    std::vector<fs::path> recent;
+    for (const auto& folder : recent_.recent())
+        if (fs::is_directory(folder, ec)) recent.push_back(folder); // gone folders aren't worth a row
+    section("Recent", recent, false);
+    if (!welcomeLists_->get_first_child()) {
+        auto* hint = Gtk::make_managed<Gtk::Label>("Projects and folders you open are listed here.\n"
+                                                   "Pin one to keep it at the top.");
+        hint->add_css_class("dim-label");
+        hint->set_xalign(0);
+        welcomeLists_->append(*hint);
+    }
+}
+
+Gtk::Widget& MainWindow::welcomeRow(const fs::path& folder, bool pinned, Gtk::ListBox&) {
+    std::error_code ec;
+    const bool exists = fs::is_directory(folder, ec);
+    auto* pin = Gtk::make_managed<Gtk::Button>();
+    pin->set_icon_name(pinned ? "kevc-pinned" : "kevc-unpinned");
+    pin->set_has_frame(false);
+    pin->set_valign(Gtk::Align::CENTER);
+    pin->set_tooltip_text(pinned ? "Unpin" : "Pin, to keep it at the top of this list");
+    pin->add_css_class("kevc-pin");
+    pin->signal_clicked().connect([this, folder, pinned] {
+        recent_.setPinned(folder, !pinned);
+        // Later: rebuilding the list now would destroy this button inside its own handler.
+        Glib::signal_idle().connect_once(sigc::track_obj([this] { refreshWelcome(); }, *this));
+    });
+
+    // ~ for the home folder, so the paths stay short.
+    std::string shown = folder.string();
+    if (const char* home = std::getenv("HOME"); home && *home && shown.rfind(std::string(home) + "/", 0) == 0)
+        shown = "~" + shown.substr(std::strlen(home));
+    auto* name = Gtk::make_managed<Gtk::Label>();
+    name->set_markup("<b>" + Glib::Markup::escape_text(folder.filename().string()) + "</b>" +
+                     (exists ? "" : "  <span alpha=\"60%\">(not found)</span>"));
+    name->set_xalign(0);
+    name->set_ellipsize(Pango::EllipsizeMode::END);
+    name->set_max_width_chars(48);
+    auto* path = Gtk::make_managed<Gtk::Label>(shown);
+    path->set_xalign(0);
+    path->set_ellipsize(Pango::EllipsizeMode::MIDDLE);
+    path->set_max_width_chars(48); // long paths are shortened in the middle, not widening the list
+    path->add_css_class("dim-label");
+    auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+    text->set_hexpand(true);
+    text->append(*name);
+    text->append(*path);
+
+    auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 6);
+    box->set_margin(4);
+    box->append(*pin);
+    box->append(*text);
+    auto* row = Gtk::make_managed<Gtk::ListBoxRow>();
+    row->set_child(*box);
+    row->set_tooltip_text(exists ? "Open " + folder.string() : folder.string() + " no longer exists");
+    welcomeRows_[row] = folder;
+    return *row;
+}
+
+void MainWindow::rememberFolder(const fs::path& root) {
+    recent_.opened(root);
+    refreshWelcome();
 }
 
 void MainWindow::forwardToEditor(const char* action) {

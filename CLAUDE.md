@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 164 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 169 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -27,7 +27,8 @@ verified by driving the real app (see "GUI testing").
   compile_commands.json for C), `BuildPlan` (commands per action/config), `Diagnostics` (gcc/ld/CMake/
   make/tsc output parser), `Packages` (catalog, pkg-config, FetchContent target detection), `Lsp`
   (framing, URIs, UTF-16 columns, markdown→Pango), `Mi` (GDB/MI parser, expression-under-cursor),
-  `Icons` (which kevc-* icon a file, LSP symbol/completion kind or gdb type gets), `Settings`
+  `Icons` (which kevc-* icon a file, LSP symbol/completion kind or gdb type gets), `RecentProjects`
+  (the Welcome tab's recent and pinned folders, in settings under /recent), `Settings`
   (`~/.config/kev-cpp/settings.json`), `ToolLocator` (PATH, node_modules/.bin, `/opt/st/stm32cube*`),
   `ProjectKinds` (per-kind traits, toolbar/panel visibility per profile), `WebProject` (package.json
   flavour, package manager, Vite/svelte-check/sv commands), `SvelteKit` (routes, exports, load keys,
