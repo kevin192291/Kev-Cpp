@@ -2508,8 +2508,12 @@ void MainWindow::installUpdate(const Release& release) {
                                                      showError(*this, "Couldn't start the new Kev-C++", e.what());
                                                      return;
                                                  }
-                                                 closeConfirmed_ = true;
-                                                 close();
+                                                 // After this dialog's callback returns: closing the
+                                                 // window inside it leaves the dialog a dead parent.
+                                                 Glib::signal_idle().connect_once([this] {
+                                                     closeConfirmed_ = true;
+                                                     close();
+                                                 });
                                              });
                                          });
                            });

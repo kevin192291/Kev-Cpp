@@ -30,6 +30,11 @@ TEST(Version, Comparison) {
     EXPECT_EQ(compareVersions(newer, newer), Freshness::UpToDate);
     EXPECT_EQ(compareVersions(newer, older), Freshness::AheadOfRelease);
     EXPECT_EQ(compareVersions(Version{}, older), Freshness::UpdateAvailable); // built outside git
+    // A build knows its commit to the second; the release tag only to the minute.
+    const Version build{newer.time + 42, "3fa834c", "2026.10.31.1959-3fa834c"};
+    EXPECT_EQ(compareVersions(build, newer), Freshness::UpToDate);
+    const Version other{newer.time + 42, "bbbbbbb", "2026.10.31.1959-bbbbbbb"};
+    EXPECT_EQ(compareVersions(other, newer), Freshness::UpToDate); // same minute: can't tell
 }
 
 TEST(Version, LatestReleaseFromGitHub) {

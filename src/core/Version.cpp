@@ -70,9 +70,13 @@ std::optional<Release> parseLatestRelease(std::string_view text) {
 
 Freshness compareVersions(const Version& running, const Version& latest) {
     // A build without a version (made outside git) is treated as older than any release.
-    if (!running.known() || running.time < latest.time) return Freshness::UpdateAvailable;
-    if (running.time > latest.time) return Freshness::AheadOfRelease;
-    return Freshness::UpToDate;
+    if (!running.known()) return Freshness::UpdateAvailable;
+    if (!running.commit.empty() && running.commit == latest.commit) return Freshness::UpToDate;
+    // Tags only keep the minute, while a build knows its commit's second: compare minutes.
+    const int64_t mine = running.time / 60, theirs = latest.time / 60;
+    if (mine < theirs) return Freshness::UpdateAvailable;
+    if (mine > theirs) return Freshness::AheadOfRelease;
+    return Freshness::UpToDate; // two commits in one minute: no way to tell which is newer
 }
 
 std::optional<fs::path> installPrefix(const fs::path& executable) {
