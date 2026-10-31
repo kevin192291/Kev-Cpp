@@ -1,7 +1,8 @@
 #include "terminal/TerminalPane.h"
 
+#include "core/Toolchain.h"
+
 #include <csignal>
-#include <cstdlib>
 #include <cstdlib>
 #include <cstring>
 #include <sys/wait.h>
@@ -13,6 +14,18 @@ namespace {
 struct SpawnContext {
     std::weak_ptr<TerminalPane*> pane;
 };
+
+// PATH for what runs in the terminal: the folder Kev-C++ is installed in comes first, so `kev`
+// works here even when the desktop session's PATH lacks ~/.local/bin (Debian-based desktops don't
+// read ~/.profile at login). Only an installed Kev-C++ has `kev` next to it; a build folder is left out.
+std::string terminalPath() {
+    const char* inherited = std::getenv("PATH");
+    const std::string path = inherited ? inherited : "";
+    std::error_code ec;
+    const std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", ec);
+    if (ec || !std::filesystem::exists(exe.parent_path() / "kev", ec)) return path;
+    return prependToPath(path, exe.parent_path().string());
+}
 
 std::string describeStatus(int status) {
     if (WIFEXITED(status)) return "Process exited with code " + std::to_string(WEXITSTATUS(status));
@@ -102,8 +115,11 @@ void TerminalPane::start(Launch launch) {
     for (auto& a : launch.argv) args.push_back(a.data());
     args.push_back(nullptr);
     auto* ctx = new SpawnContext{self_};
+    // VTE adds these to the environment the child inherits.
+    std::string path = "PATH=" + terminalPath();
+    char* env[] = {path.data(), nullptr};
     // SEARCH_PATH: programs are full paths, but package.json scripts run as plain `npm run …`.
-    vte_terminal_spawn_async(terminal_, VTE_PTY_DEFAULT, launch.cwd.c_str(), args.data(), nullptr, G_SPAWN_SEARCH_PATH,
+    vte_terminal_spawn_async(terminal_, VTE_PTY_DEFAULT, launch.cwd.c_str(), args.data(), env, G_SPAWN_SEARCH_PATH,
                              nullptr, nullptr, nullptr, -1, nullptr, &TerminalPane::onSpawned, ctx);
 }
 

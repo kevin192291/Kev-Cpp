@@ -19,6 +19,8 @@ struct ToolInfo {
 
 // Searches a PATH-style list ("a:b:c") for an executable file called `name`.
 std::optional<std::filesystem::path> findInPath(const std::string& name, const std::string& pathList);
+// `dir` put first in a PATH-style list (unless it's already in it).
+std::string prependToPath(const std::string& pathList, const std::string& dir);
 
 class Toolchain {
 public:

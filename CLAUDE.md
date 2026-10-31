@@ -76,6 +76,8 @@ verified by driving the real app (see "GUI testing").
   else CMakeLists.txt asks to adopt it; else a `package.json` makes it a TypeScript project kept in
   memory only (`ProjectSession::openWebFolder`, no `.kevc` written); else a plain folder. `data/kev`
   is a shell script installed next to kev-cpp; it runs the IDE under `setsid -f` so the terminal is freed.
+  The Terminal tab puts the folder an installed kev-cpp runs from (one with `kev` beside it) first on
+  its shell's PATH: Debian-based desktops don't read `~/.profile`, so `~/.local/bin` is often missing.
 - **IntelliSense** = clangd (`--query-driver=gcc,g++` so gcc's headers are used) + typescript-language-server.
   Completion follows GtkSourceView's model: populate returns SortListModel(FilterListModel(store)),
   refilter only updates the filter. When the server says `isIncomplete`, refilter re-requests.

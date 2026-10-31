@@ -42,6 +42,14 @@ std::string firstLineOfVersion(const std::filesystem::path& exe) {
 
 } // namespace
 
+std::string prependToPath(const std::string& pathList, const std::string& dir) {
+    if (dir.empty()) return pathList;
+    std::stringstream ss(pathList);
+    for (std::string entry; std::getline(ss, entry, ':');)
+        if (entry == dir) return pathList;
+    return pathList.empty() ? dir : dir + ":" + pathList;
+}
+
 std::optional<std::filesystem::path> findInPath(const std::string& name, const std::string& pathList) {
     if (name.find('/') != std::string::npos) {
         if (access(name.c_str(), X_OK) == 0) return std::filesystem::path(name);

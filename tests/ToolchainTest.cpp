@@ -36,6 +36,13 @@ TEST_F(ToolchainTest, FindsFirstMatchInPathOrder) {
     EXPECT_EQ(*found, dir_ / "a" / "g++");
 }
 
+TEST(Toolchain, PrependsADirectoryToPath) {
+    EXPECT_EQ(kevc::prependToPath("/usr/bin:/bin", "/home/me/.local/bin"), "/home/me/.local/bin:/usr/bin:/bin");
+    EXPECT_EQ(kevc::prependToPath("/usr/bin:/home/me/.local/bin", "/home/me/.local/bin"), "/usr/bin:/home/me/.local/bin");
+    EXPECT_EQ(kevc::prependToPath("", "/opt/kev/bin"), "/opt/kev/bin");
+    EXPECT_EQ(kevc::prependToPath("/usr/bin", ""), "/usr/bin");
+}
+
 TEST_F(ToolchainTest, SkipsNonExecutableFiles) {
     makeExe(dir_ / "a" / "gcc", false);
     makeExe(dir_ / "b" / "gcc");
