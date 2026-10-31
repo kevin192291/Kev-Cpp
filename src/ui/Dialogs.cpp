@@ -133,6 +133,8 @@ NewProjectDialog::NewProjectDialog(Gtk::Window& parent, const std::filesystem::p
     content_.append(*heading);
 
     templates_.set_selection_mode(Gtk::SelectionMode::BROWSE);
+    // A click picks the type; a double-click or Enter creates the project (activation calls submit).
+    templates_.set_activate_on_single_click(false);
     templates_.add_css_class("boxed-list");
     for (const auto& t : kTemplates) {
         auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 10);
