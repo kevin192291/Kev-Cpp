@@ -78,4 +78,18 @@ TEST(LspLanguages, ServerAndLanguageIds) {
     EXPECT_EQ(languageIdFor("x.h", false), "c");
     EXPECT_EQ(languageIdFor("x.hpp", false), "cpp");
     EXPECT_EQ(languageIdFor("m.mjs", false), "javascript");
+    EXPECT_EQ(serverFor("src/routes/+page.svelte"), Server::Svelte);
+    EXPECT_EQ(languageIdFor("src/lib/Counter.svelte", false), "svelte");
+}
+
+TEST(LspLanguages, SvelteConfiguration) {
+    const json init = svelteInitializationOptions();
+    EXPECT_TRUE(init["configuration"]["svelte"]["plugin"]["typescript"]["enable"].get<bool>());
+    EXPECT_TRUE(init["dontFilterIncompleteCompletions"].get<bool>());
+    // workspace/configuration: objects (never null) for the sections Svelte's server asks about.
+    EXPECT_TRUE(configurationFor(Server::Svelte, "svelte")["plugin"].is_object());
+    EXPECT_TRUE(configurationFor(Server::Svelte, "svelte.plugin.css")["enable"].get<bool>());
+    EXPECT_TRUE(configurationFor(Server::Svelte, "prettier").is_object());
+    EXPECT_TRUE(configurationFor(Server::Svelte, "unknown.section").is_object());
+    EXPECT_TRUE(configurationFor(Server::TypeScript, "typescript").is_null()); // unchanged for the others
 }

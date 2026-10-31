@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 DATA = HERE.parent
 SHEET = HERE / "icon-sprite-sheet.png"
 # Language logos for the New Project dialog, from Wikimedia Commons (see docs/ICONS.md).
-LOGOS = {"cpp-logo": "cpp.png", "c-logo": "c.png", "ts-logo": "typescript.png"}
+LOGOS = {"cpp-logo": "cpp.png", "c-logo": "c.png", "ts-logo": "typescript.png", "svelte-logo": "svelte.png"}
 SIZES = (16, 24, 32, 48)
 GRID = 8
 # Icons are cut from squares at least this big (sheet pixels), so small ones such as Stop keep
@@ -232,6 +232,7 @@ def build(sheet):
     cpp = get("cpp-file")
     icons["ts-file"] = square(relabel(cpp, "TS", (32, 80, 210, 255), (16, 32, 96, 255)))
     icons["js-file"] = square(relabel(cpp, "JS", (236, 196, 20, 255), OUTLINE))
+    icons["svelte-file"] = square(relabel(cpp, "SV", (255, 62, 0, 255), (110, 22, 0, 255)))
 
     gear = get("settings")
     icons["shared-library"] = library(get("document"), gear, [(0.42, 0.40, 0.40), (0.56, 0.62, 0.68)])

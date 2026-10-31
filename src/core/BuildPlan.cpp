@@ -1,5 +1,7 @@
 #include "core/BuildPlan.h"
 
+#include "core/WebProject.h"
+
 #include <algorithm>
 
 namespace fs = std::filesystem;
@@ -41,8 +43,16 @@ std::vector<Command> buildCommands(const Project& p, const fs::path& root, Build
     }
 
     if (p.kind == ProjectKind::WebTs) {
+        const WebProject web = WebProject::detect(root);
+        if (action == BuildAction::Clean) return out;
+        // Rebuild makes the production build with the project's own build script (vite build).
+        if (action == BuildAction::Rebuild && web.usesVite() && web.hasScript("build")) {
+            out.push_back({web.runScriptCommand("build"), root});
+            return out;
+        }
+        if (web.svelte()) return svelteCheckCommands(web, root, tools.node);
         std::error_code ec;
-        if (action == BuildAction::Clean || tools.tsc.empty() || !fs::exists(root / "tsconfig.json", ec)) return out;
+        if (tools.tsc.empty() || !fs::exists(root / "tsconfig.json", ec)) return out;
         out.push_back({{tools.node, tools.tsc, "--noEmit", "--pretty", "false", "-p", root.string()}, root});
         return out;
     }

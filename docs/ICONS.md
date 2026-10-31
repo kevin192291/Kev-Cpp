@@ -97,6 +97,7 @@ Rows and columns as on the sheet; the icon is `kevc-<name>`.
 | `terminal` | Terminal and GDB Console tabs | Drawn |
 | `exec-arrow` | Current line while debugging | Drawn: green arrow |
 | `ts-file`, `js-file` | TypeScript and JavaScript files | The C++ page relabelled |
+| `svelte-file` | Svelte components (`.svelte`), the Routes tab | The C++ page relabelled "SV" in Svelte orange |
 | `shared-library` | New Project: C++ Shared Library | Generic document with two Settings gears, like the Windows DLL icon |
 | `static-library` | New Project: C++ Static Library | Copy (two pages) with a Settings gear |
 
@@ -104,15 +105,17 @@ Notes use `about`.
 
 ## Language logos
 
-The New Project dialog shows the languages' own logos for the C++, C and TypeScript project types.
-They are in `data/art/logos/`, scaled down to 512 px from Wikimedia Commons, where all three are in
-the public domain (they are trademarks of their owners):
+The New Project dialog shows the languages' own logos for the C++, C, TypeScript and SvelteKit project
+types. They are in `data/art/logos/`, scaled down to 512 px from Wikimedia Commons. The C++, C and
+TypeScript logos are in the public domain there and the Svelte logo is under the MIT licence (all are
+trademarks of their owners):
 
 | Name | File | Source |
 |---|---|---|
 | `cpp-logo` | `cpp.png` | [ISO_C++_Logo.svg](https://commons.wikimedia.org/wiki/File:ISO_C%2B%2B_Logo.svg) |
 | `c-logo` | `c.png` | [C_Programming_Language.svg](https://commons.wikimedia.org/wiki/File:C_Programming_Language.svg) |
 | `ts-logo` | `typescript.png` | [Typescript.svg](https://commons.wikimedia.org/wiki/File:Typescript.svg) |
+| `svelte-logo` | `svelte.png` | [Svelte_Logo.svg](https://commons.wikimedia.org/wiki/File:Svelte_Logo.svg) (MIT) |
 
 ## Start/Stop buttons
 

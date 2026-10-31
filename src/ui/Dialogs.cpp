@@ -21,6 +21,8 @@ constexpr std::array kTemplates{
                  "CMake + g++, builds lib<name>.so"},
     TemplateInfo{ProjectTemplate::CConsole, "kevc-c-logo", "C Console Application", "Makefile + gcc"},
     TemplateInfo{ProjectTemplate::WebTs, "kevc-ts-logo", "TypeScript Web App", "Served on http://localhost:5465"},
+    TemplateInfo{ProjectTemplate::SvelteKit, "kevc-svelte-logo", "SvelteKit App",
+                 "Svelte 5 + TypeScript + Vite, made by sv create (downloads packages)"},
 };
 
 // Destroys a transient window once GTK is done with it.

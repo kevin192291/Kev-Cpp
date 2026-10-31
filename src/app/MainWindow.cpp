@@ -3,8 +3,11 @@
 #include "app/Application.h"
 #include "editor/EditorTab.h"
 #include "core/Mi.h"
+#include "core/ProjectKinds.h"
+#include "debug/DapViews.h"
 #include "debug/DebugHover.h"
 #include "lsp/LspBridges.h"
+#include "process/Capture.h"
 #include "project/SourceWatcher.h"
 #include "ui/Dialogs.h"
 #include "ui/ProjectOptionsDialog.h"
@@ -44,21 +47,37 @@ fs::path findToolsDir() {
     return fs::path(KEVC_SOURCE_DIR) / "tools";
 }
 
+// Toolbar groups (View → Toolbars), in toolbar order.
+constexpr std::array<std::pair<const char*, const char*>, 6> kToolbarGroups{{
+    {"file", "_File"},
+    {"edit", "_Edit"},
+    {"build", "_Build"},
+    {"debug", "_Debug"},
+    {"project", "_Project"},
+    {"web", "_Web"},
+}};
+
+// Tool panels (View → Panels): DockManager ids and menu labels.
+constexpr std::array<std::pair<const char*, const char*>, 11> kPanels{{
+    {"compiler", "_Compiler"},
+    {"compile-log", "Compile _Log"},
+    {"run", "_Run"},
+    {"debug", "_Debug"},
+    {"find", "_Find Results"},
+    {"terminal", "_Terminal"},
+    {"dev-server", "Dev _Server"},
+    {"env", "_Environment (SvelteKit)"},
+    {"tests", "Te_sts"},
+    {"traces", "Tr_aces"},
+    {"deps", "De_pendencies"},
+}};
+
 fs::path defaultProjectLocation() {
     const fs::path home = Glib::get_home_dir();
     std::error_code ec;
     for (const char* candidate : {"source/repos", "Projects", "projects", "src"})
         if (fs::is_directory(home / candidate, ec)) return home / candidate;
     return home;
-}
-
-std::string kindLabel(ProjectKind kind) {
-    switch (kind) {
-    case ProjectKind::Cpp: return "C++ · CMake";
-    case ProjectKind::C: return "C · Make";
-    case ProjectKind::WebTs: return "TypeScript";
-    }
-    return {};
 }
 
 std::string joinList(const std::vector<std::string>& items) {
@@ -115,6 +134,48 @@ MainWindow::MainWindow(Application& app)
     set_child(root_);
 
     projectTree_.signalFileActivated().connect([this](const fs::path& file) { openFile(file); });
+    routesPanel_.signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
+    routesPanel_.signalOpenInBrowser().connect([this](const std::string& url) { openRoute(url); });
+    routesPanel_.signalNewRoute().connect([this] { newRoute(); });
+    envPanel_.signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
+    testsPanel_.signalRunAll().connect([this](TestRunner runner) { runTests(runner); });
+    testsPanel_.signalRunFailed().connect([this] {
+        std::vector<fs::path> files;
+        for (const auto& c : lastFailed_)
+            if (std::find(files.begin(), files.end(), c.file) == files.end()) files.push_back(c.file);
+        runTests(lastRunner_, {}, {}, 0, files);
+    });
+    testsPanel_.signalRunOne().connect([this](const TestCase& c) {
+        runTests(lastRunner_, c.file, lastRunner_ == TestRunner::Vitest ? c.fullName : std::string(), c.line);
+    });
+    testsPanel_.signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
+    tracesPanel_.signalClear().connect([this] {
+        traces_.clear();
+        tracesPanel_.setTraces(traces_);
+    });
+    depsPanel_.signalRefresh().connect([this] { refreshDependencies(); });
+    depsPanel_.signalOpenPackage().connect([this](const std::string& name) {
+        if (folder_.empty()) return;
+        std::ifstream in(folder_ / "package.json");
+        std::string text;
+        int number = 0, found = 1;
+        while (std::getline(in, text)) {
+            ++number;
+            if (text.find("\"" + name + "\"") != std::string::npos) {
+                found = number;
+                break;
+            }
+        }
+        openFile(folder_ / "package.json", found);
+    });
+    envPanel_.signalEditEnv().connect([this] {
+        if (folder_.empty()) return;
+        const fs::path env = folder_ / ".env";
+        std::error_code ec;
+        if (!fs::exists(env, ec)) std::ofstream(env) << "# Environment variables for SvelteKit's $env modules.\n"
+                                                         "# Names starting with PUBLIC_ can reach the browser; the rest stay on the server.\n";
+        openFile(env);
+    });
     lsp_->signalStatus().connect([this](const std::string& message) { setStatus(message); });
     lsp_->signalDiagnosticsChanged().connect([this](EditorTab* tab) {
         // Library headers opened via Go to Definition aren't the user's code: no squiggles there.
@@ -129,6 +190,12 @@ MainWindow::MainWindow(Application& app)
     });
     editors_.signal_switch_page().connect([this](Gtk::Widget*, guint) { scheduleSymbolsRefresh(); });
     debugPanel_.signalFrameActivated().connect([this](int level) {
+        if (jsDebugger_ && jsDebugger_->stopped()) {
+            for (const auto& f : frames_)
+                if (f.level == level) showFrame(f);
+            refreshJsViews(level);
+            return;
+        }
         if (!debugger_ || !debugger_->stopped()) return;
         debugger_->selectFrame(level);
         for (const auto& f : frames_)
@@ -147,11 +214,21 @@ MainWindow::MainWindow(Application& app)
         updateBreakpointsPanel();
     });
     debugPanel_.signalConsoleCommand().connect([this](const std::string& command) {
+        if (jsDebugger_) {
+            // Evaluated in the paused frame, like the browser's console.
+            const int frameId = jsFrames_.empty() ? 0 : jsFrames_.front().id;
+            debugPanel_.appendConsole("> " + command + "\n");
+            jsDebugger_->evaluate(command, frameId, "repl", [this](std::optional<dap::Variable> v, std::string error) {
+                debugPanel_.appendConsole((v ? v->value : "Error: " + error) + "\n");
+            });
+            return;
+        }
         if (debugger_) debugger_->consoleCommand(command);
         else debugPanel_.appendConsole("Not debugging. Press F5 to start.\n");
     });
     watches_.signalChanged().connect([this] {
-        if (debugger_ && debugger_->stopped()) refreshDebugViews();
+        if (jsDebugger_ && jsDebugger_->stopped()) refreshJsViews(0);
+        else if (debugger_ && debugger_->stopped()) refreshDebugViews();
         else watches_.showPlaceholders();
     });
     compilerPanel_.signalActivated().connect([this](const Diagnostic& d) {
@@ -194,6 +271,8 @@ MainWindow::MainWindow(Application& app)
             return true;
         },
         false);
+
+    applyProfile();
 
     if (auto missing = app_.toolchain().missingOptional(); !missing.empty()) {
         Glib::ustring msg = "Optional tools not found:";
@@ -254,8 +333,39 @@ void MainWindow::buildActions() {
         docks_->resetLayout();
         setStatus("Panels moved back to the bottom");
     });
+    // View → Toolbars and View → Panels: shown or hidden for the current profile, remembered.
+    for (const auto& [id, label] : kToolbarGroups) {
+        const std::string group = id;
+        toolbarActions_[group] = add_action_bool(
+            "toolbar-" + group,
+            [this, group] {
+                setToolbarGroupShown(app_.settings(), group, profile_, !toolbarGroupShown(app_.settings(), group, profile_));
+                applyProfile();
+            },
+            true);
+    }
+    for (const auto& [id, label] : kPanels) {
+        const std::string panel = id;
+        panelActions_[panel] = add_action_bool(
+            "panel-" + panel,
+            [this, panel] {
+                const bool show = docks_->closed(panel);
+                setPanelShown(app_.settings(), panel, profile_, show);
+                docks_->setClosed(panel, !show);
+            },
+            true);
+    }
     // Project
     add_action("project-add-file", [this] { newFile(); });
+    add_action("web-install", [this] { installDependencies(); });
+    add_action("web-tests", [this] {
+        const auto runners = folder_.empty() ? std::vector<TestRunner>{} : testRunners(folder_);
+        if (runners.empty()) setStatus("No test runner installed: add Vitest (npm i -D vitest) or Playwright");
+        else runTests(runners.front());
+    });
+    add_action_with_parameter("run-script", Glib::VARIANT_TYPE_STRING, [this](const Glib::VariantBase& v) {
+        runScript(Glib::VariantBase::cast_dynamic<Glib::Variant<Glib::ustring>>(v).get());
+    });
     add_action("project-options", [this] { showProjectOptions(false); });
     add_action("packages", [this] { showProjectOptions(true); });
     // Execute
@@ -267,16 +377,30 @@ void MainWindow::buildActions() {
     add_action("stop", [this] { stopExecution(); });
     // Debug
     add_action("debug", [this] { startDebugging(); });
-    add_action("debug-continue", [this] { debugStep(&DebugController::resume); });
-    add_action("step-over", [this] { debugStep(&DebugController::stepOver); });
-    add_action("step-into", [this] { debugStep(&DebugController::stepInto); });
-    add_action("step-out", [this] { debugStep(&DebugController::stepOut); });
+    // Each goes to whichever debugger is running: gdb, or js-debug for web projects.
+    add_action("debug-continue", [this] {
+        if (jsDebugger_) jsDebugger_->resume();
+        else debugStep(&DebugController::resume);
+    });
+    add_action("step-over", [this] {
+        if (jsDebugger_) jsDebugger_->stepOver();
+        else debugStep(&DebugController::stepOver);
+    });
+    add_action("step-into", [this] {
+        if (jsDebugger_) jsDebugger_->stepInto();
+        else debugStep(&DebugController::stepInto);
+    });
+    add_action("step-out", [this] {
+        if (jsDebugger_) jsDebugger_->stepOut();
+        else debugStep(&DebugController::stepOut);
+    });
     add_action("debug-pause", [this] {
         if (debugger_) debugger_->pause();
+        if (jsDebugger_) jsDebugger_->pause();
     });
     add_action("debug-stop", [this] {
         // Also during the build that comes before debugging.
-        if (debugger_ || (build_.running() && buildTask_ == Task::Debug)) stopTask(Task::Debug);
+        if (debugger_ || jsDebugger_ || (build_.running() && buildTask_ == Task::Debug)) stopTask(Task::Debug);
         else setStatus("Not debugging");
     });
     add_action("toggle-breakpoint", [this] { toggleBreakpointAtCursor(); });
@@ -316,15 +440,42 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
         {{"_Find…", "win.find"}, {"_Replace…", "win.replace"}},
         {{"_Go to Line…", "win.goto-line"}, {"Go to _Definition (Ctrl+Click)", "win.goto-definition"}},
     });
-    submenu("_View", {
-        {{"_Project Panel", "win.toggle-left-dock"}, {"_Bottom Panel", "win.toggle-bottom-dock"},
-         {"_Right Panel", "win.toggle-right-dock"}},
-        {{"Reset Panel _Layout", "win.reset-panels"}},
-    });
-    submenu("P_roject", {
-        {{"_New File in Project…", "win.project-add-file"}},
-        {{"_Packages…", "win.packages"}, {"Project _Options…", "win.project-options"}},
-    });
+    {
+        auto view = Gio::Menu::create();
+        auto docks = Gio::Menu::create();
+        docks->append("_Project Panel", "win.toggle-left-dock");
+        docks->append("_Bottom Panel", "win.toggle-bottom-dock");
+        docks->append("_Right Panel", "win.toggle-right-dock");
+        view->append_section(docks);
+        auto toolbars = Gio::Menu::create();
+        for (const auto& [id, label] : kToolbarGroups) toolbars->append(label, std::string("win.toolbar-") + id);
+        auto panels = Gio::Menu::create();
+        for (const auto& [id, label] : kPanels) panels->append(label, std::string("win.panel-") + id);
+        auto lists = Gio::Menu::create();
+        lists->append_submenu("_Toolbars", toolbars);
+        lists->append_submenu("P_anels", panels);
+        view->append_section(lists);
+        auto reset = Gio::Menu::create();
+        reset->append("Reset Panel _Layout", "win.reset-panels");
+        view->append_section(reset);
+        bar->append_submenu("_View", view);
+    }
+    {
+        auto project = Gio::Menu::create();
+        auto files = Gio::Menu::create();
+        files->append("_New File in Project…", "win.project-add-file");
+        project->append_section(files);
+        auto web = Gio::Menu::create();
+        web->append("_Install Dependencies (npm install)", "win.web-install");
+        web->append("Run _Tests", "win.web-tests");
+        web->append_submenu("_Scripts", scriptsMenu_);
+        project->append_section(web);
+        auto options = Gio::Menu::create();
+        options->append("_Packages…", "win.packages");
+        options->append("Project _Options…", "win.project-options");
+        project->append_section(options);
+        bar->append_submenu("P_roject", project);
+    }
     submenu("E_xecute", {
         {{"_Compile", "win.compile"}, {"_Run", "win.run"}, {"Compile & R_un", "win.compile-run"}},
         {{"Rebuild _All", "win.rebuild"}, {"C_lean", "win.clean"}},
@@ -348,15 +499,32 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
 }
 
 Gtk::Widget& MainWindow::buildToolbar() {
-    // Two rows, as in Dev-C++: files, editing and building on top, debugging below.
+    // Two rows, as in Dev-C++: files, editing and building on top, debugging below. Each row holds
+    // named groups that View → Toolbars can hide (per profile; see applyProfile).
     auto* toolbar = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
     toolbar->add_css_class("kevc-toolbar");
-    auto newRow = [toolbar] {
+    auto newRow = [this, toolbar] {
+        if (!toolbarRows_.empty()) {
+            auto* rule = Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL);
+            rule->add_css_class("kevc-toolbar-rule");
+            toolbar->append(*rule);
+            toolbarRules_.push_back(rule);
+        }
         auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 1);
         toolbar->append(*row);
-        return row;
+        toolbarRows_.push_back(row);
     };
-    Gtk::Box* bar = newRow(); // the row the helpers below add to
+    Gtk::Box* bar = nullptr; // the group the helpers below add to
+    auto group = [this, &bar](const char* id) {
+        Gtk::Box* row = toolbarRows_.back();
+        auto* separator = Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::VERTICAL);
+        separator->set_margin_start(4);
+        separator->set_margin_end(4);
+        row->append(*separator);
+        bar = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 1);
+        row->append(*bar);
+        toolbarGroups_.push_back({id, bar, separator, toolbarRows_.size() - 1});
+    };
     // Buttons activate the window's actions (the same as the menus and keys) rather than being
     // bound to them, so their enabled state is ours to set in updateToolbar().
     auto button = [this, &bar](const char* icon, const char* action, const char* tooltip) {
@@ -380,24 +548,19 @@ Gtk::Widget& MainWindow::buildToolbar() {
         taskButtons_[t] = b;
         bar->append(*b);
     };
-    auto separator = [&bar] {
-        auto* s = Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::VERTICAL);
-        s->set_margin_start(4);
-        s->set_margin_end(4);
-        bar->append(*s);
-    };
 
+    newRow();
+    group("file");
     button("kevc-new-project", "win.new-project", "New Project (Ctrl+Shift+N)");
     button("kevc-new-file", "win.new-file", "New Source File (Ctrl+N)");
     button("kevc-open", "win.open-project", "Open Project or Folder (Ctrl+O)");
     button("kevc-save", "win.save", "Save (Ctrl+S)");
     button("kevc-save-all", "win.save-all", "Save All (Ctrl+Shift+S)");
-    separator();
+    group("edit");
     button("kevc-undo", "win.undo", "Undo (Ctrl+Z)");
     button("kevc-redo", "win.redo", "Redo (Ctrl+Shift+Z)");
-    separator();
     button("kevc-find", "win.find", "Find (Ctrl+F)");
-    separator();
+    group("build");
     task(Task::Compile, "kevc-compile", "win.compile", "Compile (F9)", "Stop compiling (Ctrl+F2)");
     task(Task::Run, "kevc-run", "win.run", "Run (F10)", "Stop the program (Ctrl+F2)");
     task(Task::CompileRun, "kevc-compile-run", "win.compile-run", "Compile & Run (F11)", "Stop (Ctrl+F2)");
@@ -409,10 +572,8 @@ Gtk::Widget& MainWindow::buildToolbar() {
     configDrop_->set_margin_start(4);
     bar->append(*configDrop_);
 
-    auto* rowLine = Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL);
-    rowLine->add_css_class("kevc-toolbar-rule");
-    toolbar->append(*rowLine);
-    bar = newRow();
+    newRow();
+    group("debug");
     task(Task::Debug, "kevc-debug", "win.debug", "Debug (F5)", "Stop debugging (Shift+F5)");
     continueButton_ = Gtk::make_managed<TaskButton>("kevc-continue", "Continue (F8)", "kevc-pause", "Pause");
     continueButton_->signalStart().connect([this] { activate_action("win.debug-continue"); });
@@ -423,17 +584,63 @@ Gtk::Widget& MainWindow::buildToolbar() {
                     button("kevc-step-out", "win.step-out", "Step Out (Shift+F7)")};
     button("kevc-breakpoint", "win.toggle-breakpoint", "Toggle Breakpoint (Ctrl+F5)");
     button("kevc-watch", "win.add-watch", "Add Watch");
-    separator();
+    group("project");
     button("kevc-project", "win.project-options", "Project Options (Alt+P)");
-    devServerButton_ = Gtk::make_managed<TaskButton>("kevc-globe", "Start the TypeScript dev server (port 5465)",
+    group("web");
+    button("kevc-workspace", "win.web-install", "Install Dependencies (npm install)");
+    button("kevc-bool-variable", "win.web-tests", "Run Tests (Vitest or Playwright)");
+    {
+        auto* image = Gtk::make_managed<Gtk::Image>();
+        image->set_from_icon_name("kevc-terminal");
+        image->set_pixel_size(kToolbarIconSize);
+        auto* scripts = Gtk::make_managed<Gtk::MenuButton>();
+        scripts->set_child(*image);
+        scripts->set_has_frame(false);
+        scripts->set_tooltip_text("Run a package.json script");
+        scripts->set_menu_model(scriptsMenu_);
+        bar->append(*scripts);
+    }
+    devServerButton_ = Gtk::make_managed<TaskButton>("kevc-globe", "Start the dev server (Vite, or the bundled one)",
                                                      "kevc-stop", "Stop the dev server");
     devServerButton_->signalStart().connect([this] { startDevServer(false); });
     devServerButton_->signalStop().connect([this] {
         if (devServer_) devServer_->stop();
     });
     bar->append(*devServerButton_);
+    updateToolbarRows();
     updateToolbar();
     return *toolbar;
+}
+
+void MainWindow::updateToolbarRows() {
+    // A group's separator only shows after another visible group in its row, and a row (with the
+    // line above it) only shows if it has a visible group.
+    std::vector<bool> rowUsed(toolbarRows_.size(), false);
+    for (auto& g : toolbarGroups_) {
+        const bool visible = g.box->get_visible();
+        g.separator->set_visible(visible && rowUsed[g.row]);
+        if (visible) rowUsed[g.row] = true;
+    }
+    bool earlierRow = false;
+    for (size_t r = 0; r < toolbarRows_.size(); ++r) {
+        toolbarRows_[r]->set_visible(rowUsed[r]);
+        if (r > 0) toolbarRules_[r - 1]->set_visible(rowUsed[r] && earlierRow);
+        earlierRow = earlierRow || rowUsed[r];
+    }
+}
+
+void MainWindow::applyProfile() {
+    profile_ = profileFor(session_ ? &session_->project() : nullptr, !folder_.empty());
+    const Settings& settings = app_.settings();
+    for (auto& g : toolbarGroups_) {
+        const bool shown = toolbarGroupShown(settings, g.id, profile_);
+        g.box->set_visible(shown);
+        if (auto it = toolbarActions_.find(g.id); it != toolbarActions_.end())
+            it->second->set_state(Glib::Variant<bool>::create(shown));
+    }
+    updateToolbarRows();
+    if (docks_)
+        for (const auto& [id, title] : docks_->panels()) docks_->setClosed(id, !panelShown(settings, id, profile_));
 }
 
 Gtk::Widget& MainWindow::buildLeftDock() {
@@ -520,8 +727,17 @@ Gtk::Widget& MainWindow::buildBottomDock() {
     docks_->add("find", "Find Results", placeholder("Search results appear here."), "kevc-find-in-files");
     docks_->add("terminal", "Terminal", shell_, "kevc-terminal");
     docks_->add("dev-server", "Dev Server", buildServerPage(), "kevc-globe");
+    docks_->add("env", "Environment", envPanel_, "kevc-const-variable");
+    docks_->add("tests", "Tests", testsPanel_, "kevc-bool-variable");
+    docks_->add("traces", "Traces", tracesPanel_, "kevc-call-stack");
+    docks_->add("deps", "Dependencies", depsPanel_, "kevc-workspace");
     bottomDock_.set_size_request(-1, 120);
     docks_->acceptFloatingDrops(root_);
+    docks_->signalClosedChanged().connect([this](const std::string& id, bool closed, bool byUser) {
+        if (byUser) setPanelShown(app_.settings(), id, profile_, !closed);
+        if (auto it = panelActions_.find(id); it != panelActions_.end())
+            it->second->set_state(Glib::Variant<bool>::create(!closed));
+    });
     // Put panels back where they were last time, once the main window is up.
     Glib::signal_idle().connect_once([this] { docks_->restoreLayout(); });
     return bottomDock_;
@@ -553,6 +769,7 @@ void MainWindow::newProject() {
     const fs::path location = session_ ? session_->root().parent_path() : defaultProjectLocation();
     auto* dialog = new NewProjectDialog(*this, location,
         [this](const std::string& name, const fs::path& parent, ProjectTemplate tmpl) -> Glib::ustring {
+            if (tmpl == ProjectTemplate::SvelteKit) return createSvelteKitApp(name, parent);
             try {
                 auto session = std::make_unique<ProjectSession>(ProjectSession::create(parent, name, tmpl));
                 closeAllEditors([this, s = std::shared_ptr<ProjectSession>(session.release())]() mutable {
@@ -602,7 +819,11 @@ void MainWindow::openFolder(const fs::path& root) {
                           });
             } else if (fs::exists(root / "package.json", ec)) {
                 setProject(std::make_unique<ProjectSession>(ProjectSession::openWebFolder(root)));
-                setStatus("Opened " + session_->project().name + " as a TypeScript project (it has a package.json)");
+                setStatus("Opened " + session_->project().name + " as a " + web_.label() +
+                          " project (it has a package.json)" +
+                          (fs::exists(root / "node_modules", ec) || web_.dependencies.empty()
+                               ? std::string()
+                               : ". Its packages aren't installed yet: Project → Install Dependencies"));
             } else {
                 setPlainFolder(root);
                 if (fs::exists(root / "Makefile", ec))
@@ -616,17 +837,43 @@ void MainWindow::openFolder(const fs::path& root) {
 
 void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     if (debugger_) debugger_->terminate();
+    if (jsDebugger_) jsDebugger_->stop();
     if (devServer_ && devServer_->root() != session->root()) devServer_.reset();
     updateServerPage();
     breakpoints_.clear();
     updateBreakpointsPanel();
     watcher_.reset();
+    collector_.reset();
+    traces_.clear();
+    tracesPanel_.setTraces(traces_);
     session_ = std::move(session);
     folder_ = session_->root();
+    refreshWebProject();
+    refreshKit();
     lsp_->setWorkspace(folder_, &session_->project());
+    // The Svelte server reads .svelte-kit/tsconfig.json at startup and doesn't notice it appearing
+    // later, so generate it first in a project that has never been synced (sveltejs/language-tools#1529).
+    if (std::error_code ec; web_.flavor == WebFlavor::SvelteKit && !fs::exists(folder_ / ".svelte-kit/tsconfig.json", ec)) {
+        if (const fs::path kit = nodeBin(folder_, "svelte-kit"); !kit.empty()) {
+            try {
+                auto launcher = Gio::SubprocessLauncher::create(Gio::Subprocess::Flags::STDOUT_SILENCE |
+                                                                Gio::Subprocess::Flags::STDERR_SILENCE);
+                launcher->set_cwd(folder_.string());
+                auto sync = launcher->spawn({app_.toolchain().pathOf("node").string(), kit.string(), "sync"});
+                const fs::path root = folder_;
+                sync->wait_async([this, sync, root, token = std::weak_ptr<int>(lifetime_)](const Glib::RefPtr<Gio::AsyncResult>&) {
+                    if (token.expired() || !session_ || session_->root() != root) return;
+                    lsp_->setWorkspace(folder_, &session_->project()); // restart the servers with the new config
+                });
+            } catch (const Glib::Error&) {
+                // F9 (svelte-check) runs the sync as well.
+            }
+        }
+    }
     projectTree_.setRoot(folder_);
     shell_.startShell(folder_);
     updateTitle();
+    applyProfile();
     updateToolbar(); // web projects run by serving
 
     watcher_ = std::make_unique<SourceWatcher>(*session_);
@@ -640,27 +887,35 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     });
     if (main != sources.end()) openFile(folder_ / *main);
     else if (!sources.empty()) openFile(folder_ / sources.front());
-    setStatus("Opened " + session_->project().name + " (" + kindLabel(session_->project().kind) + ")");
+    setStatus("Opened " + session_->project().name + " (" + traitsOf(session_->project().kind).label + ")");
 }
 
 void MainWindow::setPlainFolder(const fs::path& root) {
     if (debugger_) debugger_->terminate();
+    if (jsDebugger_) jsDebugger_->stop();
     if (devServer_ && devServer_->root() != root) devServer_.reset();
     updateServerPage();
     breakpoints_.clear();
     updateBreakpointsPanel();
     watcher_.reset();
+    collector_.reset();
+    traces_.clear();
+    tracesPanel_.setTraces(traces_);
     session_.reset();
     folder_ = root;
+    refreshWebProject();
+    refreshKit();
     lsp_->setWorkspace(folder_, nullptr);
     projectTree_.setRoot(folder_);
     shell_.startShell(folder_);
     updateTitle();
+    applyProfile();
     updateToolbar(); // web projects run by serving
     setStatus("Opened folder " + root.string());
 }
 
 void MainWindow::onProjectSynced(const ProjectSession::SyncResult& result) {
+    if (result.changed()) scheduleKitRefresh(); // routes added or removed
     const std::string target = session_ && !session_->buildFile().empty()
                                    ? session_->buildFile().filename().string()
                                    : std::string("the project");
@@ -672,7 +927,9 @@ void MainWindow::onProjectSynced(const ProjectSession::SyncResult& result) {
 }
 
 void MainWindow::updateTitle() {
-    if (session_) set_title(session_->project().name + " — Kev-C++ (" + kindLabel(session_->project().kind) + ")");
+    if (session_)
+        set_title(session_->project().name + " — Kev-C++ (" +
+                  (session_->project().kind == ProjectKind::WebTs ? web_.label() : traitsOf(session_->project().kind).label) + ")");
     else if (!folder_.empty()) set_title(folder_.filename().string() + " — Kev-C++");
     else set_title("Kev-C++");
 }
@@ -744,14 +1001,7 @@ void MainWindow::newFile() {
         showError(*this, "No project open", "Create or open a project first (File → New Project).");
         return;
     }
-    std::string suggestion = "untitled.txt";
-    if (session_) {
-        switch (session_->project().kind) {
-        case ProjectKind::Cpp: suggestion = "src/untitled.cpp"; break;
-        case ProjectKind::C: suggestion = "src/untitled.c"; break;
-        case ProjectKind::WebTs: suggestion = "src/untitled.ts"; break;
-        }
-    }
+    const std::string suggestion = session_ ? traitsOf(session_->project().kind).newFileName : "untitled.txt";
     promptText(*this, "New Source File", "Path relative to " + folder_.filename().string() + ":", suggestion,
                [this](const Glib::ustring& text) -> Glib::ustring {
                    auto target = resolveInside(folder_, text);
@@ -938,8 +1188,15 @@ void MainWindow::startBuild(BuildAction action, Task task, std::function<void(bo
 
     compileLog_.get_buffer()->set_text("");
     compilerPanel_.clear();
+    const bool web = session_->project().kind == ProjectKind::WebTs;
+    if (web) refreshWebProject(); // package.json may have changed since the project was opened
     if (commands.empty()) {
-        if (session_->project().kind == ProjectKind::WebTs && action != BuildAction::Clean) {
+        if (web && action != BuildAction::Clean && web_.svelte()) {
+            compilerPanel_.setEmptyText("Nothing to check yet: svelte-check isn't installed.");
+            appendLog("Checking a Svelte project runs svelte-check from node_modules. Install the dependencies first "
+                      "(Project → Install Dependencies).\n");
+            setStatus("svelte-check isn't installed: Project → Install Dependencies");
+        } else if (web && action != BuildAction::Clean) {
             compilerPanel_.setEmptyText("Nothing to type-check: the project has no tsconfig.json.");
             appendLog("Type checking runs `tsc --noEmit` and needs a tsconfig.json in the project folder.\n");
             setStatus("No tsconfig.json: skipped type checking");
@@ -953,17 +1210,35 @@ void MainWindow::startBuild(BuildAction action, Task task, std::function<void(bo
     }
 
     static const char* verbs[] = {"Building", "Rebuilding", "Cleaning"};
-    const char* verb = session_->project().kind == ProjectKind::WebTs ? "Type-checking" : verbs[static_cast<int>(action)];
-    compilerPanel_.setEmptyText(std::string(verb) + "…");
-    parser_ = std::make_unique<DiagnosticParser>(session_->root());
-    afterBuild_ = std::move(then);
+    std::string verb = verbs[static_cast<int>(action)];
+    std::string done;
+    if (web && action == BuildAction::Rebuild && web_.usesVite()) {
+        verb = "Building for production";
+        done = "Production build";
+    } else if (web) {
+        verb = web_.svelte() ? "Checking" : "Type-checking";
+    }
     buildAction_ = action;
+    runCommands(std::move(commands),
+                verb + " " + session_->project().name + " (" + (buildConfig_ == BuildConfig::Debug ? "Debug" : "Release") + ")",
+                task, std::move(then), done);
+}
+
+void MainWindow::runCommands(std::vector<Command> commands, const std::string& heading, Task task,
+                             std::function<void(bool)> then, std::string doneLabel) {
+    if (build_.running()) {
+        setStatus("Something is already running in the Compile Log; wait for it or stop it first");
+        return;
+    }
+    const fs::path base = folder_.empty() ? (commands.empty() ? fs::path{} : commands.front().cwd) : folder_;
+    compilerPanel_.setEmptyText(heading + "…");
+    parser_ = std::make_unique<DiagnosticParser>(base);
+    afterBuild_ = std::move(then);
+    doneLabel_ = std::move(doneLabel);
     buildStart_ = std::chrono::steady_clock::now();
-    appendLog(std::string(verb) + " " + session_->project().name + " (" +
-                  (buildConfig_ == BuildConfig::Debug ? "Debug" : "Release") + ")\n\n",
-              "summary");
+    appendLog(heading + "\n\n", "summary");
     showBottomPage(*compileLog_.get_parent());
-    setStatus(std::string(verb) + "…");
+    setStatus(heading + "…");
     buildTask_ = task;
     build_.start(std::move(commands));
     updateToolbar();
@@ -1008,11 +1283,15 @@ void MainWindow::onBuildFinished(bool success) {
 
     std::ostringstream status;
     status << std::fixed << std::setprecision(1);
-    if (buildAction_ == BuildAction::Clean) {
+    if (!doneLabel_.empty()) {
+        status << doneLabel_ << (success ? " finished" : " failed") << " (" << seconds << " s)";
+        compilerPanel_.setEmptyText(success ? doneLabel_ + " finished." : doneLabel_ + " failed. See the Compile Log.");
+        doneLabel_.clear();
+    } else if (buildAction_ == BuildAction::Clean) {
         status << (success ? "Clean finished" : "Clean failed");
         compilerPanel_.setEmptyText(success ? "Cleaned." : "Clean failed. See the Compile Log.");
     } else if (session_ && session_->project().kind == ProjectKind::WebTs) {
-        status << (success ? "Type check passed" : "Type check failed: ") << (success ? "" : std::to_string(errors) + " errors")
+        status << (success ? "Check passed" : "Check failed: ") << (success ? "" : std::to_string(errors) + " errors")
                << " (" << seconds << " s)";
         compilerPanel_.setEmptyText(success ? "No type errors." : "Type check failed. See the Compile Log for details.");
     } else if (success) {
@@ -1036,6 +1315,11 @@ void MainWindow::runProgram(Task task) {
     }
     if (build_.running()) {
         setStatus("Wait for the build to finish, or stop it first");
+        return;
+    }
+    if (session_->project().kind == ProjectKind::WebTs && jsDebugger_) {
+        if (!jsServerUrl_.empty()) openUrl(jsServerUrl_);
+        else setStatus("The debugger is still starting Vite");
         return;
     }
     if (session_->project().kind == ProjectKind::WebTs) {
@@ -1092,6 +1376,7 @@ void MainWindow::stopTask(Task task) {
     switch (task) {
     case Task::Debug:
         if (debugger_) debugger_->terminate();
+        if (jsDebugger_) jsDebugger_->stop();
         break;
     case Task::Run:
     case Task::CompileRun:
@@ -1111,7 +1396,7 @@ void MainWindow::updateToolbar() {
     if (taskButtons_.empty()) return; // still building the window
     const bool building = build_.running();
     const bool program = programRunning();
-    const bool debugging = static_cast<bool>(debugger_);
+    const bool debugging = debugger_ || jsDebugger_;
     const bool serving = devServer_ && devServer_->running();
     const bool web = session_ && session_->project().kind == ProjectKind::WebTs;
     auto set = [&](Task t, bool running, bool enabled) {
@@ -1130,11 +1415,14 @@ void MainWindow::updateToolbar() {
         !building && !program && !debugging);
     set(Task::Debug, builtBy(Task::Debug) || debugging, !building && !program);
 
-    const auto state = debugging ? debugger_->state() : DebugController::State::Finished;
-    continueButton_->setRunning(state == DebugController::State::Running);
-    continueButton_->set_sensitive(state == DebugController::State::Running ||
-                                   state == DebugController::State::Stopped);
-    for (Gtk::Button* b : stepButtons_) b->set_sensitive(state == DebugController::State::Stopped);
+    const auto state = debugger_ ? debugger_->state() : DebugController::State::Finished;
+    const bool jsRunning = jsDebugger_ && jsDebugger_->state() == JsDebugger::State::Running;
+    const bool jsStopped = jsDebugger_ && jsDebugger_->stopped();
+    const bool running = state == DebugController::State::Running || jsRunning;
+    const bool paused = state == DebugController::State::Stopped || jsStopped;
+    continueButton_->setRunning(running);
+    continueButton_->set_sensitive(running || paused);
+    for (Gtk::Button* b : stepButtons_) b->set_sensitive(paused);
     devServerButton_->setRunning(serving);
 }
 
@@ -1178,10 +1466,12 @@ void MainWindow::updateServerPage() {
     serverToggle_.setRunning(running);
     updateToolbar();
     serverOpen_.set_sensitive(ready);
-    if (ready) serverStatus_.set_markup("Serving <b>" + Glib::Markup::escape_text(devServer_->root().filename().string()) +
+    if (ready) serverStatus_.set_markup((devServer_->label() == "Vite" ? "Vite is serving <b>" : "Serving <b>") +
+                                        Glib::Markup::escape_text(devServer_->root().filename().string()) +
                                         "</b> at <a href=\"" + Glib::Markup::escape_text(devServer_->url()) + "\">" +
                                         Glib::Markup::escape_text(devServer_->url()) + "</a> (this computer only)");
     else if (running) serverStatus_.set_text("Starting…");
+    else if (web_.usesVite()) serverStatus_.set_text("Stopped. Runs this project's Vite dev server on 127.0.0.1.");
     else serverStatus_.set_text("Stopped. Serves the open folder on http://127.0.0.1:" +
                                 std::to_string(DevServer::kDefaultPort) + "/ with live reload.");
 }
@@ -1199,19 +1489,44 @@ void MainWindow::startDevServer(bool openBrowserWhenReady) {
         setStatus("Open a project or folder to serve it");
         return;
     }
-    const fs::path script = toolsDir_ / "devserver/devserver.mjs";
-    std::error_code ec;
-    if (!fs::exists(script, ec) || !fs::exists(toolsDir_ / "node_modules/typescript", ec)) {
-        showError(*this, "The dev server is not installed",
-                  "Expected " + script.string() + " and the bundled TypeScript (run npm ci in " + toolsDir_.string() + ").");
-        return;
-    }
     openBrowserWhenReady_ = openBrowserWhenReady;
     if (devServer_ && devServer_->running()) {
         if (devServer_->ready() && openBrowserWhenReady) openInBrowser();
         return;
     }
-    devServer_ = std::make_unique<DevServer>(app_.toolchain().pathOf("node").string(), script);
+
+    // Vite projects run their own Vite; anything else gets the bundled server.
+    const bool web = session_ && session_->project().kind == ProjectKind::WebTs;
+    if (web) refreshWebProject();
+    const std::string node = app_.toolchain().pathOf("node").string();
+    std::vector<std::string> argv;
+    DevServer::ReadyParser ready;
+    std::string label;
+    std::error_code ec;
+    if (web && web_.usesVite()) {
+        if (!fs::exists(folder_ / "node_modules", ec)) {
+            setStatus("This " + std::string(web_.label()) + " project's packages aren't installed: Project → Install Dependencies");
+            return;
+        }
+        // Vite's usual port may belong to another of the user's projects: take the first free one.
+        const int port = findFreePort(app_.settings().get<int>("/web/vitePort", 5173));
+        argv = viteDevCommand(web_, folder_, node, port);
+        ready = [](const std::string& line) { return viteReadyUrl(line); };
+        label = "Vite";
+    } else {
+        const fs::path script = toolsDir_ / "devserver/devserver.mjs";
+        if (!fs::exists(script, ec) || !fs::exists(toolsDir_ / "node_modules/typescript", ec)) {
+            showError(*this, "The dev server is not installed",
+                      "Expected " + script.string() + " and the bundled TypeScript (run npm ci in " + toolsDir_.string() + ").");
+            return;
+        }
+        argv = DevServer::bundledCommand(node, script, folder_);
+        ready = DevServer::bundledReady();
+        label = "the dev server";
+    }
+
+    devServer_ = std::make_unique<DevServer>();
+    serverWasReady_ = false;
     devServer_->signalLog().connect([this](const std::string& line) {
         auto buffer = serverLog_.get_buffer();
         buffer->insert(buffer->end(), line + "\n");
@@ -1220,26 +1535,35 @@ void MainWindow::startDevServer(bool openBrowserWhenReady) {
         buffer->delete_mark(end);
     });
     devServer_->signalReady().connect([this](const std::string& url) {
+        serverWasReady_ = true;
         updateServerPage();
-        setStatus("Dev server running at " + url + " (live reload on save)");
+        setStatus(devServer_->label() == "Vite" ? "Vite is serving at " + url + " (hot reload on save)"
+                                                : "Dev server running at " + url + " (live reload on save)");
         if (openBrowserWhenReady_) openInBrowser();
         openBrowserWhenReady_ = false;
     });
     devServer_->signalStopped().connect([this](int status) {
         updateServerPage();
-        if (status == DevServer::kExitPortInUse) {
+        const std::string label = devServer_ ? devServer_->label() : "the dev server";
+        if (status == DevServer::kExitPortInUse && label != "Vite") {
             setStatus("Port " + std::to_string(DevServer::kDefaultPort) +
                       " is already in use. Stop whatever is using it, then press Start in the Dev Server tab.");
             showBottomPage(serverPage_);
+        } else if (!serverWasReady_ && status != 0) {
+            setStatus((label == "Vite" ? std::string("Vite") : std::string("The dev server")) +
+                      " stopped before it was ready (exit status " + std::to_string(status) + "). See the Dev Server tab.");
+            showBottomPage(serverPage_);
         } else {
-            setStatus("Dev server stopped");
+            setStatus(label == "Vite" ? "Vite stopped" : "Dev server stopped");
         }
     });
     serverLog_.get_buffer()->set_text("");
     try {
-        devServer_->start(folder_);
+        // node's folder first, so `npm run dev` and its scripts find the same node as the IDE.
+        devServer_->start(argv, folder_, ready, label, fs::path(node).parent_path().string(),
+                          label == "Vite" ? traceEnvironment() : std::vector<std::pair<std::string, std::string>>{});
     } catch (const Glib::Error& e) {
-        showError(*this, "Could not start the dev server", e.what());
+        showError(*this, "Could not start " + label, e.what());
         devServer_.reset();
     }
     updateServerPage();
@@ -1250,11 +1574,281 @@ void MainWindow::openInBrowser() {
         startDevServer(true);
         return;
     }
-    try {
-        Gio::AppInfo::launch_default_for_uri(devServer_->url());
-    } catch (const Glib::Error& e) {
-        setStatus("Could not open a browser: " + std::string(e.what()) + ". Visit " + devServer_->url());
+    std::string url = devServer_->url();
+    if (!pendingRoute_.empty()) {
+        if (url.ends_with("/")) url.pop_back();
+        url += pendingRoute_;
+        pendingRoute_.clear();
     }
+    openUrl(url);
+}
+
+void MainWindow::openUrl(const std::string& url) {
+    // Settings can name a browser command (tests point it at a script that records the URL).
+    const std::string browser = app_.settings().getString("/web/browser");
+    try {
+        if (!browser.empty()) Glib::spawn_async("", std::vector<std::string>{browser, url}, Glib::SpawnFlags::SEARCH_PATH);
+        else Gio::AppInfo::launch_default_for_uri(url);
+    } catch (const Glib::Error& e) {
+        setStatus("Could not open a browser: " + std::string(e.what()) + ". Visit " + url);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Web projects
+
+void MainWindow::refreshWebProject() {
+    web_ = session_ && session_->project().kind == ProjectKind::WebTs ? WebProject::detect(session_->root()) : WebProject{};
+    scriptsMenu_->remove_all();
+    for (const auto& [name, command] : web_.scripts) {
+        auto item = Gio::MenuItem::create(name + "  (" + (command.size() > 40 ? command.substr(0, 39) + "…" : command) + ")", "");
+        item->set_action_and_target("win.run-script", Glib::Variant<Glib::ustring>::create(name));
+        scriptsMenu_->append_item(item);
+    }
+    if (web_.scripts.empty()) scriptsMenu_->append("No package.json scripts", "win.no-scripts"); // no such action: greyed out
+    testsPanel_.setRunners(session_ && session_->project().kind == ProjectKind::WebTs ? testRunners(session_->root())
+                                                                                       : std::vector<TestRunner>{});
+}
+
+void MainWindow::installDependencies() {
+    if (!session_ || session_->project().kind != ProjectKind::WebTs || !web_.hasPackageJson) {
+        setStatus("Install Dependencies is for web projects with a package.json");
+        return;
+    }
+    compileLog_.get_buffer()->set_text("");
+    compilerPanel_.clear();
+    buildAction_ = BuildAction::Build;
+    runCommands({{web_.installCommand(), session_->root()}},
+                "Installing " + session_->project().name + "'s packages (" + web_.packageManagerName() + " install)",
+                Task::None, [this](bool ok) {
+                    if (ok) refreshWebProject();
+                },
+                "Install");
+}
+
+void MainWindow::runScript(const std::string& name) {
+    if (!session_ || session_->project().kind != ProjectKind::WebTs) return;
+    if (runConsole_.childRunning()) {
+        setStatus("Something is already running in the Run tab; stop it first (Ctrl+F2)");
+        return;
+    }
+    const auto argv = web_.runScriptCommand(name);
+    showBottomPage(runConsole_);
+    runConsole_.runProgram(argv, session_->root(), [this, name](const std::string& outcome) {
+        setStatus("Script " + name + ": " + outcome);
+        updateToolbar();
+    });
+    runConsole_.focusTerminal();
+    setStatus("Running " + displayCommand(argv) + "…");
+    updateToolbar();
+}
+
+void MainWindow::refreshKit() {
+    kitRefresh_.disconnect();
+    const bool kit = web_.flavor == WebFlavor::SvelteKit;
+    const int page = leftDock_.page_num(routesPanel_);
+    if (!kit) {
+        if (page >= 0) leftDock_.remove_page(routesPanel_);
+        envPanel_.showMessage("Open a SvelteKit project to see its environment variables.");
+        return;
+    }
+    if (page < 0) {
+        // Show it when a SvelteKit project opens: with four tabs it would otherwise sit off-screen.
+        leftDock_.append_page(routesPanel_, *makeIconLabel("kevc-svelte-file", "Routes"));
+        leftDock_.set_current_page(leftDock_.page_num(routesPanel_));
+    }
+    routesPanel_.setApp(kit::scan(folder_), folder_);
+    envPanel_.setReport(kit::envReport(folder_), folder_);
+}
+
+void MainWindow::scheduleKitRefresh() {
+    if (web_.flavor != WebFlavor::SvelteKit) return;
+    kitRefresh_.disconnect();
+    kitRefresh_ = Glib::signal_timeout().connect(
+        [this] {
+            refreshKit();
+            return false;
+        },
+        300);
+}
+
+void MainWindow::newRoute() {
+    if (web_.flavor != WebFlavor::SvelteKit) return;
+    promptText(*this, "New Route", "Route under src/routes, e.g. blog/[slug] or (app)/settings:", "",
+               [this](const Glib::ustring& text) -> Glib::ustring {
+                   const auto folder = kit::routeFolder(text.raw());
+                   if (!folder) return "Use a path inside src/routes (no ..).";
+                   const fs::path dir = folder_ / "src" / "routes" / *folder;
+                   std::error_code ec;
+                   if (fs::exists(dir / "+page.svelte", ec)) return "That route already has a +page.svelte.";
+                   fs::create_directories(dir, ec);
+                   if (ec) return "Could not create " + dir.string() + ": " + ec.message();
+                   for (const auto& [name, content] : kit::newRouteFiles(*folder))
+                       if (!fs::exists(dir / name, ec)) std::ofstream(dir / name) << content;
+                   openFile(dir / "+page.svelte");
+                   refreshKit();
+                   setStatus("Created the route /" + *folder);
+                   return {};
+               });
+}
+
+void MainWindow::openRoute(const std::string& url) {
+    auto open = [this](const std::string& path) {
+        if (jsDebugger_ && !jsServerUrl_.empty()) { // the debugger's Vite is already serving
+            std::string base = jsServerUrl_;
+            if (base.ends_with("/")) base.pop_back();
+            openUrl(base + path);
+            return;
+        }
+        pendingRoute_ = path;
+        if (devServer_ && devServer_->ready()) openInBrowser();
+        else startDevServer(true);
+    };
+    if (url.find('[') == std::string::npos) {
+        open(url);
+        return;
+    }
+    promptText(*this, "Open Route", "Fill in the route's parameters:", url, [open](const Glib::ustring& text) -> Glib::ustring {
+        const std::string path = kit::fillParams(text.raw());
+        if (path.empty()) return "Replace every [parameter] with a value.";
+        open(path);
+        return {};
+    });
+}
+
+void MainWindow::runTests(TestRunner runner, const fs::path& file, const std::string& title, int line,
+                          const std::vector<fs::path>& files) {
+    if (!session_ || session_->project().kind != ProjectKind::WebTs) return;
+    if (build_.running()) {
+        setStatus("Wait for the running build to finish first");
+        return;
+    }
+    if (!saveAll()) return;
+    const fs::path root = session_->root();
+    const fs::path report = fs::path(Glib::get_user_cache_dir()) / "kev-cpp" / ("test-report-" + std::to_string(getpid()) + ".json");
+    std::error_code ec;
+    fs::create_directories(report.parent_path(), ec);
+    fs::remove(report, ec);
+    auto argv = testCommand(runner, root, app_.toolchain().pathOf("node").string(), report, file, title, line);
+    for (const auto& f : files) argv.push_back(f.lexically_relative(root).generic_string());
+    lastRunner_ = runner;
+    testsPanel_.setBusy(true);
+    compileLog_.get_buffer()->set_text("");
+    compilerPanel_.clear();
+    buildAction_ = BuildAction::Build;
+    const std::string what = std::string(runnerName(runner)) + (title.empty() ? (files.empty() ? "" : " (failed tests)") : ": " + title);
+    runCommands({{argv, root}}, "Running " + what, Task::None,
+                [this, runner, report, root](bool) {
+                    testsPanel_.setBusy(false);
+                    std::ifstream in(report);
+                    std::stringstream text;
+                    text << in.rdbuf();
+                    TestRun run;
+                    if (text.str().empty()) run.error = "The test runner wrote no report: see the Compile Log.";
+                    else run = runner == TestRunner::Vitest ? parseVitestJson(text.str()) : parsePlaywrightJson(text.str(), root);
+                    testsPanel_.setRun(run, root);
+                    lastFailed_.clear();
+                    for (const auto& c : run.cases)
+                        if (c.status == TestCase::Status::Failed) lastFailed_.push_back(c);
+                    showBottomPage(testsPanel_);
+                    setStatus(run.error.empty() ? "Tests: " + std::to_string(run.passed) + " passed, " + std::to_string(run.failed) +
+                                                      " failed" + (run.skipped ? ", " + std::to_string(run.skipped) + " skipped" : "")
+                                                : run.error);
+                },
+                "Tests");
+}
+
+std::vector<std::pair<std::string, std::string>> MainWindow::traceEnvironment() {
+    if (web_.flavor != WebFlavor::SvelteKit || folder_.empty()) return {};
+    if (!collector_ || !collector_->running()) {
+        const fs::path script = toolsDir_ / "otel/collector.mjs";
+        std::error_code ec;
+        if (!fs::exists(script, ec)) return {};
+        collectorPort_ = findFreePort(4318);
+        if (!collectorPort_) return {};
+        collector_ = std::make_unique<ManagedProcess>();
+        collector_->signalLine().connect([this](const std::string& line) {
+            if (line.starts_with("KEVC_SPANS ")) {
+                traces_.add(parseOtlpJson(line.substr(11)));
+                tracesPanel_.setTraces(traces_);
+                tracesPanel_.setStatus(std::to_string(traces_.traces().size()) + " traces · collecting at 127.0.0.1:" +
+                                       std::to_string(collectorPort_));
+            } else if (line.starts_with("KEVC_OTLP_NOTE ")) {
+                setStatus("Traces: " + line.substr(15));
+            }
+        });
+        try {
+            collector_->start({{app_.toolchain().pathOf("node").string(), script.string(), "--port", std::to_string(collectorPort_)},
+                               folder_, {}, {}});
+        } catch (const Glib::Error&) {
+            collector_.reset();
+            return {};
+        }
+        tracesPanel_.setStatus("Collecting at http://127.0.0.1:" + std::to_string(collectorPort_));
+    }
+    const std::string endpoint = "http://127.0.0.1:" + std::to_string(collectorPort_);
+    return {{"OTEL_EXPORTER_OTLP_ENDPOINT", endpoint},
+            {"OTEL_EXPORTER_OTLP_PROTOCOL", "http/json"},
+            {"OTEL_SERVICE_NAME", folder_.filename().string()}};
+}
+
+void MainWindow::refreshDependencies() {
+    if (!session_ || session_->project().kind != ProjectKind::WebTs || !web_.hasPackageJson) {
+        depsPanel_.showMessage("Open a web project with a package.json.");
+        return;
+    }
+    if (web_.packageManager != PackageManager::Npm) {
+        depsPanel_.showMessage("This project uses " + web_.packageManagerName() +
+                               "; the Dependencies panel reads npm's reports, which need an npm lockfile.");
+        return;
+    }
+    depsPanel_.setBusy(true);
+    struct Results {
+        std::string outdated, audit;
+        int remaining = 2;
+    };
+    auto results = std::make_shared<Results>();
+    auto finish = [this, results] {
+        if (--results->remaining) return;
+        depsPanel_.setBusy(false);
+        const auto outdated = parseNpmOutdated(results->outdated);
+        const auto audit = parseNpmAudit(results->audit);
+        depsPanel_.setReports(outdated, audit);
+        setStatus("Dependencies: " + std::to_string(outdated.size()) + " outdated, " +
+                  std::to_string(audit.vulnerabilities.size()) + " with known vulnerabilities");
+    };
+    // Both exit with status 1 when they find something; only the JSON matters.
+    captureOutput({"npm", "outdated", "--json"}, session_->root(),
+                  [results, finish](std::string out, int) {
+                      results->outdated = std::move(out);
+                      finish();
+                  },
+                  lifetime_);
+    captureOutput({"npm", "audit", "--json"}, session_->root(),
+                  [results, finish](std::string out, int) {
+                      results->audit = std::move(out);
+                      finish();
+                  },
+                  lifetime_);
+}
+
+Glib::ustring MainWindow::createSvelteKitApp(const std::string& name, const fs::path& parent) {
+    if (name.empty() || name.find('/') != std::string::npos) return "Enter a folder name for the app.";
+    std::error_code ec;
+    const fs::path root = fs::absolute(parent / name, ec);
+    if (fs::exists(root, ec) && !fs::is_empty(root, ec)) return root.string() + " already exists and is not empty.";
+    if (!findInPath("npx", Glib::getenv("PATH"))) return "npx (part of npm) isn't on the PATH, so sv can't run.";
+    if (build_.running()) return "Wait for the running build to finish first.";
+    if (!fs::is_directory(parent, ec)) return parent.string() + " isn't a folder.";
+    compileLog_.get_buffer()->set_text("");
+    compilerPanel_.clear();
+    buildAction_ = BuildAction::Build;
+    runCommands({{svCreateCommand(name), parent}}, "Creating the SvelteKit app " + name + " with sv (this downloads packages)",
+                Task::None, [this, root](bool ok) {
+                    if (ok) openFolder(root);
+                },
+                "Creating the SvelteKit app");
+    return {};
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1265,8 +1859,12 @@ void MainWindow::startDebugging() {
         if (debugger_->stopped()) debugger_->resume(); // F5 while paused continues, the same as F8
         return;
     }
+    if (jsDebugger_) {
+        if (jsDebugger_->stopped()) jsDebugger_->resume();
+        return;
+    }
     if (session_ && session_->project().kind == ProjectKind::WebTs) {
-        setStatus("Debug TypeScript in the browser's developer tools (F12 there); source maps point at your .ts files");
+        startJsDebugging();
         return;
     }
     if (!session_) {
@@ -1285,6 +1883,162 @@ void MainWindow::startDebugging() {
     startBuild(BuildAction::Build, Task::Debug, [this](bool ok) {
         if (ok) launchDebugger();
     }, BuildConfig::Debug);
+}
+
+void MainWindow::startJsDebugging() {
+    refreshWebProject();
+    if (!web_.usesVite()) {
+        setStatus("Debugging web code needs a Vite project (SvelteKit, Svelte or Vite); for plain TypeScript use the "
+                  "browser's developer tools");
+        return;
+    }
+    std::error_code ec;
+    const fs::path vite = nodeBin(folder_, "vite");
+    if (!fs::exists(folder_ / "node_modules", ec) || vite.empty()) {
+        setStatus("This project's packages aren't installed: Project → Install Dependencies");
+        return;
+    }
+    const fs::path server = toolsDir_ / "js-debug/src/dapDebugServer.js";
+    if (!fs::exists(server, ec)) {
+        showError(*this, "The JavaScript debugger isn't installed",
+                  "Kev-C++'s build downloads Microsoft's js-debug into " + (toolsDir_ / "js-debug").string() +
+                      ". Rebuild Kev-C++ (or run ./install.sh again) with a network connection.");
+        return;
+    }
+    if (devServer_ && devServer_->running()) devServer_->stop(); // the debugger runs its own Vite
+    for (EditorTab* tab : editors()) syncBreakpoints(tab);
+
+    const int port = findFreePort(app_.settings().get<int>("/web/vitePort", 5173));
+    JsDebugger::Options options;
+    options.node = app_.toolchain().pathOf("node").string();
+    options.server = server;
+    options.root = folder_;
+    options.viteArgs = {vite.string(), "dev", "--port", std::to_string(port), "--strictPort", "--host", "127.0.0.1"};
+    options.chrome = dap::findChrome(app_.settings().getString("/web/chrome"), Glib::getenv("PATH"));
+    options.profileDir = fs::path(Glib::get_user_cache_dir()) / "kev-cpp" / "debug-browser-profile";
+    options.env = traceEnvironment();
+    jsDebugger_ = std::make_shared<JsDebugger>(options);
+
+    jsDebugger_->signalStopped().connect([this](const dap::Frame& top, const std::string& reason) {
+        ++stopGeneration_;
+        lsp_->setHoverEnabled(false);
+        showFrame(StackFrame{0, top.name, top.file, top.line});
+        setStatus("Paused (" + reason + ") in " + (top.name.empty() ? std::string("code") : top.name) +
+                  (top.file.empty() ? std::string() : ", " + top.file.filename().string() + ":" + std::to_string(top.line)));
+        showBottomPage(debugPanel_);
+        refreshJsViews(0);
+    });
+    jsDebugger_->signalStateChanged().connect([this](JsDebugger::State state) {
+        updateToolbar();
+        if (state != JsDebugger::State::Running) return;
+        ++stopGeneration_;
+        clearExecutionLine();
+        lsp_->setHoverEnabled(true);
+        debugPanel_.showMessage("Running…  (Debug → Pause to break in)");
+    });
+    jsDebugger_->signalOutput().connect([this](const std::string& text) {
+        auto buffer = serverLog_.get_buffer();
+        buffer->insert(buffer->end(), stripAnsi(text));
+        auto end = buffer->create_mark(buffer->end());
+        serverLog_.scroll_to(end);
+        buffer->delete_mark(end);
+    });
+    jsDebugger_->signalServing().connect([this](const std::string& url) {
+        jsServerUrl_ = url;
+        const bool browser = jsDebugger_ && jsDebugger_->browserAttached() && dap::findChrome(app_.settings().getString("/web/chrome"), Glib::getenv("PATH"));
+        serverStatus_.set_markup("Debugging <b>" + Glib::Markup::escape_text(folder_.filename().string()) + "</b>: Vite at <a href=\"" +
+                                 Glib::Markup::escape_text(url) + "\">" + Glib::Markup::escape_text(url) + "</a>");
+        if (browser) {
+            setStatus("Debugging server and browser code: Vite at " + url + " (opened in a separate browser window)");
+        } else {
+            // No Chromium-based browser: server code (loads, actions, endpoints) still stops when the page is requested.
+            setStatus("Debugging server code: Vite at " + url + ". Install Chrome or Chromium to debug browser code too");
+            openUrl(url);
+        }
+    });
+    jsDebugger_->signalFinished().connect([this](const std::string& outcome) {
+        ++stopGeneration_;
+        clearExecutionLine();
+        lsp_->setHoverEnabled(true);
+        jsFrames_.clear();
+        frames_.clear();
+        jsServerUrl_.clear();
+        debugPanel_.showMessage(outcome + ". Press F5 to debug again.");
+        watches_.showPlaceholders();
+        setStatus(outcome);
+        updateServerPage();
+        // We are inside one of its signals: drop it once that returns.
+        Glib::signal_idle().connect_once([this] {
+            jsDebugger_.reset();
+            updateToolbar();
+        });
+    });
+
+    serverLog_.get_buffer()->set_text("");
+    debugPanel_.clearConsole();
+    debugPanel_.showMessage("Starting js-debug and Vite…");
+    serverStatus_.set_text("Starting Vite under the debugger…");
+    showBottomPage(serverPage_);
+    setStatus(std::string("Starting the debugger") + (options.chrome ? "" : " (server code only: no Chrome or Chromium found)") + "…");
+    jsDebugger_->start(breakpoints_);
+    updateToolbar();
+}
+
+void MainWindow::refreshJsViews(int frameIndex) {
+    if (!jsDebugger_ || !jsDebugger_->stopped()) return;
+    const unsigned generation = stopGeneration_;
+    std::weak_ptr<JsDebugger> weak = jsDebugger_;
+    auto fetch = [weak](int reference, std::function<void(std::vector<dap::Variable>)> done) {
+        if (auto d = weak.lock()) d->variables(reference, std::move(done));
+    };
+    jsDebugger_->frames([this, generation, weak, frameIndex, fetch](std::vector<dap::Frame> frames) {
+        auto dbg = weak.lock();
+        if (generation != stopGeneration_ || !dbg) return;
+        jsFrames_ = frames;
+        frames_.clear();
+        for (size_t i = 0; i < frames.size(); ++i)
+            frames_.push_back(StackFrame{static_cast<int>(i), frames[i].name, frames[i].file, frames[i].line});
+        debugPanel_.setFrames(frames_, frameIndex);
+        if (frames.empty()) return;
+        const int frameId = frames[std::min<size_t>(static_cast<size_t>(frameIndex), frames.size() - 1)].id;
+
+        // Locals: the innermost scope's variables directly; the other scopes (Closure, Module, Global)
+        // as rows that expand.
+        dbg->scopes(frameId, [this, generation, weak, fetch](std::vector<dap::Scope> scopes) {
+            auto dbg = weak.lock();
+            if (generation != stopGeneration_ || !dbg) return;
+            if (scopes.empty()) {
+                debugPanel_.setLocals({});
+                return;
+            }
+            dbg->variables(scopes.front().reference, [this, generation, weak, fetch, scopes](std::vector<dap::Variable> vars) {
+                if (generation != stopGeneration_ || !weak.lock()) return;
+                std::vector<Gtk::Widget*> rows;
+                for (auto& v : vars) rows.push_back(Gtk::make_managed<DapVarNode>(std::move(v), 0, fetch));
+                for (size_t i = 1; i < scopes.size(); ++i)
+                    rows.push_back(Gtk::make_managed<DapVarNode>(dap::Variable{scopes[i].name, "…", "scope", scopes[i].reference}, 0, fetch));
+                debugPanel_.setLocals(rows);
+            });
+        });
+
+        // Watches, evaluated in the same frame.
+        const auto exprs = watches_.expressions();
+        if (exprs.empty()) {
+            watches_.setRows({});
+            return;
+        }
+        auto results = std::make_shared<std::vector<Gtk::Widget*>>(exprs.size(), nullptr);
+        auto remaining = std::make_shared<size_t>(exprs.size());
+        for (size_t i = 0; i < exprs.size(); ++i) {
+            dbg->evaluate(exprs[i], frameId, "watch",
+                          [this, generation, weak, fetch, results, remaining, i, name = exprs[i]](std::optional<dap::Variable> v, std::string error) {
+                              if (generation != stopGeneration_ || !weak.lock()) return;
+                              (*results)[i] = v ? static_cast<Gtk::Widget*>(Gtk::make_managed<DapVarNode>(*v, 0, fetch))
+                                                : DapVarNode::error(name, error);
+                              if (--*remaining == 0) watches_.setRows(*results);
+                          });
+        }
+    });
 }
 
 void MainWindow::launchDebugger() {
@@ -1433,6 +2187,28 @@ void MainWindow::refreshDebugViews() {
 }
 
 bool MainWindow::debugHover(EditorTab* tab, const GtkTextIter& at, std::function<void(GtkWidget*)> show) {
+    if (jsDebugger_ && jsDebugger_->stopped()) {
+        const std::string line = tab->lineText(gtk_text_iter_get_line(&at) + 1);
+        const char* start = line.c_str();
+        const int byteColumn = static_cast<int>(g_utf8_offset_to_pointer(start, gtk_text_iter_get_line_offset(&at)) - start);
+        const std::string expression = mi::expressionAt(line, byteColumn); // a.b.c works for JS too
+        if (expression.empty()) return false;
+        std::weak_ptr<JsDebugger> weak = jsDebugger_;
+        const int frameId = jsFrames_.empty() ? 0 : jsFrames_.front().id;
+        jsDebugger_->evaluate(expression, frameId, "hover", [weak, show](std::optional<dap::Variable> v, std::string) {
+            if (!v || !weak.lock()) {
+                show(nullptr);
+                return;
+            }
+            auto fetch = [weak](int ref, std::function<void(std::vector<dap::Variable>)> done) {
+                if (auto d = weak.lock()) d->variables(ref, std::move(done));
+            };
+            auto* node = Gtk::manage(new DapVarNode(*v, 0, fetch));
+            node->set_margin(6);
+            show(GTK_WIDGET(node->gobj()));
+        });
+        return true;
+    }
     if (!debugger_ || !debugger_->stopped()) return false;
     const std::string line = tab->lineText(gtk_text_iter_get_line(&at) + 1);
     const char* start = line.c_str();
@@ -1465,6 +2241,7 @@ void MainWindow::onBreakpointToggled(EditorTab* tab, int line, bool on) {
     if (on) breakpoints_[tab->path()].insert(line);
     else breakpoints_[tab->path()].erase(line);
     if (debugger_) debugger_->setBreakpoint(tab->path(), line, on);
+    if (jsDebugger_) jsDebugger_->setBreakpoints(tab->path(), breakpoints_[tab->path()]);
     updateBreakpointsPanel();
     setStatus(std::string(on ? "Breakpoint set at " : "Breakpoint removed from ") + tab->path().filename().string() +
               ":" + std::to_string(line));
@@ -1513,6 +2290,7 @@ void MainWindow::setupIntelliSense(EditorTab* tab) {
     lsp_->attach(tab);
     tab->signalSaved().connect([this, tab] {
         lsp_->saved(tab);
+        scheduleKitRefresh(); // load keys, actions, .env values
         syncBreakpoints(tab);
     });
 

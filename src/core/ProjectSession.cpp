@@ -2,6 +2,7 @@
 
 #include "core/BuildFiles.h"
 #include "core/ManagedBlock.h"
+#include "core/ProjectKinds.h"
 
 #include <algorithm>
 #include <array>
@@ -110,6 +111,8 @@ std::vector<TemplateFile> templateFiles(const Project& p, ProjectTemplate tmpl) 
                  "    printf(\"Hello from " + p.name + "!\\n\");\n"
                  "    return 0;\n"
                  "}\n"}};
+    case ProjectTemplate::SvelteKit:
+        return {}; // sv writes the files
     case ProjectTemplate::WebTs:
         return {{"index.html",
                  "<!doctype html>\n"
@@ -175,6 +178,7 @@ ProjectSession ProjectSession::open(const fs::path& projectFile) {
 
 ProjectSession ProjectSession::create(const fs::path& parentDir, const std::string& name, ProjectTemplate tmpl) {
     if (name.empty() || name.find('/') != std::string::npos) throw std::runtime_error("invalid project name");
+    if (tmpl == ProjectTemplate::SvelteKit) throw std::runtime_error("SvelteKit apps are created with sv create");
     fs::path root = fs::absolute(parentDir / name);
     std::error_code ec;
     if (fs::exists(root, ec) && !fs::is_empty(root, ec))
@@ -199,16 +203,15 @@ ProjectSession ProjectSession::create(const fs::path& parentDir, const std::stri
         break;
     case ProjectTemplate::CConsole: p.kind = ProjectKind::C; break;
     case ProjectTemplate::WebTs:
+    case ProjectTemplate::SvelteKit:
         p.kind = ProjectKind::WebTs;
         p.compilerFlags.clear();
         break;
     }
-    p.standard = p.kind == ProjectKind::C ? "17" : "20";
+    p.standard = traitsOf(p.kind).standard;
 
     for (const auto& file : templateFiles(p, tmpl)) writeFileIfChanged(root / file.path, file.content);
-    // .cache/ holds clangd's background index; compile_commands.json is generated.
-    writeFileIfChanged(root / ".gitignore",
-                       p.kind == ProjectKind::WebTs ? "node_modules/\n" : "build/\n.cache/\ncompile_commands.json\n");
+    writeFileIfChanged(root / ".gitignore", traitsOf(p.kind).gitignore);
 
     ProjectSession session(std::move(p), root / (name + ".kevc"));
     session.project_.setSources(session.scanSources());

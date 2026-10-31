@@ -223,7 +223,8 @@ void LspClient::answerServerRequest(const json& message) {
     if (method == "workspace/configuration") {
         const auto items = message["params"].value("items", json::array());
         reply["result"] = json::array();
-        for (size_t i = 0; i < items.size(); ++i) reply["result"].push_back(nullptr);
+        for (const auto& item : items)
+            reply["result"].push_back(configuration_ ? configuration_(item.value("section", "")) : json(nullptr));
     } else if (method == "window/workDoneProgress/create" || method == "client/registerCapability" ||
                method == "client/unregisterCapability" || method == "window/showMessageRequest" ||
                method == "workspace/workspaceFolders") {

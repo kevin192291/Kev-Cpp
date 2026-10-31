@@ -225,6 +225,7 @@ Server serverFor(const fs::path& file) {
         if (ext == e) return Server::Clangd;
     for (const char* e : tsFamily)
         if (ext == e) return Server::TypeScript;
+    if (ext == ".svelte") return Server::Svelte;
     return Server::None;
 }
 
@@ -237,8 +238,50 @@ std::string languageIdFor(const fs::path& file, bool cppHeaders) {
     if (ext == ".tsx") return "typescriptreact";
     if (ext == ".jsx") return "javascriptreact";
     if (ext == ".js" || ext == ".mjs" || ext == ".cjs") return "javascript";
+    if (ext == ".svelte") return "svelte";
     if (serverFor(file) == Server::Clangd) return "cpp";
     return "plaintext";
+}
+
+json svelteInitializationOptions() {
+    const json on = {{"enable", true}};
+    return {
+        {"configuration",
+         {{"svelte",
+           {{"plugin",
+             {{"typescript",
+               {{"enable", true}, {"diagnostics", on}, {"hover", on}, {"completions", on}, {"definitions", on},
+                {"documentSymbols", on}, {"signatureHelp", on}, {"codeActions", on}, {"rename", on}}},
+              {"css", {{"enable", true}, {"diagnostics", on}, {"hover", on}, {"completions", {{"enable", true}, {"emmet", false}}}}},
+              {"html", {{"enable", true}, {"hover", on}, {"tagComplete", on}, {"completions", {{"enable", true}, {"emmet", false}}}}},
+              {"svelte", {{"enable", true}, {"diagnostics", on}, {"hover", on}, {"completions", on}, {"compilerWarnings", json::object()}}}}}}},
+          {"typescript", json::object()},
+          {"javascript", json::object()},
+          {"prettier", json::object()},
+          {"emmet", json::object()},
+          {"css", json::object()},
+          {"html", json::object()}}},
+        // Kev-C++ filters completions itself as you type (see LspBridges).
+        {"dontFilterIncompleteCompletions", true},
+        {"isTrustedWorkspace", true},
+    };
+}
+
+json configurationFor(Server server, const std::string& section) {
+    if (server != Server::Svelte) return nullptr;
+    const json config = svelteInitializationOptions()["configuration"];
+    // Sections may be dotted paths, e.g. "svelte.plugin.typescript".
+    json node = config;
+    size_t start = 0;
+    while (start <= section.size()) {
+        const size_t dot = section.find('.', start);
+        const std::string key = section.substr(start, dot == std::string::npos ? std::string::npos : dot - start);
+        if (!node.is_object() || !node.contains(key)) return json::object();
+        node = node[key];
+        if (dot == std::string::npos) break;
+        start = dot + 1;
+    }
+    return node;
 }
 
 } // namespace kevc::lsp

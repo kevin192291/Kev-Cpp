@@ -47,6 +47,13 @@ DockManager::DockManager(Gtk::ApplicationWindow& main, Gtk::Notebook& bottom, Gt
         const Area area = where == "right" ? Area::Right : where == "window" ? Area::Floating : Area::Bottom;
         Glib::signal_idle().connect_once([this, widget, area] { move(*widget, area); });
     });
+    actions_->add_action_with_parameter("close", Glib::VARIANT_TYPE_STRING, [this](const Glib::VariantBase& v) {
+        const std::string id = Glib::VariantBase::cast_dynamic<Glib::Variant<Glib::ustring>>(v).get();
+        // Defer, like "move": the menu that triggered this lives in the tab being closed.
+        Glib::signal_idle().connect_once([this, id] {
+            if (Panel* panel = find(id); panel && !panel->closed) close(*panel, true);
+        });
+    });
     main_.insert_action_group("dock", actions_);
     setupNotebook(bottom_);
     setupNotebook(right_);
@@ -62,6 +69,48 @@ DockManager::~DockManager() {
         delete f.window;
     }
     floating_.clear();
+    for (auto& p : panels_)
+        if (p.closed) g_object_unref(p.widget->gobj());
+}
+
+void DockManager::close(Panel& panel, bool byUser) {
+    Gtk::Notebook* from = notebookOf(*panel.widget);
+    panel.lastArea = from ? areaOf(from) : panel.lastArea;
+    panel.closed = true;
+    // Our reference keeps the panel alive outside any dock (some panels are managed widgets).
+    g_object_ref(panel.widget->gobj());
+    if (from) from->remove_page(*panel.widget);
+    saveLayoutSoon();
+    closedChanged_.emit(panel.id, true, byUser);
+}
+
+void DockManager::reopen(Panel& panel, bool byUser) {
+    panel.closed = false;
+    Gtk::Notebook* to = panel.lastArea == Area::Bottom  ? &bottom_
+                        : panel.lastArea == Area::Right ? &right_
+                                                        : newFloatingWindow(panel.title);
+    attach(panel, *to);
+    g_object_unref(panel.widget->gobj());
+    closedChanged_.emit(panel.id, false, byUser);
+}
+
+void DockManager::setClosed(const std::string& id, bool closed) {
+    Panel* panel = find(id);
+    if (!panel || panel->closed == closed) return;
+    if (closed) close(*panel, false);
+    else reopen(*panel, false);
+}
+
+bool DockManager::closed(const std::string& id) const {
+    for (const auto& p : panels_)
+        if (p.id == id) return p.closed;
+    return false;
+}
+
+std::vector<std::pair<std::string, Glib::ustring>> DockManager::panels() const {
+    std::vector<std::pair<std::string, Glib::ustring>> out;
+    for (const auto& p : panels_) out.emplace_back(p.id, p.title);
+    return out;
 }
 
 DockManager::Panel* DockManager::find(Gtk::Widget& widget) {
@@ -154,6 +203,11 @@ Gtk::Widget& DockManager::makeTabLabel(const Panel& panel) {
     item("Dock at Bottom", "bottom");
     item("Dock on Right", "right");
     item("Open in Separate Window", "window");
+    auto closeSection = Gio::Menu::create();
+    auto closeItem = Gio::MenuItem::create("Close Panel", "");
+    closeItem->set_action_and_target("dock.close", Glib::Variant<Glib::ustring>::create(panel.id));
+    closeSection->append_item(closeItem);
+    menu->append_section(closeSection);
     auto* button = Gtk::make_managed<Gtk::MenuButton>();
     button->set_icon_name("view-more-symbolic");
     button->set_has_frame(false);
@@ -210,6 +264,10 @@ void DockManager::add(const std::string& id, const Glib::ustring& title, Gtk::Wi
 void DockManager::move(Gtk::Widget& widget, Area area) {
     Panel* panel = find(widget);
     if (!panel) return;
+    if (panel->closed) {
+        panel->lastArea = area; // where it comes back when reopened
+        return;
+    }
     Gtk::Notebook* from = notebookOf(widget);
     if (from && areaOf(from) == area && area != Area::Floating) {
         show(widget);
@@ -263,6 +321,7 @@ int DockManager::dropPosition(Gtk::Notebook& notebook, double x, double y) {
 }
 
 void DockManager::show(Gtk::Widget& widget) {
+    if (Panel* panel = find(widget); panel && panel->closed) reopen(*panel, false);
     Gtk::Notebook* nb = notebookOf(widget);
     if (!nb) return;
     nb->set_visible(true);
@@ -345,8 +404,10 @@ void DockManager::updateVisibility() {
 
 void DockManager::resetLayout() {
     for (auto& p : panels_) move(*p.widget, Area::Bottom);
-    // Restore the original tab order.
-    for (size_t i = 0; i < panels_.size(); ++i) bottom_.reorder_child(*panels_[i].widget, static_cast<int>(i));
+    // Restore the original tab order (closed panels stay closed, but come back at the bottom).
+    int position = 0;
+    for (auto& p : panels_)
+        if (!p.closed) bottom_.reorder_child(*p.widget, position++);
     if (!panels_.empty()) bottom_.set_current_page(0);
 }
 
@@ -363,8 +424,10 @@ void DockManager::saveLayoutSoon() {
 
 void DockManager::saveLayout() {
     nlohmann::json panels = nlohmann::json::object();
-    for (auto& p : panels_)
-        if (Gtk::Notebook* nb = notebookOf(*p.widget)) panels[p.id] = areaName(areaOf(nb));
+    for (auto& p : panels_) {
+        if (p.closed) panels[p.id] = areaName(p.lastArea);
+        else if (Gtk::Notebook* nb = notebookOf(*p.widget)) panels[p.id] = areaName(areaOf(nb));
+    }
     std::error_code ec;
     fs::create_directories(layoutFile().parent_path(), ec);
     std::ofstream(layoutFile()) << nlohmann::json{{"version", 1}, {"panels", panels}}.dump(2) << "\n";

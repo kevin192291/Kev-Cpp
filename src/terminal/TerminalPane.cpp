@@ -102,7 +102,8 @@ void TerminalPane::start(Launch launch) {
     for (auto& a : launch.argv) args.push_back(a.data());
     args.push_back(nullptr);
     auto* ctx = new SpawnContext{self_};
-    vte_terminal_spawn_async(terminal_, VTE_PTY_DEFAULT, launch.cwd.c_str(), args.data(), nullptr, G_SPAWN_DEFAULT,
+    // SEARCH_PATH: programs are full paths, but package.json scripts run as plain `npm run …`.
+    vte_terminal_spawn_async(terminal_, VTE_PTY_DEFAULT, launch.cwd.c_str(), args.data(), nullptr, G_SPAWN_SEARCH_PATH,
                              nullptr, nullptr, nullptr, -1, nullptr, &TerminalPane::onSpawned, ctx);
 }
 

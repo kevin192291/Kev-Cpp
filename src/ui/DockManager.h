@@ -3,6 +3,7 @@
 #include <gtkmm.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace kevc {
@@ -21,8 +22,16 @@ public:
     // `icon` is a kevc-* icon name, shown on the panel's tab.
     void add(const std::string& id, const Glib::ustring& title, Gtk::Widget& widget, const char* icon);
     void move(Gtk::Widget& widget, Area area);
-    // Brings a panel to the front: selects its tab and raises its window if it floats.
+    // Brings a panel to the front: selects its tab and raises its window if it floats. A closed
+    // panel comes back where it was.
     void show(Gtk::Widget& widget);
+    // Closed panels leave their dock; reopening one puts it back where it was.
+    void setClosed(const std::string& id, bool closed);
+    bool closed(const std::string& id) const;
+    // Panel ids and titles, in the order they were added (for View → Panels).
+    std::vector<std::pair<std::string, Glib::ustring>> panels() const;
+    // A panel was closed or reopened, by its tab menu (byUser) or by code such as show().
+    sigc::signal<void(const std::string& id, bool closed, bool byUser)>& signalClosedChanged() { return closedChanged_; }
     void resetLayout();
     void restoreLayout();
     // Dropping a panel tab anywhere on `area` that isn't a dock opens the panel in its own window.
@@ -34,12 +43,16 @@ private:
         Glib::ustring title;
         Gtk::Widget* widget;
         const char* icon;
+        bool closed = false; // out of every dock; we hold a reference so it isn't destroyed
+        Area lastArea = Area::Bottom; // where a closed panel comes back
     };
     struct Floating {
         Gtk::Window* window;
         Gtk::Notebook* notebook;
     };
 
+    void close(Panel& panel, bool byUser);
+    void reopen(Panel& panel, bool byUser);
     Panel* find(Gtk::Widget& widget);
     Panel* find(const std::string& id);
     // The panel a drag carries (its widget, as a GValue), or nullptr.
@@ -74,6 +87,7 @@ private:
     bool shuttingDown_ = false;
     bool rightSized_ = false;
     sigc::connection saveTimer_;
+    sigc::signal<void(const std::string&, bool, bool)> closedChanged_;
 };
 
 } // namespace kevc

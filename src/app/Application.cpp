@@ -66,6 +66,7 @@ void Application::on_startup() {
     // App icon, embedded as a GResource (see data/kevcpp.gresource.xml).
     Gtk::IconTheme::get_for_display(Gdk::Display::get_default())->add_resource_path("/org/kevcpp/KevCpp/icons/hicolor");
     Gtk::Window::set_default_icon_name("org.kevcpp.KevCpp");
+    settings_.load();
     toolchain_ = Toolchain::detect();
     setupAccelerators();
     add_action("quit", [this] { quit(); });
@@ -84,6 +85,18 @@ void Application::installStyleScheme() {
         gtk_source_style_scheme_manager_append_search_path(gtk_source_style_scheme_manager_get_default(), dir.c_str());
     } catch (const Glib::Error&) {
         // The editor falls back to Adwaita-dark (see EditorTab).
+    }
+    // Languages GtkSourceView doesn't ship (Svelte), the same way and for the same reason.
+    const std::string langs = Glib::build_filename(Glib::get_user_cache_dir(), "kev-cpp", "language-specs");
+    try {
+        auto bytes = Gio::Resource::lookup_data_global("/org/kevcpp/KevCpp/language-specs/svelte.lang");
+        gsize size = 0;
+        const auto* data = static_cast<const char*>(bytes->get_data(size));
+        g_mkdir_with_parents(langs.c_str(), 0700);
+        Glib::file_set_contents(Glib::build_filename(langs, "svelte.lang"), data, static_cast<gssize>(size));
+        gtk_source_language_manager_append_search_path(gtk_source_language_manager_get_default(), langs.c_str());
+    } catch (const Glib::Error&) {
+        // .svelte files open without highlighting.
     }
 }
 

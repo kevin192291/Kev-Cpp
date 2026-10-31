@@ -37,10 +37,16 @@ int charsToUtf16(std::string_view utf8Line, int charColumn);
 // **bold**, headings in bold, horizontal rules dropped, everything else escaped.
 std::string markdownToPango(std::string_view markdown);
 
-enum class Server { None, Clangd, TypeScript };
+enum class Server { None, Clangd, TypeScript, Svelte };
 
 // Which language server handles a file, and the LSP languageId to send for it.
 Server serverFor(const std::filesystem::path& file);
 std::string languageIdFor(const std::filesystem::path& file, bool cppHeaders);
+
+// svelte-language-server's initializationOptions: every feature on, settings for its plugins.
+json svelteInitializationOptions();
+// The answer to a workspace/configuration request for `section` ("svelte", "typescript", ...).
+// Servers merge it over their defaults; null tells some of them (Svelte's) nothing at all.
+json configurationFor(Server server, const std::string& section);
 
 } // namespace kevc::lsp

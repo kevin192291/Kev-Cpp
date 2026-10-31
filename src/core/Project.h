@@ -47,6 +47,9 @@ struct Project {
     std::vector<std::string> linkerFlags;
     bool staticRuntime = false; // -static-libstdc++ -static-libgcc
     std::vector<Package> packages;
+    // Top-level .kevc keys this version doesn't use (as JSON text), written back on save so a
+    // project saved by an older Kev-C++ keeps what a newer one added.
+    std::map<std::string, std::string> extra;
 
     static Project load(const std::filesystem::path& projectFile);
     void save(const std::filesystem::path& projectFile) const;

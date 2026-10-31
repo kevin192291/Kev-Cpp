@@ -34,6 +34,11 @@ public:
     bool running() const { return static_cast<bool>(process_); }
     const json& capabilities() const { return capabilities_; }
 
+    // Answers the server's workspace/configuration requests, section by section (default: null).
+    void setConfigurationHandler(std::function<json(const std::string& section)> handler) {
+        configuration_ = std::move(handler);
+    }
+
     void request(const std::string& method, json params, Callback callback);
     void notify(const std::string& method, json params);
 
@@ -53,6 +58,7 @@ private:
     std::vector<std::string> argv_;
     std::filesystem::path root_;
     json initOptions_;
+    std::function<json(const std::string&)> configuration_;
     std::filesystem::path logFile_;
 
     Glib::RefPtr<Gio::Subprocess> process_;

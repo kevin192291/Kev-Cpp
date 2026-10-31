@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Settings.h"
 #include "core/Toolchain.h"
 
 #include <gtkmm.h>
@@ -13,6 +14,7 @@ public:
     static Glib::RefPtr<Application> create();
 
     const Toolchain& toolchain() const { return toolchain_; }
+    Settings& settings() { return settings_; }
 
 protected:
     Application();
@@ -28,6 +30,7 @@ private:
     void setupAccelerators();
 
     Toolchain toolchain_;
+    Settings settings_{Settings::defaultFile()};
     MainWindow* window_ = nullptr;
 };
 

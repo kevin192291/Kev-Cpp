@@ -85,13 +85,54 @@ type-checks it) without Kev-C++ writing anything into it.
 - **TypeScript dev server**: serves the project on http://127.0.0.1:5465/ (this computer only),
   converts `.ts` to JavaScript on request, and reloads the browser on save. Compile (F9) type-checks
   with `tsc --noEmit`.
+- **Toolbars and panels to suit the project**: View → Toolbars shows or hides each group of toolbar
+  buttons, and View → Panels (or Close Panel on a tab's ⋮ menu) each panel, separately for each kind of
+  project (C++, C, web…). The web toolbar and web panels only show for web projects by default.
+
+### Web projects (SvelteKit, Svelte, Vite)
+
+A folder with a `package.json` opens as a web project; Kev-C++ reads its dependencies to tell SvelteKit,
+Svelte and Vite apps apart (the title bar says which) and which package manager it uses.
+
+- **SvelteKit App** (File → New Project) runs the official `sv create` (Svelte 5, TypeScript) and opens
+  the result. **Install Dependencies** and **Project → Scripts** run `npm install` and any package.json
+  script.
+- **Run (F10)** starts the project's own Vite on 127.0.0.1, on the first free port from 5173, and opens
+  the browser. **Compile (F9)** runs `svelte-kit sync` and `svelte-check`, with errors in the Compiler tab;
+  **Rebuild (F12)** runs the `build` script.
+- **Svelte IntelliSense**: completion, hover, go to definition and diagnostics in `.svelte` files
+  (svelte-language-server, bundled), and `.ts` files understand Svelte components
+  (typescript-svelte-plugin). `.svelte` files are highlighted.
+- **Routes** tab: every route under `src/routes` with its files, what each exports (load and the keys it
+  returns, form actions, HTTP verbs), where a page's `data` comes from through its layouts, and remote
+  functions. ↗ opens a route in the browser (asking for its parameters); + creates a route.
+- **Environment** panel: every `$env` variable, public or private, where it's defined (`.env`,
+  `.env.local`, …) and used, with warnings for a private variable in code that reaches the browser, a
+  static one no `.env` defines, and the wrong module for its prefix.
+- **Debugging (F5)**: breakpoints in `+page.server.ts`, endpoints, hooks and other server code, and in
+  browser code when Chrome, Chromium, Brave or Edge is installed (a separate browser window with its own
+  profile opens). Stepping, call stack, locals, watches, hover and a console, through Microsoft's js-debug
+  (the build downloads a pinned, hash-checked release).
+- **Tests** panel: runs Vitest or Playwright, lists each test's result by file, re-runs failed tests or
+  one test, and jumps to where a test failed.
+- **Traces** panel: while Kev-C++ runs a SvelteKit app it collects the app's OpenTelemetry spans
+  (`OTEL_EXPORTER_OTLP_ENDPOINT` points at a local collector) and draws each request as a waterfall of
+  hooks, loads and fetches. The panel explains the three steps to turn SvelteKit's tracing on.
+- **Dependencies** panel: outdated packages and known vulnerabilities (`npm outdated`, `npm audit`).
+
+### Settings
+
+`~/.config/kev-cpp/settings.json` holds what View → Toolbars/Panels remember, plus a few options:
+`/web/browser` (a command to open pages with instead of the default browser), `/web/chrome` (the
+Chromium-based browser for debugging), `/web/vitePort` (the first port to try, 5173), and
+`/tools/<name>` (the path of a tool, e.g. `/tools/arm-none-eabi-gcc`).
 
 ## Keyboard shortcuts
 
 | Key | Action | Key | Action |
 |---|---|---|---|
-| F9 | Compile (TypeScript: type-check) | F5 | Start debugging |
-| F10 | Run (TypeScript: serve + open browser) | F6 | Step over |
+| F9 | Compile (web: type-check / svelte-check) | F5 | Start debugging |
+| F10 | Run (web: serve or Vite + open browser) | F6 | Step over |
 | F11 | Compile & run | F7 | Step into |
 | F12 | Rebuild all | Shift+F7 | Step out |
 | | | F8 | Continue |

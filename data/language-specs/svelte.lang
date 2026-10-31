@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Svelte components for GtkSourceView 5, written for Kev-C++ (GtkSourceView ships no Svelte language).
+ Markup reuses html.lang; <script> is TypeScript (a superset of the JavaScript Svelte also allows),
+ <style> is CSS, and {…} expressions and {#if}/{:else}/{/each} blocks are TypeScript too.
+-->
+<language id="svelte" name="Svelte" version="2.0" _section="Markup">
+  <metadata>
+    <property name="mimetypes">text/x-svelte</property>
+    <property name="globs">*.svelte</property>
+    <property name="block-comment-start">&lt;!--</property>
+    <property name="block-comment-end">--&gt;</property>
+    <property name="suggested-suffix">.svelte</property>
+  </metadata>
+
+  <styles>
+    <style id="tag" name="Tag" map-to="xml:element-name"/>
+    <style id="brace" name="Expression braces" map-to="def:preprocessor"/>
+    <style id="block-keyword" name="Block keyword" map-to="def:keyword"/>
+  </styles>
+
+  <definitions>
+    <!-- {expression}, {#if cond}, {:else}, {/each}, {@html …}, {@render …}: TypeScript inside. -->
+    <context id="expression" class="no-spell-check">
+      <start>\{</start>
+      <end>\}</end>
+      <include>
+        <context sub-pattern="0" where="start" style-ref="brace"/>
+        <context sub-pattern="0" where="end" style-ref="brace"/>
+        <context id="block-keyword" style-ref="block-keyword">
+          <match>(?&lt;=\{)[#:/@][a-z]+(\s+if\b)?</match>
+        </context>
+        <context ref="typescript:typescript"/>
+      </include>
+    </context>
+
+    <context id="script" class="no-spell-check">
+      <start>&lt;script\%]</start>
+      <include>
+        <context sub-pattern="0" where="start" style-ref="tag"/>
+        <context ref="html:generic-tag"/>
+        <context end-parent="true" style-ref="tag">
+          <match>/&gt;</match>
+        </context>
+        <context id="script-code" end-parent="true">
+          <start>&gt;</start>
+          <end>&lt;/script\s*&gt;</end>
+          <include>
+            <context sub-pattern="0" where="start" style-ref="tag"/>
+            <context sub-pattern="0" where="end" style-ref="tag"/>
+            <context ref="typescript:typescript"/>
+          </include>
+        </context>
+      </include>
+    </context>
+
+    <context id="style" class="no-spell-check">
+      <start>&lt;style\%]</start>
+      <include>
+        <context sub-pattern="0" where="start" style-ref="tag"/>
+        <context ref="html:generic-tag"/>
+        <context id="style-code" end-parent="true">
+          <start>&gt;</start>
+          <end>&lt;/style\s*&gt;</end>
+          <include>
+            <context sub-pattern="0" where="start" style-ref="tag"/>
+            <context sub-pattern="0" where="end" style-ref="tag"/>
+            <context ref="css:css"/>
+          </include>
+        </context>
+      </include>
+    </context>
+
+    <!-- Elements and components, with {…} attribute values and {...spread}. -->
+    <context id="tag" class="no-spell-check">
+      <start>&lt;/?[A-Za-z][A-Za-z0-9:._-]*</start>
+      <end>/?&gt;</end>
+      <include>
+        <context sub-pattern="0" where="start" style-ref="tag"/>
+        <context sub-pattern="0" where="end" style-ref="tag"/>
+        <context ref="expression"/>
+        <context ref="html:generic-tag"/>
+      </include>
+    </context>
+
+    <context id="svelte">
+      <include>
+        <context ref="html:comment"/>
+        <context ref="xml:entity"/>
+        <context ref="script"/>
+        <context ref="style"/>
+        <context ref="expression"/>
+        <context ref="tag"/>
+      </include>
+    </context>
+  </definitions>
+</language>

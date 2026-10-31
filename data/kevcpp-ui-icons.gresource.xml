@@ -75,6 +75,8 @@
     <file>icons/hicolor/16x16/actions/kevc-stop.png</file>
     <file>icons/hicolor/16x16/actions/kevc-string-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-struct.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-svelte-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-svelte-logo.png</file>
     <file>icons/hicolor/16x16/actions/kevc-terminal.png</file>
     <file>icons/hicolor/16x16/actions/kevc-ts-file.png</file>
     <file>icons/hicolor/16x16/actions/kevc-ts-logo.png</file>
@@ -155,6 +157,8 @@
     <file>icons/hicolor/24x24/actions/kevc-stop.png</file>
     <file>icons/hicolor/24x24/actions/kevc-string-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-struct.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-svelte-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-svelte-logo.png</file>
     <file>icons/hicolor/24x24/actions/kevc-terminal.png</file>
     <file>icons/hicolor/24x24/actions/kevc-ts-file.png</file>
     <file>icons/hicolor/24x24/actions/kevc-ts-logo.png</file>
@@ -235,6 +239,8 @@
     <file>icons/hicolor/32x32/actions/kevc-stop.png</file>
     <file>icons/hicolor/32x32/actions/kevc-string-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-struct.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-svelte-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-svelte-logo.png</file>
     <file>icons/hicolor/32x32/actions/kevc-terminal.png</file>
     <file>icons/hicolor/32x32/actions/kevc-ts-file.png</file>
     <file>icons/hicolor/32x32/actions/kevc-ts-logo.png</file>
@@ -315,6 +321,8 @@
     <file>icons/hicolor/48x48/actions/kevc-stop.png</file>
     <file>icons/hicolor/48x48/actions/kevc-string-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-struct.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-svelte-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-svelte-logo.png</file>
     <file>icons/hicolor/48x48/actions/kevc-terminal.png</file>
     <file>icons/hicolor/48x48/actions/kevc-ts-file.png</file>
     <file>icons/hicolor/48x48/actions/kevc-ts-logo.png</file>

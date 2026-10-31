@@ -13,6 +13,7 @@ TEST(Icons, FilesByExtension) {
     EXPECT_EQ(icons::forFile("util.h"), "kevc-header-file");
     EXPECT_EQ(icons::forFile("app.ts"), "kevc-ts-file");
     EXPECT_EQ(icons::forFile("app.mjs"), "kevc-js-file");
+    EXPECT_EQ(icons::forFile("src/routes/+page.svelte"), "kevc-svelte-file");
     EXPECT_EQ(icons::forFile("logo.png"), "kevc-resource-file");
     EXPECT_EQ(icons::forFile("demo.kevc"), "kevc-project");
     EXPECT_EQ(icons::forFile("CMakeLists.txt"), "kevc-document");

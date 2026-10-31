@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 80 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 124 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -27,19 +27,33 @@ verified by driving the real app (see "GUI testing").
   compile_commands.json for C), `BuildPlan` (commands per action/config), `Diagnostics` (gcc/ld/CMake/
   make/tsc output parser), `Packages` (catalog, pkg-config, FetchContent target detection), `Lsp`
   (framing, URIs, UTF-16 columns, markdown→Pango), `Mi` (GDB/MI parser, expression-under-cursor),
-  `Icons` (which kevc-* icon a file, LSP symbol/completion kind or gdb type gets).
+  `Icons` (which kevc-* icon a file, LSP symbol/completion kind or gdb type gets), `Settings`
+  (`~/.config/kev-cpp/settings.json`), `ToolLocator` (PATH, node_modules/.bin, `/opt/st/stm32cube*`),
+  `ProjectKinds` (per-kind traits, toolbar/panel visibility per profile), `WebProject` (package.json
+  flavour, package manager, Vite/svelte-check/sv commands), `SvelteKit` (routes, exports, load keys,
+  data flow, `$env` report), `Dap` (js-debug launch configs, DAP replies), `TestReport` (Vitest/
+  Playwright JSON), `WebReports` (OTLP spans → waterfall, npm outdated/audit).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon), `MainWindow`
   (everything wired together: menus, actions, build/run, debugging, IntelliSense, dev server).
 - `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), ProjectTree, SymbolsPanel.
 - `src/lsp/` LspClient (JSON-RPC over stdio), LspManager (documents ↔ servers), LspBridges
   (GObject completion/hover providers for GtkSourceView, written in C style).
 - `src/debug/` GdbSession (MI process), DebugController (session state), DebugViews (VarNode tree,
-  Debug panel, Watches), DebugHover (hover provider).
+  Debug panel, Watches), DebugHover (hover provider); for web projects DapClient (one DAP session
+  over TCP), JsDebugger (js-debug server + root/child sessions) and DapViews (DapVarNode).
+- `src/process/` ManagedProcess (long-running child: own process group, PR_SET_PDEATHSIG, stdin pipe,
+  line output; Vite, the dev server, js-debug, the OTLP collector) and Capture (run + collect stdout).
 - `src/build/` BuildRunner (sequential subprocesses, line streaming), CompilerPanel.
 - `src/ui/` Dialogs, ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
-  bottom/right/floating; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton, icon tab labels).
-- `src/devserver/DevServer` runs `tools/devserver/devserver.mjs`; `tools/package.json` pins
-  typescript 5.9.3 + typescript-language-server 5.3.0 (installed by `npm ci` during the build).
+  bottom/right/floating or closed; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton,
+  icon tab labels), and the web panels EnvPanel, TestsPanel, TracesPanel, DependenciesPanel
+  (`src/editor/RoutesPanel` is the left-dock Routes tab).
+- `src/devserver/DevServer` runs the bundled `tools/devserver/devserver.mjs` or the project's Vite.
+  `tools/package.json` pins typescript 5.9.3, typescript-language-server 5.3.0, svelte-language-server
+  0.18.5 and typescript-svelte-plugin 0.3.52 (`npm ci` during the build); `tools/fetch-js-debug.cmake`
+  downloads js-debug 1.140.0 (SHA-256 checked) into `tools/js-debug/`; `tools/otel/collector.mjs` is the
+  loopback OTLP/HTTP JSON collector. `data/language-specs/svelte.lang` is copied to the cache like the
+  style scheme.
 - `data/` icons (GResource-embedded), `packages.json` catalog, `.desktop` template. `data/art/` holds the
   icon sprite sheet, the C++/C/TypeScript logos (`logos/`, New Project dialog) and `make_icons.py`, which generates `data/icons/hicolor/*/actions/kevc-*.png` and
   `data/kevcpp-ui-icons.gresource.xml` (committed; see docs/ICONS.md). Only the app icon is installed
@@ -89,6 +103,24 @@ verified by driving the real app (see "GUI testing").
   and XLibre 25 + Mesa crocus (Intel Ironlake, e.g. Panasonic CF-19) segfaults copying its frames
   into windows not a multiple of 128 px wide (the New Project dialog). `Application` probes
   `prepare_gl()` at startup and sets `GSK_RENDERER=cairo` if it fails (unless the user set one).
+- **Web flavours** (`WebProject::detect`, never saved): `@sveltejs/kit` → SvelteKit, `svelte`+`vite` →
+  Svelte, `vite` → Vite, else Plain (bundled server on 5465). Vite runs directly as `node vite.js dev`
+  (one process, dies with the IDE) on the first free port from 5173 with `--strictPort --host 127.0.0.1`.
+  `.bin` tools are resolved to their scripts and run with our node (`nodeBin`), not via PATH.
+- **Toolbar groups / panels**: named groups (file, edit, build, debug, project, web) and closable
+  panels, Auto/Shown/Hidden per profile in settings (`/toolbars/<id>/<profile>`, `/panels/<id>/<profile>`);
+  `applyProfile()` after every open. Defaults live in `ProjectKinds.cpp` (web-only: web toolbar,
+  dev-server/env/tests/traces/deps panels).
+- **JS debugging**: js-debug's `dapDebugServer.js` on a free port; the root `pwa-node` session launches
+  Vite; js-debug's `startDebugging` reverse requests each get a new TCP session; once Vite prints its
+  URL a `pwa-chrome` session opens it if a Chromium-based browser is found (`/web/chrome`), else the
+  normal browser opens it (server code only). Debug actions dispatch to `jsDebugger_` or gdb.
+  `.svelte` breakpoints go to browser sessions only (`dap::sessionWantsBreakpoints`): in Vite's SSR
+  build of a component the source map doesn't lead back, so it paused on lines that don't exist.
+  GUI tests: Playwright's Chromium (`~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome`) as
+  `/web/chrome`; it opens on the Xephyr display, and keys go to whichever window is under the pointer.
+- **Test hooks in settings**: `/web/browser` (tests point it at a script that records URLs) and
+  `/web/chrome`; never let tests open the user's real browser.
 - **Async safety**: callbacks from gdb/LSP/processes capture a `weak_ptr` token, never raw `this`
   alone (`sigc::track_obj` only protects sigc slots, not `std::function`).
 
@@ -114,6 +146,9 @@ All seven planned milestones are done (projects, build/run, options & packages, 
 debugger, dev server) plus docking panels. Not done yet: Replace (Ctrl+R) and Find Results are
 placeholders; breakpoints/watches aren't saved between sessions; the dev server can't resolve npm
 packages; floating panel window positions aren't remembered (GTK 4 can't position windows).
+
+Roadmap: docs/ROADMAP.md. Done: M0 (foundations) and W1–W5 (web/SvelteKit, including server and
+browser debugging, checked end to end). Next: S1 (STM32). Each milestone gets its own plan first.
 
 ## Conventions
 

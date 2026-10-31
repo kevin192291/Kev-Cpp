@@ -1,5 +1,7 @@
 #include "core/Diagnostics.h"
 
+#include <nlohmann/json.hpp>
+
 #include <regex>
 
 namespace kevc {
@@ -79,6 +81,29 @@ std::vector<Diagnostic> DiagnosticParser::feed(std::string_view raw) {
 
 std::optional<Diagnostic> DiagnosticParser::parse(const std::string& line) {
     std::smatch m;
+    // svelte-check --output machine-verbose:
+    // 1793440778357 {"type":"ERROR","filename":"src/routes/+page.svelte","start":{"line":1,"character":5},...}
+    if (const auto brace = line.find(" {"); brace != std::string::npos && brace > 0 &&
+        line.find_first_not_of("0123456789") == brace) {
+        try {
+            const auto j = nlohmann::json::parse(line.substr(brace + 1));
+            const std::string type = j.value("type", "");
+            Diagnostic d;
+            d.severity = type == "WARNING" ? Diagnostic::Severity::Warning
+                       : type == "ERROR"   ? Diagnostic::Severity::Error
+                                           : Diagnostic::Severity::Note;
+            d.file = resolve(j.value("filename", ""));
+            // Its positions are 0-based.
+            const auto start = j.value("start", nlohmann::json::object());
+            d.line = start.value("line", -1) + 1;
+            d.column = start.value("character", -1) + 1;
+            d.message = j.value("message", "");
+            if (j.contains("code") && j["code"].is_number()) d.message += " (" + j.value("source", "") + std::to_string(j["code"].get<int>()) + ")";
+            return count(std::move(d));
+        } catch (const std::exception&) {
+            return std::nullopt;
+        }
+    }
     if (std::regex_match(line, m, kMakeDir)) {
         if (m[1] == "Entering") dirs_.push_back(m[2].str());
         else if (dirs_.size() > 1) dirs_.pop_back();

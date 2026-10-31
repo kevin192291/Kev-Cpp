@@ -1,9 +1,11 @@
 {
   "name": "kev-cpp-tools",
   "private": true,
-  "description": "Node tooling bundled with Kev-C++: the TypeScript language server and compiler.",
+  "description": "Node tooling bundled with Kev-C++: the TypeScript and Svelte language servers and the TypeScript compiler.",
   "dependencies": {
+    "svelte-language-server": "0.18.5",
     "typescript": "5.9.3",
-    "typescript-language-server": "5.3.0"
+    "typescript-language-server": "5.3.0",
+    "typescript-svelte-plugin": "0.3.52"
   }
 }

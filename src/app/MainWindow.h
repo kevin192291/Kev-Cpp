@@ -5,13 +5,20 @@
 #include "core/BuildPlan.h"
 #include "core/Diagnostics.h"
 #include "core/ProjectSession.h"
+#include "core/WebProject.h"
 #include "debug/DebugController.h"
 #include "debug/DebugViews.h"
+#include "debug/JsDebugger.h"
 #include "devserver/DevServer.h"
 #include "editor/ProjectTree.h"
+#include "editor/RoutesPanel.h"
 #include "editor/SymbolsPanel.h"
 #include "lsp/LspManager.h"
 #include "ui/DockManager.h"
+#include "ui/DependenciesPanel.h"
+#include "ui/EnvPanel.h"
+#include "ui/TestsPanel.h"
+#include "ui/TracesPanel.h"
 #include "ui/IconWidgets.h"
 #include "terminal/TerminalPane.h"
 
@@ -51,6 +58,10 @@ private:
     Gtk::Widget& buildStatusBar();
     // Registers a win.<name> action that only reports it is not implemented yet.
     void addStubAction(const Glib::ustring& name, const Glib::ustring& label);
+    // Shows the toolbar groups and panels the current profile (what's open) wants; see
+    // core/ProjectKinds. Called whenever a project or folder is opened.
+    void applyProfile();
+    void updateToolbarRows();
 
     // Projects
     void newProject();
@@ -100,6 +111,28 @@ private:
     void appendLog(const std::string& text, const Glib::ustring& tag = {});
     void showBottomPage(Gtk::Widget& page);
 
+    // Runs commands in the Compile Log like a build (output parsed into the Compiler panel).
+    // `doneLabel` names the job in the status bar when it ends ("Install"); empty for builds.
+    void runCommands(std::vector<Command> commands, const std::string& heading, Task task,
+                     std::function<void(bool)> then, std::string doneLabel = {});
+
+    // Web projects (package.json): flavour, scripts, dependencies, SvelteKit creation.
+    void refreshWebProject();
+    void installDependencies();
+    void runScript(const std::string& name);
+    Glib::ustring createSvelteKitApp(const std::string& name, const std::filesystem::path& parent);
+    void openUrl(const std::string& url);
+    // SvelteKit: the Routes tab and the Environment panel, rescanned as files change.
+    void refreshKit();
+    void scheduleKitRefresh();
+    void newRoute();
+    void openRoute(const std::string& url);
+    // Tests (Vitest, Playwright), traces (a local OpenTelemetry collector) and npm's dependency report.
+    void runTests(TestRunner runner, const std::filesystem::path& file = {}, const std::string& title = {}, int line = 0,
+                  const std::vector<std::filesystem::path>& files = {});
+    std::vector<std::pair<std::string, std::string>> traceEnvironment();
+    void refreshDependencies();
+
     void showToolchainInfo();
     void showAbout();
 
@@ -112,6 +145,10 @@ private:
 
     // Debugging
     void startDebugging();
+    // JavaScript/TypeScript (Vite projects) through js-debug: server code, and browser code when a
+    // Chromium-based browser is installed.
+    void startJsDebugging();
+    void refreshJsViews(int frameIndex);
     void launchDebugger();
     void debugStep(void (DebugController::*step)());
     void onDebugStopped(const StopInfo& info);
@@ -134,6 +171,8 @@ private:
     void showProjectOptions(bool packagesPage);
 
     Application& app_;
+    // Async callbacks (subprocesses) hold a weak_ptr to this and do nothing once the window is gone.
+    std::shared_ptr<int> lifetime_ = std::make_shared<int>(0);
     std::filesystem::path toolsDir_; // bundled Node tools: language server, tsc, dev server
     // Declared before the widgets so it outlives the editors during teardown.
     std::unique_ptr<LspManager> lsp_;
@@ -151,6 +190,18 @@ private:
     Gtk::Notebook leftDock_;
     ProjectTree projectTree_;
     SymbolsPanel symbols_;
+    RoutesPanel routesPanel_;
+    EnvPanel envPanel_;
+    sigc::connection kitRefresh_;
+    std::string pendingRoute_; // opened once the dev server is ready
+    TestsPanel testsPanel_;
+    TracesPanel tracesPanel_;
+    DependenciesPanel depsPanel_;
+    TraceStore traces_;
+    std::unique_ptr<ManagedProcess> collector_;
+    int collectorPort_ = 0;
+    TestRunner lastRunner_ = TestRunner::Vitest;
+    std::vector<TestCase> lastFailed_;
     sigc::connection symbolsTimer_;
     Gtk::Box editorArea_{Gtk::Orientation::VERTICAL};
     Gtk::Notebook editors_;
@@ -167,6 +218,20 @@ private:
     TerminalPane shell_;
     Gtk::DropDown* configDrop_ = nullptr;
     std::map<Task, TaskButton*> taskButtons_;
+    // Named groups of toolbar buttons that View → Toolbars shows or hides per profile.
+    struct ToolbarGroup {
+        std::string id;
+        Gtk::Box* box;
+        Gtk::Separator* separator; // before the group, hidden when it's the first one in its row
+        size_t row;
+    };
+    std::vector<ToolbarGroup> toolbarGroups_;
+    std::vector<Gtk::Box*> toolbarRows_;
+    std::vector<Gtk::Separator*> toolbarRules_; // the line above each row after the first
+    // View → Toolbars / Panels check items, by group or panel id.
+    std::map<std::string, Glib::RefPtr<Gio::SimpleAction>> toolbarActions_;
+    std::map<std::string, Glib::RefPtr<Gio::SimpleAction>> panelActions_;
+    std::string profile_ = "none";
     TaskButton* continueButton_ = nullptr; // Continue while paused, Pause while the program runs
     TaskButton* devServerButton_ = nullptr;
     std::vector<Gtk::Button*> stepButtons_; // only while paused in the debugger
@@ -181,6 +246,10 @@ private:
     BuildConfig buildConfig_ = BuildConfig::Debug;
 
     std::unique_ptr<DevServer> devServer_;
+    bool serverWasReady_ = false; // tells a failed start from a server that stopped later
+    WebProject web_;              // the open web project's package.json, read when it opens
+    Glib::RefPtr<Gio::Menu> scriptsMenu_ = Gio::Menu::create(); // Project → Scripts and the web toolbar
+    std::string doneLabel_;       // see runCommands
     bool openBrowserWhenReady_ = false;
     Gtk::Box serverPage_{Gtk::Orientation::VERTICAL};
     Gtk::Label serverStatus_;
@@ -189,6 +258,9 @@ private:
     Gtk::TextView serverLog_;
 
     std::shared_ptr<DebugController> debugger_;
+    std::shared_ptr<JsDebugger> jsDebugger_;
+    std::vector<dap::Frame> jsFrames_;
+    std::string jsServerUrl_; // the Vite the JS debugger runs, once it's serving
     DebugPanel debugPanel_;
     WatchPanel watches_;
     std::map<std::filesystem::path, std::set<int>> breakpoints_; // file -> 1-based lines

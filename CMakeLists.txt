@@ -22,6 +22,7 @@ find_package(nlohmann_json 3.10 REQUIRED)
 add_library(kevc_core STATIC
   src/core/BuildFiles.cpp
   src/core/BuildPlan.cpp
+  src/core/Dap.cpp
   src/core/Diagnostics.cpp
   src/core/Icons.cpp
   src/core/Lsp.cpp
@@ -29,8 +30,15 @@ add_library(kevc_core STATIC
   src/core/Mi.cpp
   src/core/Packages.cpp
   src/core/Project.cpp
+  src/core/ProjectKinds.cpp
   src/core/ProjectSession.cpp
+  src/core/Settings.cpp
+  src/core/SvelteKit.cpp
+  src/core/TestReport.cpp
+  src/core/ToolLocator.cpp
   src/core/Toolchain.cpp
+  src/core/WebProject.cpp
+  src/core/WebReports.cpp
 )
 target_include_directories(kevc_core PUBLIC src)
 target_link_libraries(kevc_core PUBLIC nlohmann_json::nlohmann_json)
@@ -67,23 +75,33 @@ add_executable(kev-cpp
   src/app/MainWindow.cpp
   src/build/BuildRunner.cpp
   src/build/CompilerPanel.cpp
+  src/debug/DapClient.cpp
+  src/debug/DapViews.cpp
   src/debug/DebugController.cpp
   src/debug/DebugHover.cpp
   src/debug/DebugViews.cpp
   src/debug/GdbSession.cpp
+  src/debug/JsDebugger.cpp
   src/devserver/DevServer.cpp
   src/editor/EditorTab.cpp
   src/editor/ProjectTree.cpp
+  src/editor/RoutesPanel.cpp
   src/editor/SymbolsPanel.cpp
   src/lsp/LspBridges.cpp
   src/lsp/LspClient.cpp
   src/lsp/LspManager.cpp
+  src/process/Capture.cpp
+  src/process/ManagedProcess.cpp
   src/project/SourceWatcher.cpp
   src/terminal/TerminalPane.cpp
   src/ui/Dialogs.cpp
+  src/ui/DependenciesPanel.cpp
   src/ui/DockManager.cpp
+  src/ui/EnvPanel.cpp
   src/ui/IconWidgets.cpp
   src/ui/ProjectOptionsDialog.cpp
+  src/ui/TestsPanel.cpp
+  src/ui/TracesPanel.cpp
 )
 target_link_libraries(kev-cpp PRIVATE
   kevc_core
@@ -143,6 +161,13 @@ if(NPM_EXECUTABLE)
     DEPENDS ${CMAKE_SOURCE_DIR}/tools/package.json ${CMAKE_SOURCE_DIR}/tools/package-lock.json
     COMMENT "Installing the TypeScript language server (npm ci)")
   add_custom_target(kevc_node_tools ALL DEPENDS ${CMAKE_SOURCE_DIR}/tools/node_modules/.package-lock.json)
+  # Microsoft's js-debug for debugging web projects; pinned and hash-checked (see the script).
+  add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/tools/js-debug/.kev-cpp-1.140.0
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/tools/fetch-js-debug.cmake
+    DEPENDS ${CMAKE_SOURCE_DIR}/tools/fetch-js-debug.cmake
+    COMMENT "Fetching js-debug (the JavaScript debugger)")
+  add_custom_target(kevc_js_debug ALL DEPENDS ${CMAKE_SOURCE_DIR}/tools/js-debug/.kev-cpp-1.140.0)
 else()
   message(WARNING "npm not found: TypeScript IntelliSense will be unavailable")
 endif()

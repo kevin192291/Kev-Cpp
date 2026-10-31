@@ -164,6 +164,21 @@ TEST_F(ProjectSessionTest, PackageJsonFolderOpensAsTypeScriptWithoutWritingAnyth
     EXPECT_FALSE(ProjectSession::findProjectFile(dir_ / "webapp"));
 }
 
+TEST_F(ProjectSessionTest, KevcKeepsKeysThisVersionDoesNotUse) {
+    auto s = ProjectSession::create(dir_, "keep", ProjectTemplate::CppConsole);
+    std::string text = slurp(s.projectFile());
+    text.insert(text.rfind('}'), ",\n  \"stm32\": {\"ioc\": \"keep.ioc\", \"probe\": \"0670FF\"}\n");
+    std::ofstream(s.projectFile()) << text;
+
+    auto reopened = ProjectSession::open(s.projectFile());
+    reopened.project().defines.push_back("NEW=1");
+    reopened.saveAndRegenerate();
+    const std::string saved = slurp(s.projectFile());
+    EXPECT_NE(saved.find("\"stm32\""), std::string::npos);
+    EXPECT_NE(saved.find("\"0670FF\""), std::string::npos);
+    EXPECT_NE(saved.find("NEW=1"), std::string::npos);
+}
+
 // End-to-end: generated projects must actually build with gcc/g++.
 TEST_F(ProjectSessionTest, GeneratedCppProjectBuildsWithCMakeAndGxx) {
     auto s = ProjectSession::create(dir_, "built", ProjectTemplate::CppConsole);

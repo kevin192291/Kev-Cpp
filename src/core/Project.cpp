@@ -54,7 +54,7 @@ constexpr int kFormatVersion = 1;
 
 constexpr std::array kCppExtensions{".cpp", ".cc", ".cxx", ".c++", ".c", ".h", ".hpp", ".hh", ".hxx", ".inl", ".tpp"};
 constexpr std::array kCExtensions{".c", ".h"};
-constexpr std::array kWebExtensions{".ts", ".tsx", ".js", ".mjs", ".jsx", ".html", ".css"};
+constexpr std::array kWebExtensions{".ts", ".tsx", ".js", ".mjs", ".jsx", ".html", ".css", ".svelte"};
 
 template <typename Array>
 bool hasExtension(const Array& exts, const std::string& ext) {
@@ -93,6 +93,12 @@ Project Project::load(const std::filesystem::path& projectFile) {
     p.staticRuntime = linker.value("staticRuntime", false);
 
     p.packages = j.value("packages", std::vector<Package>{});
+
+    static const std::array known{"kevcFormat", "name", "kind", "targetType", "standard", "outputName",
+                                  "ownsTarget", "targetName", "sources", "excludedSources", "compiler",
+                                  "linker", "packages"};
+    for (const auto& [key, value] : j.items())
+        if (std::find(known.begin(), known.end(), key) == known.end()) p.extra[key] = value.dump();
     return p;
 }
 
@@ -121,6 +127,8 @@ void Project::save(const std::filesystem::path& projectFile) const {
           {"staticRuntime", staticRuntime}}},
         {"packages", packages},
     };
+    for (const auto& [key, text] : extra)
+        if (!j.contains(key)) j[key] = json::parse(text, nullptr, false);
     // Write to a temp file and rename so a crash never leaves a half-written project file.
     std::filesystem::path tmp = projectFile;
     tmp += ".tmp";

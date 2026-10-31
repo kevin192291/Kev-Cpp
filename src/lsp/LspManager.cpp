@@ -1,5 +1,6 @@
 #include "lsp/LspManager.h"
 
+#include "core/WebProject.h"
 #include "editor/EditorTab.h"
 
 namespace fs = std::filesystem;
@@ -126,8 +127,28 @@ std::unique_ptr<LspClient> LspManager::createClient(lsp::Server server) {
         json init = {{"hostInfo", "kev-cpp"},
                      {"tsserver", {{"path", tsserver.string()}}},
                      {"preferences", {{"includeCompletionsForModuleExports", true}}}};
+        // In Svelte projects, .ts files import .svelte components: the plugin lets tsserver follow them.
+        const fs::path plugin = toolsDir_ / "node_modules/typescript-svelte-plugin";
+        if (WebProject::detect(root_).svelte() && fs::exists(plugin, ec))
+            init["plugins"] = json::array({{{"name", "typescript-svelte-plugin"}, {"location", (toolsDir_ / "node_modules").string()}}});
         return std::make_unique<LspClient>("typescript-language-server", argv, root_, init,
                                            logs / "typescript-language-server.log");
+    }
+    if (server == lsp::Server::Svelte) {
+        // The project's own copy if it has one (it matches the project's Svelte), else ours.
+        fs::path script = root_ / "node_modules/svelte-language-server/bin/server.js";
+        std::error_code ec;
+        if (!fs::exists(script, ec)) script = toolsDir_ / "node_modules/svelte-language-server/bin/server.js";
+        if (!fs::exists(script, ec)) {
+            status_.emit("IntelliSense for Svelte is off: run `npm install` in Kev-C++'s tools/ folder");
+            return nullptr;
+        }
+        std::vector<std::string> argv{toolchain_.pathOf("node").string(), script.string(), "--stdio"};
+        auto client = std::make_unique<LspClient>("svelte-language-server", argv, root_,
+                                                  lsp::svelteInitializationOptions(), logs / "svelte-language-server.log");
+        client->setConfigurationHandler(
+            [](const std::string& section) { return lsp::configurationFor(lsp::Server::Svelte, section); });
+        return client;
     }
     return nullptr;
 }
@@ -256,6 +277,11 @@ void LspManager::saved(EditorTab* tab) {
     flush(*doc);
     if (auto it = clients_.find(doc->server); it != clients_.end() && doc->open)
         it->second->notify("textDocument/didSave", {{"textDocument", {{"uri", doc->uri}}}});
+    // The Svelte server keeps its own copy of the .ts/.js files components import; without this it
+    // shows errors from their old contents (sveltejs/language-tools#2008).
+    if (doc->server == lsp::Server::TypeScript)
+        if (auto it = clients_.find(lsp::Server::Svelte); it != clients_.end())
+            it->second->notify("$/onDidChangeTsOrJsFile", {{"uri", doc->uri}});
 }
 
 LspManager::Document* LspManager::find(EditorTab* tab) {
