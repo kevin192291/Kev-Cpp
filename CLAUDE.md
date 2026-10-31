@@ -85,6 +85,10 @@ verified by driving the real app (see "GUI testing").
   tab is then dropped on another notebook, GTK dereferences a cleared `detached_tab` and crashes.
   Drop targets: every dock notebook (insert before the tab under the pointer), the main window
   (`acceptFloatingDrops` → own window), and a cancelled drag (dropped outside) → own window.
+- **Old GPUs**: GTK 4 needs OpenGL 3.3/GLES 3.0; without it GTK 4.16+ uses Vulkan on lavapipe (CPU),
+  and XLibre 25 + Mesa crocus (Intel Ironlake, e.g. Panasonic CF-19) segfaults copying its frames
+  into windows not a multiple of 128 px wide (the New Project dialog). `Application` probes
+  `prepare_gl()` at startup and sets `GSK_RENDERER=cairo` if it fails (unless the user set one).
 - **Async safety**: callbacks from gdb/LSP/processes capture a `weak_ptr` token, never raw `this`
   alone (`sigc::track_obj` only protects sigc slots, not `std::function`).
 

@@ -6,6 +6,24 @@
 
 namespace kevc {
 
+namespace {
+
+// GTK 4 draws with OpenGL 3.3 or GLES 3.0. On older GPUs (Intel Ironlake laptops have OpenGL 2.1)
+// GTK 4.16+ falls back to Vulkan on lavapipe, a CPU driver, and some X servers crash copying its
+// frames into a window (XLibre 25 + Mesa crocus segfault on the 520 px wide New Project dialog).
+// Cairo draws on the CPU too but hands X plain images, so use it there. GSK_RENDERER is read when
+// the first window is shown, so this must run before that; a renderer the user chose wins.
+void useCairoWithoutGl() {
+    if (!Glib::getenv("GSK_RENDERER").empty()) return;
+    try {
+        Gdk::Display::get_default()->prepare_gl();
+    } catch (const Glib::Error&) {
+        Glib::setenv("GSK_RENDERER", "cairo");
+    }
+}
+
+} // namespace
+
 Application::Application()
     : Gtk::Application("org.kevcpp.KevCpp", Gio::Application::Flags::NON_UNIQUE | Gio::Application::Flags::HANDLES_OPEN) {
     Glib::set_application_name("Kev-C++");
@@ -17,6 +35,7 @@ Glib::RefPtr<Application> Application::create() {
 
 void Application::on_startup() {
     Gtk::Application::on_startup();
+    useCairoWithoutGl();
     gtk_source_init();
 
     // The Slate palette (data/kevc-theme.css) is written against GTK's own dark theme, so use that
