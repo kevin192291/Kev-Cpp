@@ -24,6 +24,7 @@ add_library(kevc_core STATIC
   src/core/BuildPlan.cpp
   src/core/Dap.cpp
   src/core/Diagnostics.cpp
+  src/core/GitStatus.cpp
   src/core/Icons.cpp
   src/core/Lsp.cpp
   src/core/ManagedBlock.cpp

@@ -177,6 +177,20 @@ def draw_pin():
     return img.crop(img.getchannel("A").getbbox())
 
 
+def draw_git_badge(fill, mark=None):
+    """A round badge for the Project tab's git states: half the icon's size, so it reads as a dot."""
+    img, d = canvas()
+    box = (30, 30, 98, 98)
+    d.ellipse(box, fill=fill, outline=OUTLINE, width=8)
+    if mark == "plus":
+        d.rectangle((58, 44, 70, 84), fill=(255, 255, 255, 255))
+        d.rectangle((44, 58, 84, 70), fill=(255, 255, 255, 255))
+    elif mark == "bang":
+        d.rounded_rectangle((58, 42, 70, 70), radius=4, fill=(255, 255, 255, 255))
+        d.ellipse((57, 75, 71, 89), fill=(255, 255, 255, 255))
+    return img
+
+
 def greyed(img):
     """The same icon in light grey: the "not pinned" state."""
     out = img.copy()
@@ -260,6 +274,9 @@ def build(sheet):
     pin = draw_pin()
     icons["pinned"] = square(pin, min_side=0)
     icons["unpinned"] = square(greyed(pin), min_side=0)
+    icons["git-modified"] = square(draw_git_badge((236, 168, 20, 255)), min_side=0)
+    icons["git-added"] = square(draw_git_badge((46, 170, 70, 255), "plus"), min_side=0)
+    icons["git-conflict"] = square(draw_git_badge((214, 40, 40, 255), "bang"), min_side=0)
 
     cpp = get("cpp-file")
     icons["ts-file"] = square(relabel(cpp, "TS", (32, 80, 210, 255), (16, 32, 96, 255)))

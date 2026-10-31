@@ -74,6 +74,10 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
 
 ## Features
 
+- **git status in the Project tab**: a file with changes that aren't committed has an amber dot
+  after its name (a green plus if it's new, a red ! for a merge conflict), and so does each folder
+  holding one. They update when you save, and when you commit or stage in any terminal. Kev-C++ only
+  shows this; you commit and push with git yourself.
 - **Welcome tab**: the projects and folders you opened lately, to the left of the main shortcuts.
   Click one to open it, and click its pin to keep it in the Pinned list at the top. The tab comes
   back when you close the last file.

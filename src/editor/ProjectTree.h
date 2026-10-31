@@ -1,9 +1,12 @@
 #pragma once
 
+#include "core/GitStatus.h"
+
 #include <gtkmm.h>
 
 #include <filesystem>
 #include <map>
+#include <set>
 
 namespace kevc {
 
@@ -16,6 +19,10 @@ public:
     void setRoot(const std::filesystem::path& root);
 
     sigc::signal<void(const std::filesystem::path&)>& signalFileActivated() { return fileActivated_; }
+
+    // Files with changes git hasn't committed (absolute paths as the tree spells them), and the
+    // folders that hold one: each gets an icon after its name. Empty for a folder outside git.
+    void setGitChanges(std::map<std::string, git::FileState> files, std::set<std::string> folders);
 
 private:
     Glib::RefPtr<Gio::ListModel> directoryModel(const Glib::RefPtr<Gio::File>& dir);
@@ -34,6 +41,16 @@ private:
     sigc::signal<void(const std::filesystem::path&)> fileActivated_;
     // Swaps a folder row's icon between open and closed; one per bound row, since GTK reuses rows.
     std::map<Gtk::ListItem*, sigc::connection> expandWatch_;
+
+    struct BoundRow {
+        std::string path;
+        bool folder = false;
+        Gtk::Image* git = nullptr;
+    };
+    void showGitState(const BoundRow& row) const;
+    std::map<Gtk::ListItem*, BoundRow> bound_; // the rows on screen, to update when git's view changes
+    std::map<std::string, git::FileState> gitFiles_;
+    std::set<std::string> gitFolders_;
 };
 
 } // namespace kevc

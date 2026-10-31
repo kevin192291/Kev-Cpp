@@ -35,6 +35,9 @@
     <file>icons/hicolor/16x16/actions/kevc-folder.png</file>
     <file>icons/hicolor/16x16/actions/kevc-folder-open.png</file>
     <file>icons/hicolor/16x16/actions/kevc-function.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-git-added.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-git-conflict.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-git-modified.png</file>
     <file>icons/hicolor/16x16/actions/kevc-global-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-globe.png</file>
     <file>icons/hicolor/16x16/actions/kevc-header-file.png</file>
@@ -119,6 +122,9 @@
     <file>icons/hicolor/24x24/actions/kevc-folder.png</file>
     <file>icons/hicolor/24x24/actions/kevc-folder-open.png</file>
     <file>icons/hicolor/24x24/actions/kevc-function.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-git-added.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-git-conflict.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-git-modified.png</file>
     <file>icons/hicolor/24x24/actions/kevc-global-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-globe.png</file>
     <file>icons/hicolor/24x24/actions/kevc-header-file.png</file>
@@ -203,6 +209,9 @@
     <file>icons/hicolor/32x32/actions/kevc-folder.png</file>
     <file>icons/hicolor/32x32/actions/kevc-folder-open.png</file>
     <file>icons/hicolor/32x32/actions/kevc-function.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-git-added.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-git-conflict.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-git-modified.png</file>
     <file>icons/hicolor/32x32/actions/kevc-global-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-globe.png</file>
     <file>icons/hicolor/32x32/actions/kevc-header-file.png</file>
@@ -287,6 +296,9 @@
     <file>icons/hicolor/48x48/actions/kevc-folder.png</file>
     <file>icons/hicolor/48x48/actions/kevc-folder-open.png</file>
     <file>icons/hicolor/48x48/actions/kevc-function.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-git-added.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-git-conflict.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-git-modified.png</file>
     <file>icons/hicolor/48x48/actions/kevc-global-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-globe.png</file>
     <file>icons/hicolor/48x48/actions/kevc-header-file.png</file>

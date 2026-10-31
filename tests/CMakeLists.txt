@@ -6,6 +6,7 @@ add_executable(kevc_tests
   BuildPlanTest.cpp
   DapTest.cpp
   DiagnosticsTest.cpp
+  GitStatusTest.cpp
   IconsTest.cpp
   LspTest.cpp
   ManagedBlockTest.cpp

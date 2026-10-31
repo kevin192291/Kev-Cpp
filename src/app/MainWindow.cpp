@@ -279,6 +279,19 @@ MainWindow::MainWindow(Application& app)
 
     applyProfile();
 
+    // The Project tab's git icons follow commits made in a terminal (the index watch) and files
+    // changed outside the IDE (looked at again when the window is used, and every few seconds).
+    property_is_active().signal_changed().connect([this] {
+        if (is_active()) refreshGitStatus();
+    });
+    Glib::signal_timeout().connect_seconds(sigc::track_obj(
+                                               [this] {
+                                                   if (is_active()) refreshGitStatus();
+                                                   return true;
+                                               },
+                                               *this),
+                                           5);
+
     if (auto missing = app_.toolchain().missingOptional(); !missing.empty()) {
         Glib::ustring msg = "Optional tools not found:";
         for (const ToolInfo* t : missing) msg += " " + t->name + " (" + t->purpose + ")";
@@ -927,6 +940,7 @@ void MainWindow::setPlainFolder(const fs::path& root) {
 
 void MainWindow::onProjectSynced(const ProjectSession::SyncResult& result) {
     if (result.changed()) scheduleKitRefresh(); // routes added or removed
+    refreshGitStatus();                         // files added or removed
     const std::string target = session_ && !session_->buildFile().empty()
                                    ? session_->buildFile().filename().string()
                                    : std::string("the project");
@@ -1111,6 +1125,7 @@ void MainWindow::saveCurrent() {
     try {
         page->save();
         setStatus("Saved " + page->path().filename().string());
+        refreshGitStatus();
     } catch (const Glib::Error& e) {
         showError(*this, "Could not save " + page->path().filename().string(), e.what());
     }
@@ -1129,6 +1144,7 @@ bool MainWindow::saveAll() {
         }
     }
     if (saved) setStatus("Saved " + std::to_string(saved) + (saved == 1 ? " file" : " files"));
+    if (saved) refreshGitStatus();
     return true;
 }
 
@@ -1305,6 +1321,93 @@ Gtk::Widget& MainWindow::welcomeRow(const fs::path& folder, bool pinned, Gtk::Li
 void MainWindow::rememberFolder(const fs::path& root) {
     recent_.opened(root);
     refreshWelcome();
+    watchGit();
+}
+
+// ---------------------------------------------------------------------------------------------
+// git's view of the project (icons in the Project tab; committing is left to git itself)
+
+void MainWindow::watchGit() {
+    gitTopLevel_.clear();
+    gitSoon_.disconnect();
+    if (gitMonitor_) gitMonitor_->cancel();
+    gitMonitor_.reset();
+    projectTree_.setGitChanges({}, {});
+    if (folder_.empty()) return;
+    const fs::path root = folder_;
+    captureOutput(git::topLevelCommand(), root,
+                  [this, root](std::string out, int status) {
+                      if (root != folder_ || status != 0) return; // another folder by now, or not in git
+                      std::istringstream lines(out);
+                      std::string top, gitDir;
+                      std::getline(lines, top);
+                      std::getline(lines, gitDir);
+                      if (top.empty()) return;
+                      gitTopLevel_ = top;
+                      try {
+                          gitMonitor_ = Gio::File::create_for_path(gitDir)->monitor_directory();
+                          gitMonitor_->signal_changed().connect(
+                              [this](const Glib::RefPtr<Gio::File>& file, const Glib::RefPtr<Gio::File>&,
+                                     Gio::FileMonitor::Event) {
+                                  // add, commit, restore, checkout… rewrite the index (by way of index.lock).
+                                  const std::string name = file ? file->get_basename() : "";
+                                  if (name == "index" || name == "index.lock" || name == "HEAD") refreshGitStatus();
+                              });
+                      } catch (const Glib::Error&) {
+                          // Without the watch, the timer and window activation still refresh it.
+                      }
+                      runGitStatus();
+                  },
+                  lifetime_);
+}
+
+void MainWindow::refreshGitStatus() {
+    if (gitTopLevel_.empty() || gitSoon_.connected()) return;
+    gitSoon_ = Glib::signal_timeout().connect(sigc::track_obj(
+                                                  [this] {
+                                                      runGitStatus();
+                                                      return false;
+                                                  },
+                                                  *this),
+                                              300);
+}
+
+void MainWindow::runGitStatus() {
+    if (gitTopLevel_.empty()) return;
+    if (gitRunning_) {
+        gitAgain_ = true; // once this one is done
+        return;
+    }
+    gitRunning_ = true;
+    const fs::path root = folder_, top = gitTopLevel_;
+    captureOutput(git::statusCommand(), root,
+                  [this, root, top](std::string out, int status) {
+                      gitRunning_ = false;
+                      if (root != folder_) return;
+                      if (status == 0) {
+                          // git names files from the work tree's top; the tree spells them from root.
+                          std::error_code ec;
+                          const fs::path base = fs::weakly_canonical(root, ec);
+                          auto inTree = [&](const std::string& rel) -> std::optional<std::string> {
+                              const fs::path fromRoot = (top / rel).lexically_relative(base);
+                              if (fromRoot.empty() || *fromRoot.begin() == "..") return std::nullopt;
+                              return (root / fromRoot).string();
+                          };
+                          const git::Changes changes = git::parseStatus(out);
+                          std::map<std::string, git::FileState> files;
+                          std::set<std::string> folders;
+                          for (const auto& [rel, state] : changes)
+                              if (auto path = inTree(rel)) files[*path] = state;
+                          for (const auto& rel : git::changedFolders(changes))
+                              if (auto path = inTree(rel)) folders.insert(*path);
+                          projectTree_.setGitChanges(std::move(files), std::move(folders));
+                      }
+                      if (gitAgain_) {
+                          gitAgain_ = false;
+                          refreshGitStatus();
+                      }
+                  },
+                  lifetime_);
 }
 
 void MainWindow::forwardToEditor(const char* action) {

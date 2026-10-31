@@ -93,6 +93,10 @@ private:
     void refreshWelcome();
     Gtk::Widget& welcomeRow(const std::filesystem::path& folder, bool pinned, Gtk::ListBox& list);
     void rememberFolder(const std::filesystem::path& root);
+    // The Project tab's git icons: files with changes git hasn't committed.
+    void watchGit();          // after opening a folder: find its repository, watch its index
+    void refreshGitStatus();  // soon (bursts of requests make one run)
+    void runGitStatus();
     void addSystemPackage(const std::string& module);
     void newFile();
     void saveCurrent();
@@ -229,6 +233,10 @@ private:
     Gtk::Notebook editors_;
     Gtk::Widget* welcomePage_ = nullptr;
     Gtk::Box* welcomeLists_ = nullptr; // pinned and recent projects, left of the shortcuts
+    std::filesystem::path gitTopLevel_; // the open folder's git work tree ("" if it isn't in one)
+    Glib::RefPtr<Gio::FileMonitor> gitMonitor_;
+    sigc::connection gitSoon_;
+    bool gitRunning_ = false, gitAgain_ = false;
     std::map<Gtk::ListBoxRow*, std::filesystem::path> welcomeRows_;
     Gtk::SearchBar findBar_;
     Gtk::SearchEntry findEntry_;

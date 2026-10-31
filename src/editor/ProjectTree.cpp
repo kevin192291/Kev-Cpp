@@ -90,6 +90,9 @@ void ProjectTree::onSetupItem(const Glib::RefPtr<Gtk::ListItem>& item) {
     label->set_xalign(0.0f);
     label->set_ellipsize(Pango::EllipsizeMode::END);
     box->append(*label);
+    auto* git = Gtk::make_managed<Gtk::Image>(); // uncommitted changes (see setGitChanges)
+    git->set_visible(false);
+    box->append(*git);
     auto* expander = Gtk::make_managed<Gtk::TreeExpander>();
     expander->set_child(*box);
     item->set_child(*expander);
@@ -105,8 +108,17 @@ void ProjectTree::onBindItem(const Glib::RefPtr<Gtk::ListItem>& item) {
     if (!info || !box) return;
     auto* image = dynamic_cast<Gtk::Image*>(box->get_first_child());
     auto* label = dynamic_cast<Gtk::Label*>(image->get_next_sibling());
+    auto* git = dynamic_cast<Gtk::Image*>(label->get_next_sibling());
     label->set_text(info->get_display_name());
-    if (info->get_file_type() != Gio::FileType::DIRECTORY) {
+    onUnbindItem(item);
+    BoundRow bound{{}, info->get_file_type() == Gio::FileType::DIRECTORY, git};
+    if (char* path = g_file_get_path(fileOf(info))) {
+        bound.path = path;
+        g_free(path);
+    }
+    showGitState(bound);
+    bound_[item.get()] = bound;
+    if (!bound.folder) {
         image->set_from_icon_name(icons::forFile(info->get_name()));
         return;
     }
@@ -114,7 +126,6 @@ void ProjectTree::onBindItem(const Glib::RefPtr<Gtk::ListItem>& item) {
     // Raw pointers: the row owns this connection, and unbinding disconnects it before the image
     // can go away or be reused for another row.
     Gtk::TreeListRow* r = row.get();
-    onUnbindItem(item);
     expandWatch_[item.get()] = row->property_expanded().signal_changed().connect(
         [r, image] { image->set_from_icon_name(icons::forFolder(r->get_expanded())); });
 }
@@ -123,6 +134,35 @@ void ProjectTree::onUnbindItem(const Glib::RefPtr<Gtk::ListItem>& item) {
     if (auto it = expandWatch_.find(item.get()); it != expandWatch_.end()) {
         it->second.disconnect();
         expandWatch_.erase(it);
+    }
+    bound_.erase(item.get());
+}
+
+void ProjectTree::setGitChanges(std::map<std::string, git::FileState> files, std::set<std::string> folders) {
+    if (files == gitFiles_ && folders == gitFolders_) return;
+    gitFiles_ = std::move(files);
+    gitFolders_ = std::move(folders);
+    for (const auto& [item, row] : bound_) showGitState(row);
+}
+
+void ProjectTree::showGitState(const BoundRow& row) const {
+    const char* icon = nullptr;
+    const char* tip = nullptr;
+    if (row.folder) {
+        if (gitFolders_.count(row.path)) icon = "kevc-git-modified", tip = "Holds changes that aren't committed";
+    } else if (auto it = gitFiles_.find(row.path); it != gitFiles_.end()) {
+        switch (it->second) {
+        case git::FileState::Modified: icon = "kevc-git-modified", tip = "Changed since the last commit"; break;
+        case git::FileState::Added: icon = "kevc-git-added", tip = "New, staged for the next commit"; break;
+        case git::FileState::Untracked: icon = "kevc-git-added", tip = "New: not in git yet"; break;
+        case git::FileState::Conflicted: icon = "kevc-git-conflict", tip = "Has merge conflicts"; break;
+        case git::FileState::Deleted: break; // not in the tree
+        }
+    }
+    row.git->set_visible(icon != nullptr);
+    if (icon) {
+        row.git->set_from_icon_name(icon);
+        row.git->set_tooltip_text(tip);
     }
 }
 

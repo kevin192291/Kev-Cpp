@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 169 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 171 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -28,7 +28,8 @@ verified by driving the real app (see "GUI testing").
   make/tsc output parser), `Packages` (catalog, pkg-config, FetchContent target detection), `Lsp`
   (framing, URIs, UTF-16 columns, markdown→Pango), `Mi` (GDB/MI parser, expression-under-cursor),
   `Icons` (which kevc-* icon a file, LSP symbol/completion kind or gdb type gets), `RecentProjects`
-  (the Welcome tab's recent and pinned folders, in settings under /recent), `Settings`
+  (the Welcome tab's recent and pinned folders, in settings under /recent), `GitStatus` (`git status
+  --porcelain -z` → which files have uncommitted changes, for the Project tab), `Settings`
   (`~/.config/kev-cpp/settings.json`), `ToolLocator` (PATH, node_modules/.bin, `/opt/st/stm32cube*`),
   `ProjectKinds` (per-kind traits, toolbar/panel visibility per profile), `WebProject` (package.json
   flavour, package manager, Vite/svelte-check/sv commands), `SvelteKit` (routes, exports, load keys,
@@ -162,6 +163,11 @@ verified by driving the real app (see "GUI testing").
   table. C stand-ins are `__attribute__((weak))`. TypeInfo (`designer::gtkTypes()`) asks GType for
   signal signatures and property kinds, and checks gtkmm's headers via pkg-config; the project templates use
   `ui::basicGtkTypes()`. `MainWindow::addSystemPackage` adds gtkmm-4.0/gtk4 when code is written.
+- **git in the Project tab** is read-only: `watchGit()` (on every folder open) asks git for the work tree
+  and .git folder, watches .git for index/HEAD rewrites (a commit or add in any terminal), and
+  `refreshGitStatus()` also runs after saves, source syncs, window activation and every 5 s while the
+  window is active. One `git status` at a time; paths are mapped from the work tree's top to the
+  tree's spelling of the project root.
 - **Async safety**: callbacks from gdb/LSP/processes capture a `weak_ptr` token, never raw `this`
   alone (`sigc::track_obj` only protects sigc slots, not `std::function`).
 
