@@ -119,6 +119,10 @@ void showError(Gtk::Window& parent, const Glib::ustring& message, const Glib::us
     dialog->show(parent);
 }
 
+void showInfo(Gtk::Window& parent, const Glib::ustring& message, const Glib::ustring& detail) {
+    showError(parent, message, detail);
+}
+
 NewProjectDialog::NewProjectDialog(Gtk::Window& parent, const std::filesystem::path& defaultLocation,
                                    CreateHandler onCreate)
     : onCreate_(std::move(onCreate)) {

@@ -5,6 +5,7 @@
 #include "core/BuildPlan.h"
 #include "core/Diagnostics.h"
 #include "core/ProjectSession.h"
+#include "core/Version.h"
 #include "core/WebProject.h"
 #include "debug/DebugController.h"
 #include "debug/DebugViews.h"
@@ -134,6 +135,9 @@ private:
     void refreshDependencies();
 
     void showToolchainInfo();
+    // Help → Check for Updates: the latest GitHub release, downloaded and installed over this one.
+    void checkForUpdates();
+    void installUpdate(const Release& release);
     void showAbout();
 
     // TypeScript dev server

@@ -21,6 +21,8 @@ void askChoice(Gtk::Window& parent, const Glib::ustring& message, const Glib::us
                std::function<void(int)> onChoice);
 
 void showError(Gtk::Window& parent, const Glib::ustring& message, const Glib::ustring& detail);
+// The same dialog for news that isn't a problem ("Kev-C++ is up to date").
+void showInfo(Gtk::Window& parent, const Glib::ustring& message, const Glib::ustring& detail);
 
 class NewProjectDialog : public Gtk::Window {
 public:

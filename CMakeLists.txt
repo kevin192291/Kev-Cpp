@@ -36,6 +36,7 @@ add_library(kevc_core STATIC
   src/core/SvelteKit.cpp
   src/core/TestReport.cpp
   src/core/ToolLocator.cpp
+  src/core/Version.cpp
   src/core/Toolchain.cpp
   src/core/WebProject.cpp
   src/core/WebReports.cpp
@@ -72,6 +73,7 @@ add_executable(kev-cpp
   ${KEVC_RESOURCE_C}
   src/main.cpp
   src/app/Application.cpp
+  src/app/BuildInfo.cpp
   src/app/MainWindow.cpp
   src/build/BuildRunner.cpp
   src/build/CompilerPanel.cpp
@@ -111,9 +113,17 @@ target_link_libraries(kev-cpp PRIVATE
 )
 target_compile_options(kev-cpp PRIVATE -Wall -Wextra)
 target_compile_definitions(kev-cpp PRIVATE
-  KEVC_VERSION="${PROJECT_VERSION}"
   KEVC_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
 )
+# kevc_version.h: the commit this build is made from (its date, time and hash are the version).
+# Checked on every build; the header only changes, and BuildInfo.cpp only recompiles, on a new commit.
+add_custom_target(kevc_version
+  COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR} -DOUTPUT=${CMAKE_BINARY_DIR}/generated/kevc_version.h
+          -P ${CMAKE_SOURCE_DIR}/cmake/version.cmake
+  BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/kevc_version.h
+  COMMENT "Reading the version from git")
+add_dependencies(kev-cpp kevc_version)
+target_include_directories(kev-cpp PRIVATE ${CMAKE_BINARY_DIR}/generated)
 
 # ELF binaries can't embed an icon, but file managers that honour GIO's metadata::custom-icon (Nemo)
 # show one. Set it after every build; harmless where gio or a desktop session isn't available.

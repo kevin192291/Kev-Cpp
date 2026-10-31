@@ -54,6 +54,19 @@ kev                  # the current folder
 A folder with a `package.json` but no `.kevc` opens as a TypeScript project (Run serves it, Compile
 type-checks it) without Kev-C++ writing anything into it.
 
+## Updates
+
+Every push to `master` builds Kev-C++ on GitHub, runs the tests and publishes a
+[release](https://github.com/kevin192291/Kev-Cpp/releases) (`.github/workflows/release.yml`). Versions are
+the commit's date and time in UTC plus its short hash, such as `2026.10.31.1959-3fa834c`; Help → About
+shows yours.
+
+**Help → Check for Updates** compares your version with the latest release. If there's a newer one, it
+downloads the package and runs its installer in the Run tab, then offers to restart. The installer
+replaces the program, its bundled tools and the menu entry, and installs any missing packages with apt
+(it asks for your sudo password there). To install a release by hand, unpack it and run
+`./install.sh` (`--prefix DIR` to choose where; the default is `~/.local`).
+
 ## Features
 
 - **Projects**: File → New Project creates C++ (console, static or shared library), C console or

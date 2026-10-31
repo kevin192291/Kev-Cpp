@@ -121,6 +121,14 @@ verified by driving the real app (see "GUI testing").
   `/web/chrome`; it opens on the Xephyr display, and keys go to whichever window is under the pointer.
 - **Test hooks in settings**: `/web/browser` (tests point it at a script that records URLs) and
   `/web/chrome`; never let tests open the user's real browser.
+- **Versions and releases**: a build's version is its commit, `YYYY.MM.DD.HHMM-<hash>` in UTC
+  (`cmake/version.cmake` writes `build/generated/kevc_version.h` on every build; only
+  `src/app/BuildInfo.cpp` includes it, `+changes` marks a dirty tree). Pushes to master run
+  `.github/workflows/release.yml`: build + tests on ubuntu-24.04, `packaging/make-release.sh` (install
+  tree + `packaging/install-release.sh` as `install.sh`), `gh release create v<version>`. Help → Check
+  for Updates: curl GitHub's releases/latest, `core/Version` compares by commit time, the download and
+  `install.sh --prefix <prefix of the running binary>` run in the Run tab (sudo prompts work there).
+  `KEVC_PRETEND_VERSION=2026.01.01.0000-0000000` makes a build look old, to test updating.
 - **Async safety**: callbacks from gdb/LSP/processes capture a `weak_ptr` token, never raw `this`
   alone (`sigc::track_obj` only protects sigc slots, not `std::function`).
 

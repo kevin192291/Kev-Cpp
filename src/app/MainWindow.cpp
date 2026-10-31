@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 
 #include "app/Application.h"
+#include "app/BuildInfo.h"
 #include "editor/EditorTab.h"
 #include "core/Mi.h"
 #include "core/ProjectKinds.h"
@@ -410,6 +411,7 @@ void MainWindow::buildActions() {
     add_action("dev-server-open", [this] { openInBrowser(); });
     add_action("toolchain-info", [this] { showToolchainInfo(); });
     add_action("about", [this] { showAbout(); });
+    add_action("check-updates", [this] { checkForUpdates(); });
 }
 
 Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
@@ -493,6 +495,7 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
         {{"_Toolchain Info", "win.toolchain-info"}},
     });
     submenu("_Help", {
+        {{"Check for _Updates…", "win.check-updates"}},
         {{"_About Kev-C++", "win.about"}},
     });
     return bar;
@@ -2415,12 +2418,111 @@ void MainWindow::showProjectOptions(bool packagesPage) {
     dialog->present();
 }
 
+void MainWindow::checkForUpdates() {
+    setStatus("Checking for updates…");
+    const std::string repository = app_.settings().getString("/updates/repository", std::string(kReleaseRepository));
+    captureOutput(
+        {"curl", "-fsSL", "--max-time", "20", "-H", "Accept: application/vnd.github+json", latestReleaseUrl(repository)},
+        Glib::get_home_dir(),
+        [this](std::string reply, int status) {
+            const Version running = buildVersion();
+            if (status != 0) {
+                // curl -f fails with 22 on an HTTP error: GitHub answers 404 while there's no release yet.
+                showError(*this, "Couldn't check for updates",
+                          status == 22  ? "GitHub has no Kev-C++ release to download yet."
+                          : status < 0 ? "Checking needs curl, which isn't installed (sudo apt install curl)."
+                                        : "Kev-C++ couldn't reach GitHub (curl exit status " + std::to_string(status) +
+                                              "). Check the network connection and try again.");
+                setStatus("Couldn't check for updates");
+                return;
+            }
+            const auto release = parseLatestRelease(reply);
+            if (!release) {
+                showError(*this, "Couldn't check for updates", "The latest release on GitHub has no Linux package.");
+                setStatus("Couldn't check for updates");
+                return;
+            }
+            const std::string current = running.known() ? running.text : "a build without a version (made outside git)";
+            switch (compareVersions(running, release->version)) {
+            case Freshness::UpToDate:
+                setStatus("Kev-C++ is up to date (" + running.text + ")");
+                showInfo(*this, "Kev-C++ is up to date", "You have " + running.text + ", the latest release.");
+                return;
+            case Freshness::AheadOfRelease:
+                setStatus("This build is newer than the latest release");
+                showInfo(*this, "This build is newer than the latest release",
+                         "You have " + running.text + ", made from a newer commit than the latest release, " +
+                             release->version.text + ".");
+                return;
+            case Freshness::UpdateAvailable:
+                break;
+            }
+            std::error_code ec;
+            const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+            const fs::path prefix = installPrefix(exe).value_or(fs::path(Glib::get_home_dir()) / ".local");
+            std::string notes = release->notes.size() > 700 ? release->notes.substr(0, 700) + "…" : release->notes;
+            std::ostringstream size;
+            size << std::fixed << std::setprecision(0) << static_cast<double>(release->assetSize) / (1024 * 1024);
+            setStatus("Kev-C++ " + release->version.text + " is available");
+            askChoice(*this, "Kev-C++ " + release->version.text + " is available",
+                      "You have " + current + "." + (notes.empty() ? "" : "\n\n" + notes) + "\n\nUpdate Now downloads it (" +
+                          size.str() + " MB) and installs it into " + prefix.string() +
+                          ", replacing this version: the program, its tools and the menu entry.",
+                      {"Later", "Update Now"}, 0, 1, [this, r = *release](int choice) {
+                          if (choice == 1) installUpdate(r);
+                      });
+        },
+        lifetime_);
+}
+
+void MainWindow::installUpdate(const Release& release) {
+    if (runConsole_.childRunning()) {
+        setStatus("Stop what's running in the Run tab first (Ctrl+F2), then update");
+        return;
+    }
+    std::error_code ec;
+    const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+    const fs::path prefix = installPrefix(exe).value_or(fs::path(Glib::get_home_dir()) / ".local");
+    const fs::path cache = fs::path(Glib::get_user_cache_dir()) / "kev-cpp" / "updates";
+    // In the Run tab, so the installer can ask for a sudo password if packages are missing.
+    showBottomPage(runConsole_);
+    setStatus("Updating to Kev-C++ " + release.version.text + "…");
+    runConsole_.runProgram(updateCommand(release, cache, prefix), Glib::get_home_dir(),
+                           [this, release, prefix](const std::string& outcome) {
+                               updateToolbar();
+                               if (!outcome.ends_with(" code 0")) {
+                                   setStatus("The update didn't finish (" + outcome + "); see the Run tab");
+                                   return;
+                               }
+                               setStatus("Kev-C++ " + release.version.text + " is installed");
+                               askChoice(*this, "Kev-C++ " + release.version.text + " is installed",
+                                         "Restart now to start using it? You'll be asked about unsaved changes first.",
+                                         {"Later", "Restart Now"}, 0, 1, [this, prefix](int choice) {
+                                             if (choice != 1) return;
+                                             closeAllEditors([this, prefix] {
+                                                 std::vector<std::string> argv{(prefix / "bin" / "kev-cpp").string()};
+                                                 if (!folder_.empty()) argv.push_back(folder_.string());
+                                                 try {
+                                                     Glib::spawn_async(Glib::get_home_dir(), argv);
+                                                 } catch (const Glib::Error& e) {
+                                                     showError(*this, "Couldn't start the new Kev-C++", e.what());
+                                                     return;
+                                                 }
+                                                 closeConfirmed_ = true;
+                                                 close();
+                                             });
+                                         });
+                           });
+    runConsole_.focusTerminal();
+    updateToolbar();
+}
+
 void MainWindow::showAbout() {
     auto* about = new Gtk::AboutDialog();
     about->set_transient_for(*this);
     about->set_modal(true);
     about->set_program_name("Kev-C++");
-    about->set_version(KEVC_VERSION);
+    about->set_version(buildVersion().text); // the commit it was built from: date, time and hash
     about->set_logo_icon_name("org.kevcpp.KevCpp");
     about->set_comments("A lightweight IDE for C, C++, JavaScript and TypeScript,\n"
                         "built on gcc, g++, CMake, Make and GTK 4.");

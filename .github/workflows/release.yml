@@ -1,0 +1,60 @@
+# Every push to master builds Kev-C++, runs the tests and publishes a GitHub release that
+# Help → Check for Updates installs. The version (and tag, with a "v") is the commit's date and time
+# in UTC plus its short hash, e.g. v2026.10.31.1959-3fa834c (see cmake/version.cmake).
+name: Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write # to create the release
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 20+ for typescript-language-server 5 (Ubuntu 24.04 packages Node 18).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config libglib2.0-dev-bin gdb \
+            libgtkmm-4.0-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
+            nlohmann-json3-dev libgtest-dev
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DKEVC_BUILD_TESTS=ON
+          cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        id: package
+        run: packaging/make-release.sh build dist
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag is already released"
+            exit 0
+          fi
+          gh release create "$tag" dist/kev-cpp-*-linux-x86_64.tar.gz \
+            --target "$GITHUB_SHA" --title "Kev-C++ $VERSION" --notes-file dist/notes.md --latest
