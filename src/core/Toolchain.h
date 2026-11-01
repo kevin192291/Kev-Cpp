@@ -26,14 +26,21 @@ std::string toolVersion(const std::filesystem::path& exe);
 // The major version in a Node version line: "v18.19.1" -> 18; 0 if there isn't one.
 int nodeMajor(const std::string& versionLine);
 
+// Where version managers keep Node, for terminalLikePath. Empty paths mean the usual places.
+struct NodeSearch {
+    std::filesystem::path home;
+    std::filesystem::path nvmDir;                   // $NVM_DIR (~/.nvm)
+    std::filesystem::path pnpmHome;                 // $PNPM_HOME (~/.local/share/pnpm)
+    std::filesystem::path nPrefix = "/usr/local/n"; // $N_PREFIX
+    int minNodeMajor = 20;
+};
+
 // Desktop menus, file managers and panels start programs with the session's PATH, without what
 // ~/.bashrc adds for terminals: nvm's node, pnpm's and bun's folders. Ubuntu's own node is then too old
 // for Vite. Returns `pathList` with the newest node a version manager installed (nvm, fnm, Volta, asdf,
-// mise, n) put first when the PATH's node is missing or older than `minNodeMajor`, and pnpm's and
-// bun's folders added at the end where they exist. `nvmDir`/`pnpmHome` are $NVM_DIR/$PNPM_HOME, if set.
-std::string terminalLikePath(const std::string& pathList, const std::filesystem::path& home, int pathNodeMajor,
-                             const std::filesystem::path& nvmDir = {}, const std::filesystem::path& pnpmHome = {},
-                             int minNodeMajor = 20);
+// mise, n) put first when the PATH's node is missing or older than `where.minNodeMajor`, and pnpm's
+// and bun's folders added at the end where they exist.
+std::string terminalLikePath(const std::string& pathList, int pathNodeMajor, const NodeSearch& where);
 
 class Toolchain {
 public:

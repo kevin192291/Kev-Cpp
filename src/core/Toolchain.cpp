@@ -57,10 +57,12 @@ int nodeMajor(const std::string& versionLine) {
     return major;
 }
 
-std::string terminalLikePath(const std::string& pathList, const std::filesystem::path& home, int pathNodeMajor,
-                             const std::filesystem::path& nvmDir, const std::filesystem::path& pnpmHome,
-                             int minNodeMajor) {
+std::string terminalLikePath(const std::string& pathList, int pathNodeMajor, const NodeSearch& where) {
     namespace fs = std::filesystem;
+    const fs::path& home = where.home;
+    const fs::path& nvmDir = where.nvmDir;
+    const fs::path& pnpmHome = where.pnpmHome;
+    const int minNodeMajor = where.minNodeMajor;
     std::string out = pathList;
     if (pathNodeMajor < minNodeMajor) {
         // Where each manager keeps its versions: <dir>/<version>/<binary inside it>.
@@ -71,7 +73,7 @@ std::string terminalLikePath(const std::string& pathList, const std::filesystem:
             {home / ".volta/tools/image/node", "bin/node"},
             {home / ".asdf/installs/nodejs", "bin/node"},
             {home / ".local/share/mise/installs/node", "bin/node"},
-            {"/usr/local/n/versions/node", "bin/node"},
+            {where.nPrefix / "versions/node", "bin/node"},
         };
         fs::path best;
         std::vector<int> bestVersion;

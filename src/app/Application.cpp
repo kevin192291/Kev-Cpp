@@ -72,8 +72,9 @@ void Application::on_startup() {
     {
         const std::string path = Glib::getenv("PATH");
         const auto node = findInPath("node", path);
-        const std::string better = terminalLikePath(path, Glib::get_home_dir(), node ? nodeMajor(toolVersion(*node)) : 0,
-                                                    Glib::getenv("NVM_DIR"), Glib::getenv("PNPM_HOME"));
+        NodeSearch where{Glib::get_home_dir(), Glib::getenv("NVM_DIR"), Glib::getenv("PNPM_HOME")};
+        if (const std::string n = Glib::getenv("N_PREFIX"); !n.empty()) where.nPrefix = std::filesystem::path(n) / "n";
+        const std::string better = terminalLikePath(path, node ? nodeMajor(toolVersion(*node)) : 0, where);
         if (better != path) Glib::setenv("PATH", better, true);
     }
     toolchain_ = Toolchain::detect();
