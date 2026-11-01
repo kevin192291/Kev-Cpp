@@ -388,6 +388,61 @@ void LspManager::definition(EditorTab* tab, const GtkTextIter& at, std::function
                     });
 }
 
+namespace {
+
+// Location, Location[] or LocationLink[], as servers answer position requests.
+std::vector<LspLocation> parseLocations(const lsp::json& result) {
+    std::vector<LspLocation> out;
+    auto add = [&out](const lsp::json& item) {
+        if (!item.is_object()) return;
+        const bool isLink = item.contains("targetUri");
+        const auto path = lsp::uriToPath(item.value(isLink ? "targetUri" : "uri", ""));
+        const auto range = item.find(isLink ? "targetSelectionRange" : "range");
+        if (!path || range == item.end() || !range->contains("start")) return;
+        LspLocation loc{*path, (*range)["start"].value("line", 0), (*range)["start"].value("character", 0)};
+        for (const auto& o : out)
+            if (o.file == loc.file && o.line == loc.line) return; // one per line
+        out.push_back(std::move(loc));
+    };
+    if (result.is_array())
+        for (const auto& item : result) add(item);
+    else add(result);
+    return out;
+}
+
+} // namespace
+
+void LspManager::locations(const std::string& method, EditorTab* tab, const GtkTextIter& at,
+                           std::function<void(std::vector<LspLocation>)> done) {
+    Document* doc = find(tab);
+    LspClient* client = doc ? clientFor(doc->server) : nullptr;
+    if (!client) {
+        done({});
+        return;
+    }
+    flush(*doc);
+    json params = {{"textDocument", {{"uri", doc->uri}}}, {"position", positionOf(at)}};
+    if (method == "textDocument/references") params["context"] = {{"includeDeclaration", true}};
+    client->request(method, params, [done](const json& result, const json* error) {
+        done(error ? std::vector<LspLocation>{} : parseLocations(result));
+    });
+}
+
+void LspManager::sourceDefinition(EditorTab* tab, const GtkTextIter& at, std::function<void(std::vector<LspLocation>)> done) {
+    Document* doc = find(tab);
+    LspClient* client = doc && doc->server == lsp::Server::TypeScript ? clientFor(doc->server) : nullptr;
+    if (!client) {
+        done({});
+        return;
+    }
+    flush(*doc);
+    client->request("workspace/executeCommand",
+                    {{"command", "_typescript.goToSourceDefinition"}, {"arguments", {doc->uri, positionOf(at)}}},
+                    [done](const json& result, const json* error) {
+                        done(error ? std::vector<LspLocation>{} : parseLocations(result));
+                    });
+}
+
 void LspManager::documentSymbols(EditorTab* tab, std::function<void(const json&)> done) {
     Document* doc = find(tab);
     LspClient* client = doc ? clientFor(doc->server) : nullptr;

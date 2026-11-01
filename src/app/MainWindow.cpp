@@ -13,6 +13,7 @@
 #include "process/Capture.h"
 #include "project/SourceWatcher.h"
 #include "ui/Dialogs.h"
+#include "ui/NpmPackagesDialog.h"
 #include "ui/ProjectOptionsDialog.h"
 
 #include <cstdlib>
@@ -116,7 +117,7 @@ MainWindow::MainWindow(Application& app)
     vpaned_.set_resize_end_child(false);
     vpaned_.set_position(560);
 
-    rightDock_.set_size_request(260, -1);
+    rightDock_.set_size_request(140, -1); // can be dragged narrow; panels there scroll their tabs
     rightPaned_.set_start_child(vpaned_);
     rightPaned_.set_end_child(rightDock_);
     rightPaned_.set_resize_start_child(true);
@@ -144,6 +145,9 @@ MainWindow::MainWindow(Application& app)
     });
     searchPanel_.signalOpen().connect([this](const fs::path& file, int line, size_t column, size_t length) {
         if (EditorTab* tab = openFile(file)) tab->selectRange(line, column, length);
+    });
+    searchPanel_.signalReplaceInEditor().connect([this](const fs::path& file, const std::string& text) {
+        if (auto* tab = dynamic_cast<EditorTab*>(findDocument(file))) tab->replaceText(text);
     });
     searchPanel_.signalDone().connect([this] {
         if (auto* page = currentDocument()) page->focusPage();
@@ -236,6 +240,7 @@ MainWindow::MainWindow(Application& app)
         breakpoints_[file].erase(line);
         if (debugger_) debugger_->setBreakpoint(file, line, false);
         updateBreakpointsPanel();
+        saveProjectState();
     });
     debugPanel_.signalConsoleCommand().connect([this](const std::string& command) {
         if (jsDebugger_) {
@@ -251,6 +256,7 @@ MainWindow::MainWindow(Application& app)
         else debugPanel_.appendConsole("Not debugging. Press F5 to start.\n");
     });
     watches_.signalChanged().connect([this] {
+        saveProjectState();
         if (jsDebugger_ && jsDebugger_->stopped()) refreshJsViews(0);
         else if (debugger_ && debugger_->stopped()) refreshDebugViews();
         else watches_.showPlaceholders();
@@ -285,6 +291,7 @@ MainWindow::MainWindow(Application& app)
 
     signal_close_request().connect(
         [this] {
+            saveProjectState(); // where breakpoints have moved with edits
             if (closeConfirmed_) return false;
             auto docs = documents();
             if (std::none_of(docs.begin(), docs.end(), [](DocumentPage* d) { return d->modified(); })) return false;
@@ -320,7 +327,9 @@ MainWindow::MainWindow(Application& app)
     }
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    locationsPopover_.unparent();
+}
 
 void MainWindow::setStatus(const Glib::ustring& message) {
     status_.set_text(message);
@@ -352,19 +361,19 @@ void MainWindow::buildActions() {
     add_action("paste", [this] { forwardToEditor("clipboard.paste"); });
     add_action("select-all", [this] { forwardToEditor("selection.select-all"); });
     // Search
-    add_action("find", [this] { showFindBar(); });
+    add_action("find", [this] {
+        replaceToggle_.set_active(false);
+        showFindBar();
+    });
     add_action("find-in-files", [this] { findInFiles(); });
     add_action("quick-search", [this] { focusQuickSearch(); });
-    addStubAction("replace", "Replace");
+    add_action("replace", [this] { showReplaceBar(); });
     add_action("goto-line", [this] { gotoLine(); });
-    add_action("goto-definition", [this] {
-        if (auto* tab = currentEditor()) {
-            GtkTextIter cursor;
-            GtkTextBuffer* text = GTK_TEXT_BUFFER(tab->buffer());
-            gtk_text_buffer_get_iter_at_mark(text, &cursor, gtk_text_buffer_get_insert(text));
-            gotoDefinition(tab, cursor);
-        }
-    });
+    add_action("goto-definition", [this] { lookUpAtCursor(Lookup::Definition); });
+    add_action("goto-declaration", [this] { lookUpAtCursor(Lookup::Declaration); });
+    add_action("goto-type-definition", [this] { lookUpAtCursor(Lookup::TypeDefinition); });
+    add_action("goto-implementation", [this] { lookUpAtCursor(Lookup::Implementation); });
+    add_action("find-references", [this] { lookUpAtCursor(Lookup::References); });
     // View
     add_action("toggle-left-dock", [this] { leftDock_.set_visible(!leftDock_.get_visible()); });
     add_action("toggle-bottom-dock", [this] { bottomDock_.set_visible(!bottomDock_.get_visible()); });
@@ -379,7 +388,7 @@ void MainWindow::buildActions() {
         toolbarActions_[group] = add_action_bool(
             "toolbar-" + group,
             [this, group] {
-                setToolbarGroupShown(app_.settings(), group, profile_, !toolbarGroupShown(app_.settings(), group, profile_));
+                setToolbarShownHere(group, !toolbarShown(group));
                 applyProfile();
             },
             true);
@@ -390,7 +399,7 @@ void MainWindow::buildActions() {
             "panel-" + panel,
             [this, panel] {
                 const bool show = docks_->closed(panel);
-                setPanelShown(app_.settings(), panel, profile_, show);
+                setPanelShownHere(panel, show);
                 docks_->setClosed(panel, !show);
             },
             true);
@@ -475,7 +484,9 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
     submenu("_Search", {
         {{"_Find…", "win.find"}, {"_Replace…", "win.replace"}},
         {{"Search Files and _Text…", "win.quick-search"}, {"Find in F_iles…", "win.find-in-files"}},
-        {{"_Go to Line…", "win.goto-line"}, {"Go to _Definition (Ctrl+Click)", "win.goto-definition"}},
+        {{"_Go to Line…", "win.goto-line"}, {"Go to _Definition (Ctrl+Click)", "win.goto-definition"},
+         {"Go to _Implementation", "win.goto-implementation"}, {"Go to T_ype Definition", "win.goto-type-definition"},
+         {"Find All _References", "win.find-references"}},
     });
     {
         auto view = Gio::Menu::create();
@@ -583,6 +594,12 @@ Gtk::Widget& MainWindow::buildToolbar() {
     configDrop_->set_tooltip_text("Build configuration");
     configDrop_->set_valign(Gtk::Align::CENTER);
     configDrop_->set_margin_start(4);
+    // The choice belongs to the project (saved in it); applyProfile sets it when one opens.
+    configDrop_->property_selected().signal_changed().connect([this] {
+        if (!session_ || applyingProfile_) return;
+        session_->project().ui.buildConfig = configDrop_->get_selected() == 1 ? "Release" : "";
+        saveProjectUi();
+    });
     bar->append(*configDrop_);
 
     newRow();
@@ -601,6 +618,7 @@ Gtk::Widget& MainWindow::buildToolbar() {
     button("kevc-project", "win.project-options", "Project Options (Alt+P)");
     group("web");
     button("kevc-workspace", "win.web-install", "Install Dependencies (npm install)");
+    button("kevc-settings", "win.packages", "Packages: versions, locking and where they come from");
     button("kevc-bool-variable", "win.web-tests", "Run Tests (Vitest or Playwright)");
     {
         auto* image = Gtk::make_managed<Gtk::Image>();
@@ -645,9 +663,8 @@ void MainWindow::updateToolbarRows() {
 void MainWindow::applyProfile() {
     profile_ = profileFor(session_ ? &session_->project() : nullptr, !folder_.empty());
     const bool kit = web_.flavor == WebFlavor::SvelteKit;
-    const Settings& settings = app_.settings();
     for (auto& g : toolbarGroups_) {
-        const bool shown = toolbarGroupApplies(g.id, profile_) && toolbarGroupShown(settings, g.id, profile_);
+        const bool shown = toolbarGroupApplies(g.id, profile_) && toolbarShown(g.id);
         g.box->set_visible(shown);
         if (auto it = toolbarActions_.find(g.id); it != toolbarActions_.end())
             it->second->set_state(Glib::Variant<bool>::create(shown));
@@ -655,7 +672,12 @@ void MainWindow::applyProfile() {
     // Buttons for the compiler only (a web project has no Debug/Release build and nothing to clean),
     // and what the build buttons mean in a web project.
     const bool native = usesNativeTools(profile_), web = profile_ == "web";
-    if (configDrop_) configDrop_->set_visible(native);
+    if (configDrop_) {
+        configDrop_->set_visible(native);
+        applyingProfile_ = true;
+        configDrop_->set_selected(session_ && session_->project().ui.buildConfig == "Release" ? 1 : 0);
+        applyingProfile_ = false;
+    }
     if (!taskButtons_.empty()) {
         taskButtons_.at(Task::Clean)->set_visible(native);
         if (web) {
@@ -674,7 +696,7 @@ void MainWindow::applyProfile() {
     updateToolbarRows();
     if (docks_)
         for (const auto& [id, title] : docks_->panels())
-            docks_->setClosed(id, !(panelApplies(id, profile_, kit) && panelShown(settings, id, profile_)));
+            docks_->setClosed(id, !(panelApplies(id, profile_, kit) && panelShownHere(id)));
     updateMenus();
 }
 
@@ -710,8 +732,12 @@ void MainWindow::updateMenus() {
         packages->append_submenu("_Scripts", scriptsMenu_);
         projectMenu_->append_section(packages);
     }
-    if (usesNativeTools(profile_))
+    if (session_ && !session_->project().buildFileManaged)
+        projectMenu_->append_section(section({{"_Program to Run and Debug…", "win.project-options"}}));
+    else if (usesNativeTools(profile_))
         projectMenu_->append_section(section({{"_Packages…", "win.packages"}, {"Project _Options…", "win.project-options"}}));
+    else
+        projectMenu_->append_section(section({{"_Packages (Versions, Locking, Source)…", "win.packages"}}));
 
     executeMenu_->remove_all();
     if (web) {
@@ -815,8 +841,33 @@ Gtk::Widget& MainWindow::buildEditorArea() {
     everywhere->set_tooltip_text("Find this in all files (Ctrl+Shift+F)");
     everywhere->signal_clicked().connect([this] { findInFiles(findEntry_.get_text()); });
     findBox->append(*everywhere);
+    {
+        auto* image = Gtk::make_managed<Gtk::Image>();
+        image->set_from_icon_name("kevc-replace");
+        replaceToggle_.set_child(*image);
+    }
+    replaceToggle_.set_tooltip_text("Replace (Ctrl+R)");
+    replaceToggle_.signal_toggled().connect([this] { replaceRow_.set_visible(replaceToggle_.get_active()); });
+    findBox->append(replaceToggle_);
     findBox->append(findCount_);
-    findBar_.set_child(*findBox);
+    // The Replace row, under the find field: Ctrl+R or the toggle shows it.
+    replaceEntry_.set_placeholder_text("Replace with…");
+    replaceEntry_.set_width_chars(32);
+    replaceEntry_.signal_activate().connect([this] { replaceNext(); });
+    auto* replaceOne = Gtk::make_managed<Gtk::Button>("Replace");
+    replaceOne->set_tooltip_text("Replace this match and go to the next (Enter)");
+    replaceOne->signal_clicked().connect([this] { replaceNext(); });
+    auto* replaceEvery = Gtk::make_managed<Gtk::Button>("Replace All");
+    replaceEvery->set_tooltip_text("Replace every match in this file (one Ctrl+Z undoes it)");
+    replaceEvery->signal_clicked().connect([this] { replaceAllInFile(); });
+    replaceRow_.append(replaceEntry_);
+    replaceRow_.append(*replaceOne);
+    replaceRow_.append(*replaceEvery);
+    replaceRow_.set_visible(false);
+    auto* findRows = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+    findRows->append(*findBox);
+    findRows->append(replaceRow_);
+    findBar_.set_child(*findRows);
     findBar_.connect_entry(findEntry_);
     findBar_.set_show_close_button(true);
     findEntry_.signal_search_changed().connect([this] { findNext(true, true); });
@@ -838,6 +889,23 @@ Gtk::Widget& MainWindow::buildEditorArea() {
 
     editorArea_.append(findBar_);
     editorArea_.append(editors_);
+    locationsPopover_.set_parent(editorArea_);
+    locationsPopover_.set_position(Gtk::PositionType::BOTTOM);
+    locationsPopover_.set_halign(Gtk::Align::START); // rightwards from the word, not centred on it
+    // The editors' right-click menu: Go to… first (C/C++ also has declarations, in headers).
+    auto lookups = [](bool declaration) {
+        auto menu = Gio::Menu::create();
+        auto section = Gio::Menu::create();
+        section->append("Go to _Definition", "win.goto-definition");
+        if (declaration) section->append("Go to D_eclaration", "win.goto-declaration");
+        section->append("Go to _Implementation", "win.goto-implementation");
+        section->append("Go to T_ype Definition", "win.goto-type-definition");
+        section->append("Find All _References", "win.find-references");
+        menu->append_section(section);
+        return menu;
+    };
+    editorMenu_ = lookups(false);
+    cppEditorMenu_ = lookups(true);
     return editorArea_;
 }
 
@@ -873,7 +941,7 @@ Gtk::Widget& MainWindow::buildBottomDock() {
     bottomDock_.set_size_request(-1, 120);
     docks_->acceptFloatingDrops(root_);
     docks_->signalClosedChanged().connect([this](const std::string& id, bool closed, bool byUser) {
-        if (byUser) setPanelShown(app_.settings(), id, profile_, !closed);
+        if (byUser) setPanelShownHere(id, !closed);
         if (auto it = panelActions_.find(id); it != panelActions_.end())
             it->second->set_state(Glib::Variant<bool>::create(!closed));
     });
@@ -943,17 +1011,23 @@ void MainWindow::openFolder(const fs::path& root) {
             if (auto kevc = ProjectSession::findProjectFile(root)) {
                 setProject(std::make_unique<ProjectSession>(ProjectSession::open(*kevc)));
             } else if (fs::exists(root / "CMakeLists.txt", ec)) {
-                askChoice(*this, "Enable Kev-C++ management?",
-                          "This CMake project was not created by Kev-C++. Enabling management adds " +
-                              root.filename().string() + ".kevc and a marked block at the end of CMakeLists.txt "
-                              "that lists your sources. Nothing else in the file is changed.",
-                          {"Cancel", "Open as Plain Folder", "Enable"}, 0, 2, [this, root](int choice) {
+                const std::string kevcName = root.filename().string() + ".kevc";
+                askChoice(*this, "How should Kev-C++ build this CMake project?",
+                          "It wasn't created by Kev-C++.\n\n"
+                          "Build As It Is: Kev-C++ builds, runs and debugs it with its own CMakeLists.txt, which "
+                          "it never edits; it only adds " + kevcName + ". Best for projects with several targets "
+                          "or their own way of listing sources.\n\n"
+                          "Manage Sources: Kev-C++ also keeps the source list for you, in a marked block it adds "
+                          "at the end of CMakeLists.txt (nothing else in the file is changed).",
+                          {"Cancel", "Open as Plain Folder", "Manage Sources", "Build As It Is"}, 0, 3,
+                          [this, root](int choice) {
                               if (choice == 1) setPlainFolder(root);
-                              if (choice != 2) return;
+                              if (choice != 2 && choice != 3) return;
                               try {
-                                  setProject(std::make_unique<ProjectSession>(ProjectSession::adoptCMake(root)));
+                                  setProject(std::make_unique<ProjectSession>(choice == 3 ? ProjectSession::useCMakeAsIs(root)
+                                                                                          : ProjectSession::adoptCMake(root)));
                               } catch (const std::exception& e) {
-                                  showError(*this, "Could not enable Kev-C++ management", e.what());
+                                  showError(*this, "Could not open the project", e.what());
                               }
                           });
             } else if (fs::exists(root / "package.json", ec)) {
@@ -975,6 +1049,7 @@ void MainWindow::openFolder(const fs::path& root) {
 }
 
 void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
+    saveProjectState(); // the project being left
     if (debugger_) debugger_->terminate();
     if (jsDebugger_) jsDebugger_->stop();
     if (devServer_ && devServer_->root() != session->root()) devServer_.reset();
@@ -987,6 +1062,7 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     tracesPanel_.setTraces(traces_);
     session_ = std::move(session);
     folder_ = session_->root();
+    restoreProjectState();
     rememberFolder(folder_);
     refreshWebProject();
     refreshKit();
@@ -1041,6 +1117,7 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
 
 void MainWindow::closeProject() {
     if (folder_.empty()) return;
+    saveProjectState(); // before closing the editors: they know where breakpoints moved
     closeAllEditors([this] {
         const std::string name = session_ ? session_->project().name : folder_.filename().string();
         const bool project = session_ != nullptr;
@@ -1053,6 +1130,7 @@ void MainWindow::closeProject() {
         updateServerPage();
         breakpoints_.clear();
         updateBreakpointsPanel();
+        watches_.setExpressions({});
         watcher_.reset();
         collector_.reset();
         traces_.clear();
@@ -1080,6 +1158,7 @@ void MainWindow::closeProject() {
 }
 
 void MainWindow::setPlainFolder(const fs::path& root) {
+    saveProjectState();
     if (debugger_) debugger_->terminate();
     if (jsDebugger_) jsDebugger_->stop();
     if (devServer_ && devServer_->root() != root) devServer_.reset();
@@ -1092,6 +1171,7 @@ void MainWindow::setPlainFolder(const fs::path& root) {
     tracesPanel_.setTraces(traces_);
     session_.reset();
     folder_ = root;
+    restoreProjectState();
     refreshWebProject();
     refreshKit();
     lsp_->setWorkspace(folder_, nullptr);
@@ -1360,6 +1440,7 @@ void MainWindow::deletePath(const fs::path& path) {
                           if (fileops::isInside(doc->path(), canonical)) removeEditor(doc);
                       std::erase_if(breakpoints_, [&](const auto& entry) { return fileops::isInside(entry.first, canonical); });
                       updateBreakpointsPanel();
+                      saveProjectState();
                   };
                   try {
                       Gio::File::create_for_path(path.string())->trash();
@@ -1422,6 +1503,7 @@ void MainWindow::relocated(const fs::path& from, const fs::path& to) {
     }
     breakpoints_ = std::move(breakpoints);
     updateBreakpointsPanel();
+    saveProjectState();
     filesChanged();
 }
 
@@ -1776,6 +1858,31 @@ void MainWindow::showFindBar() {
     findEntry_.grab_focus();
 }
 
+void MainWindow::showReplaceBar() {
+    if (!currentEditor()) return;
+    showFindBar();
+    replaceToggle_.set_active(true);
+    // With something to find already, the cursor goes where the next thing to type is.
+    if (!findEntry_.get_text().empty()) replaceEntry_.grab_focus();
+}
+
+void MainWindow::replaceNext() {
+    EditorTab* tab = currentEditor();
+    if (!tab || findEntry_.get_text().empty()) return;
+    if (!tab->replace(findEntry_.get_text(), replaceEntry_.get_text(), findCase_.get_active()))
+        findCount_.set_text("No matches");
+}
+
+void MainWindow::replaceAllInFile() {
+    EditorTab* tab = currentEditor();
+    if (!tab || findEntry_.get_text().empty()) return;
+    const int n = tab->replaceAll(findEntry_.get_text(), replaceEntry_.get_text(), findCase_.get_active());
+    findCount_.set_text(n == 0 ? "No matches" : "Replaced " + std::to_string(n));
+    setStatus(n == 0 ? std::string("Nothing to replace")
+                     : "Replaced " + std::to_string(n) + (n == 1 ? " match" : " matches") + " in " +
+                           tab->path().filename().string() + " (Ctrl+Z undoes it)");
+}
+
 void MainWindow::findNext(bool forward, bool incremental) {
     EditorTab* tab = currentEditor();
     if (!tab) return;
@@ -2064,15 +2171,18 @@ void MainWindow::updateToolbar() {
         b->set_sensitive(running || enabled);
     };
     auto builtBy = [&](Task t) { return building && buildTask_ == t; };
+    // Without a project there's nothing to build, run or debug: those buttons and menu items are
+    // greyed out (and their keys do nothing) until one is open.
+    const bool project = session_ != nullptr;
     // Only one build at a time, and the Run tab runs one program (or the program being debugged).
-    set(Task::Compile, builtBy(Task::Compile), !building);
-    set(Task::Rebuild, builtBy(Task::Rebuild), !building);
-    set(Task::Clean, builtBy(Task::Clean), !building);
+    set(Task::Compile, builtBy(Task::Compile), project && !building);
+    set(Task::Rebuild, builtBy(Task::Rebuild), project && !building);
+    set(Task::Clean, builtBy(Task::Clean), project && !building);
     set(Task::CompileRun, builtBy(Task::CompileRun) || (program && programTask_ == Task::CompileRun),
-        !building && !program && !debugging);
+        project && !building && !program && !debugging);
     set(Task::Run, builtBy(Task::Run) || (program && programTask_ == Task::Run) || (web && serving),
-        !building && !program && !debugging);
-    set(Task::Debug, builtBy(Task::Debug) || debugging, !building && !program);
+        project && !building && !program && !debugging);
+    set(Task::Debug, builtBy(Task::Debug) || debugging, project && !building && !program);
 
     const auto state = debugger_ ? debugger_->state() : DebugController::State::Finished;
     const bool jsRunning = jsDebugger_ && jsDebugger_->state() == JsDebugger::State::Running;
@@ -2083,6 +2193,21 @@ void MainWindow::updateToolbar() {
     continueButton_->set_sensitive(running || paused);
     for (Gtk::Button* b : stepButtons_) b->set_sensitive(paused);
     devServerButton_->setRunning(serving);
+
+    // The same for the menus (Execute, Debug, Project, Tools) and their keys.
+    auto enable = [this](const char* name, bool on) {
+        if (auto action = std::dynamic_pointer_cast<Gio::SimpleAction>(lookup_action(name))) action->set_enabled(on);
+    };
+    for (const char* name : {"compile", "rebuild", "clean", "compile-run", "run", "debug", "project-options", "packages"})
+        enable(name, project);
+    enable("stop", building || program || (web && serving));
+    enable("debug-continue", running || paused);
+    enable("debug-pause", running);
+    enable("debug-stop", debugging || builtBy(Task::Debug));
+    for (const char* name : {"step-over", "step-into", "step-out"}) enable(name, paused);
+    enable("project-add-file", !folder_.empty());
+    enable("close-project", !folder_.empty());
+    for (const char* name : {"web-install", "web-tests", "dev-server", "dev-server-open"}) enable(name, web);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2283,6 +2408,62 @@ void MainWindow::installDependencies() {
                     if (ok) refreshWebProject();
                 },
                 "Install");
+}
+
+void MainWindow::chooseProgram() {
+    if (!session_) return;
+    const auto programs = cmakeExecutables(session_->root());
+    if (programs.empty()) {
+        showInfo(*this, "No programs to choose from",
+                 "None of this project's CMakeLists.txt files has an add_executable(). Run and Debug start the "
+                 "program named " + session_->project().targetName + ".");
+        return;
+    }
+    std::vector<Glib::ustring> buttons{"Cancel"};
+    for (const auto& p : programs) buttons.push_back(p == session_->project().targetName ? p + " (now)" : p);
+    askChoice(*this, "Which program should Run and Debug start?",
+              "The executables this project's CMakeLists.txt files define. The choice is saved in its .kevc.",
+              buttons, 0, 0, [this, programs](int choice) {
+                  if (choice < 1 || !session_) return;
+                  session_->project().targetName = programs[static_cast<size_t>(choice - 1)];
+                  saveProjectUi(); // writes the .kevc
+                  setStatus("Run and Debug start " + session_->project().targetName);
+              });
+}
+
+void MainWindow::showNpmPackages() {
+    if (!session_ || session_->project().kind != ProjectKind::WebTs || !web_.hasPackageJson) {
+        setStatus("Packages are for web projects with a package.json");
+        return;
+    }
+    auto* dialog = new NpmPackagesDialog(*this, session_->root(), web_.packageManagerName()); // deletes itself
+    dialog->signalSaved().connect([this](bool install) {
+        refreshWebProject();
+        updateTitle();
+        applyProfile();
+        if (install) installDependencies();
+        else setStatus("Saved package.json: install with Project → Install Dependencies");
+    });
+    dialog->signalLogin().connect([this](const std::string& registry) { npmLogin(registry); });
+    dialog->present();
+}
+
+void MainWindow::npmLogin(const std::string& registry) {
+    if (folder_.empty()) return;
+    if (runConsole_.childRunning()) {
+        setStatus("Something is already running in the Run tab; stop it first (Ctrl+F2)");
+        return;
+    }
+    std::vector<std::string> argv{"npm", "login"};
+    if (!registry.empty()) argv.push_back("--registry=" + registry);
+    showBottomPage(runConsole_);
+    runConsole_.runProgram(argv, folder_, [this](const std::string& outcome) {
+        setStatus("npm login: " + outcome);
+        updateToolbar();
+    });
+    runConsole_.focusTerminal();
+    setStatus("Log in in the Run tab (your token is saved in ~/.npmrc)");
+    updateToolbar();
 }
 
 void MainWindow::runScript(const std::string& name) {
@@ -2903,6 +3084,7 @@ void MainWindow::onBreakpointToggled(EditorTab* tab, int line, bool on) {
     if (debugger_) debugger_->setBreakpoint(tab->path(), line, on);
     if (jsDebugger_) jsDebugger_->setBreakpoints(tab->path(), breakpoints_[tab->path()]);
     updateBreakpointsPanel();
+    saveProjectState();
     setStatus(std::string(on ? "Breakpoint set at " : "Breakpoint removed from ") + tab->path().filename().string() +
               ":" + std::to_string(line));
 }
@@ -2915,6 +3097,72 @@ void MainWindow::syncBreakpoints(EditorTab* tab) {
     if (now == stored) return;
     stored = now;
     updateBreakpointsPanel();
+}
+
+void MainWindow::saveProjectState() {
+    if (folder_.empty()) return;
+    for (EditorTab* tab : editors()) syncBreakpoints(tab); // marks move with edits
+    ProjectState state{breakpoints_, watches_.expressions(), {}};
+    // A project without a .kevc (a web folder) keeps its look here instead.
+    if (session_ && session_->projectFile().empty()) state.ui = session_->project().ui;
+    std::error_code ec;
+    projectState_.save(fs::weakly_canonical(folder_, ec), state);
+}
+
+void MainWindow::restoreProjectState() {
+    std::error_code ec;
+    const ProjectState state = folder_.empty() ? ProjectState{} : projectState_.load(fs::weakly_canonical(folder_, ec));
+    breakpoints_ = state.breakpoints;
+    updateBreakpointsPanel();
+    watches_.setExpressions(state.watches);
+    if (session_ && session_->projectFile().empty()) session_->project().ui = state.ui;
+}
+
+bool MainWindow::toolbarShown(const std::string& group) const {
+    if (session_) {
+        const auto& toolbars = session_->project().ui.toolbars;
+        if (auto it = toolbars.find(group); it != toolbars.end()) return it->second;
+    }
+    return toolbarGroupShown(app_.settings(), group, profile_);
+}
+
+bool MainWindow::panelShownHere(const std::string& panel) const {
+    if (session_) {
+        const auto& panels = session_->project().ui.panels;
+        if (auto it = panels.find(panel); it != panels.end()) return it->second;
+    }
+    return panelShown(app_.settings(), panel, profile_);
+}
+
+void MainWindow::setToolbarShownHere(const std::string& group, bool shown) {
+    if (!session_) {
+        setToolbarGroupShown(app_.settings(), group, profile_, shown);
+        return;
+    }
+    session_->project().ui.toolbars[group] = shown;
+    saveProjectUi();
+}
+
+void MainWindow::setPanelShownHere(const std::string& panel, bool shown) {
+    if (!session_) {
+        setPanelShown(app_.settings(), panel, profile_, shown);
+        return;
+    }
+    session_->project().ui.panels[panel] = shown;
+    saveProjectUi();
+}
+
+void MainWindow::saveProjectUi() {
+    if (!session_) return;
+    if (session_->projectFile().empty()) {
+        saveProjectState();
+        return;
+    }
+    try {
+        session_->project().save(session_->projectFile());
+    } catch (const std::exception& e) {
+        setStatus(std::string("Couldn't save the project's settings: ") + e.what());
+    }
 }
 
 void MainWindow::updateBreakpointsPanel() {
@@ -2952,6 +3200,7 @@ void MainWindow::setupIntelliSense(EditorTab* tab) {
         lsp_->saved(tab);
         scheduleKitRefresh(); // load keys, actions, .env values
         syncBreakpoints(tab);
+        saveProjectState();
     });
 
     // Breakpoints set before the file was (re)opened.
@@ -2989,28 +3238,165 @@ void MainWindow::setupIntelliSense(EditorTab* tab) {
         GtkTextIter iter;
         if (!gtk_text_view_get_iter_at_location(GTK_TEXT_VIEW(tab->view()), &iter, bx, by)) return;
         click->set_state(Gtk::EventSequenceState::CLAIMED);
-        gotoDefinition(tab, iter);
+        lookUp(tab, iter, Lookup::Definition);
     });
     view->add_controller(click);
+    // Right-click puts the cursor where it was clicked (unless that's inside the selection), so the
+    // menu's Go to… items look up the word under the pointer.
+    auto rightClick = Gtk::GestureClick::create();
+    rightClick->set_button(GDK_BUTTON_SECONDARY);
+    rightClick->set_propagation_phase(Gtk::PropagationPhase::CAPTURE);
+    rightClick->signal_pressed().connect([tab](int, double x, double y) {
+        GtkTextView* text = GTK_TEXT_VIEW(tab->view());
+        int bx = 0, by = 0;
+        gtk_text_view_window_to_buffer_coords(text, GTK_TEXT_WINDOW_WIDGET, static_cast<int>(x), static_cast<int>(y), &bx, &by);
+        GtkTextIter iter, start, end;
+        if (!gtk_text_view_get_iter_at_location(text, &iter, bx, by)) return;
+        GtkTextBuffer* buffer = gtk_text_view_get_buffer(text);
+        if (gtk_text_buffer_get_selection_bounds(buffer, &start, &end) && gtk_text_iter_in_range(&iter, &start, &end)) return;
+        gtk_text_buffer_place_cursor(buffer, &iter);
+    });
+    view->add_controller(rightClick);
+    // Right-click: the Go to… items above GTK's Cut/Copy/Paste.
+    gtk_text_view_set_extra_menu(GTK_TEXT_VIEW(tab->view()),
+                                 G_MENU_MODEL((lsp::serverFor(tab->path()) == lsp::Server::Clangd ? cppEditorMenu_ : editorMenu_)->gobj()));
 }
 
-void MainWindow::gotoDefinition(EditorTab* tab, const GtkTextIter& at) {
-    const bool sent = lsp_->handles(tab);
-    if (!sent) {
-        setStatus("Go to Definition needs IntelliSense for this file");
+void MainWindow::lookUpAtCursor(Lookup what) {
+    EditorTab* tab = currentEditor();
+    if (!tab) return;
+    GtkTextIter cursor;
+    GtkTextBuffer* text = GTK_TEXT_BUFFER(tab->buffer());
+    gtk_text_buffer_get_iter_at_mark(text, &cursor, gtk_text_buffer_get_insert(text));
+    lookUp(tab, cursor, what);
+}
+
+void MainWindow::lookUp(EditorTab* tab, const GtkTextIter& at, Lookup what) {
+    if (!lsp_->handles(tab)) {
+        setStatus("Go to Definition and the like need IntelliSense for this file");
         return;
     }
-    setStatus("Finding definition…");
-    lsp_->definition(tab, at, [this](std::optional<LspLocation> location) {
-        if (!location) {
-            setStatus("No definition found");
+    struct Kind {
+        const char* method;
+        const char* name; // "No … found"
+    };
+    static const std::map<Lookup, Kind> kinds{
+        {Lookup::Definition, {"textDocument/definition", "definition"}},
+        {Lookup::Declaration, {"textDocument/declaration", "declaration"}},
+        {Lookup::TypeDefinition, {"textDocument/typeDefinition", "type definition"}},
+        {Lookup::Implementation, {"textDocument/implementation", "implementation"}},
+        {Lookup::References, {"textDocument/references", "references"}},
+    };
+    const Kind kind = kinds.at(what);
+    setStatus(std::string("Finding ") + kind.name + "…");
+    // Iterators don't survive the wait: keep the place as a line and UTF-16 column.
+    const auto pos = LspManager::positionOf(at);
+    const int line = pos.value("line", 0), utf16 = pos.value("character", 0);
+    std::weak_ptr<int> alive = lifetime_;
+    lsp_->locations(kind.method, tab, at, [this, tab, what, kind, line, utf16, alive](std::vector<LspLocation> found) {
+        if (alive.expired()) return;
+        const auto open = editors(); // the tab may have been closed while the server thought
+        if (std::find(open.begin(), open.end(), tab) == open.end()) return;
+        const GtkTextIter where = LspManager::iterAt(GTK_TEXT_BUFFER(tab->buffer()), line, utf16);
+        auto inTypings = [](const std::vector<LspLocation>& locs) {
+            return !locs.empty() && std::all_of(locs.begin(), locs.end(), [](const LspLocation& l) {
+                return l.file.string().ends_with(".d.ts");
+            });
+        };
+        // A library's .d.ts only declares it: TypeScript can say where its JavaScript really is.
+        if (what == Lookup::Definition && inTypings(found)) {
+            lsp_->sourceDefinition(tab, where, [this, tab, found, line, utf16, alive](std::vector<LspLocation> source) {
+                if (alive.expired()) return;
+                const auto open = editors();
+                if (std::find(open.begin(), open.end(), tab) == open.end()) return;
+                const bool better = !source.empty() && !std::all_of(source.begin(), source.end(), [](const LspLocation& l) {
+                    return l.file.string().ends_with(".d.ts");
+                });
+                showLocations(tab, LspManager::iterAt(GTK_TEXT_BUFFER(tab->buffer()), line, utf16), "definition",
+                              better ? source : found);
+            });
             return;
         }
-        if (EditorTab* target = openFile(location->file)) {
-            target->placeCursor(LspManager::iterAt(GTK_TEXT_BUFFER(target->buffer()), location->line, location->utf16));
-            setStatus(location->file.filename().string() + ":" + std::to_string(location->line + 1));
-        }
+        showLocations(tab, where, kind.name, std::move(found));
     });
+}
+
+void MainWindow::openLocation(const LspLocation& location) {
+    if (EditorTab* target = openFile(location.file)) {
+        target->placeCursor(LspManager::iterAt(GTK_TEXT_BUFFER(target->buffer()), location.line, location.utf16));
+        setStatus(location.file.filename().string() + ":" + std::to_string(location.line + 1));
+    }
+}
+
+void MainWindow::showLocations(EditorTab* tab, const GtkTextIter& at, const Glib::ustring& what,
+                               std::vector<LspLocation> locations) {
+    if (locations.empty()) {
+        setStatus("No " + what + " found here");
+        return;
+    }
+    if (locations.size() == 1) {
+        openLocation(locations.front());
+        return;
+    }
+    // Several: a list at the cursor, each with its file, line and the line's text.
+    auto* list = Gtk::make_managed<Gtk::ListBox>();
+    list->set_selection_mode(Gtk::SelectionMode::BROWSE);
+    list->set_activate_on_single_click(true);
+    auto shown = std::make_shared<std::vector<LspLocation>>();
+    for (const auto& loc : locations) {
+        if (shown->size() == 100) break;
+        std::string text;
+        if (auto* open = dynamic_cast<EditorTab*>(findDocument(loc.file))) {
+            text = open->lineText(loc.line + 1);
+        } else {
+            std::ifstream in(loc.file);
+            for (int i = 0; i <= loc.line && std::getline(in, text); ++i) {
+            }
+        }
+        const size_t first = text.find_first_not_of(" \t");
+        text = first == std::string::npos ? std::string() : text.substr(first, 120);
+        std::error_code ec;
+        const fs::path rel = folder_.empty() ? loc.file : loc.file.lexically_relative(folder_);
+        const std::string where = rel.empty() || *rel.begin() == ".." ? loc.file.string() : rel.generic_string();
+        auto* label = Gtk::make_managed<Gtk::Label>();
+        label->set_markup("<b>" + Glib::Markup::escape_text(loc.file.filename().string()) + "</b>:" +
+                          std::to_string(loc.line + 1) + "  <span alpha=\"60%\">" + Glib::Markup::escape_text(where) +
+                          "</span>\n<tt>" + Glib::Markup::escape_text(text) + "</tt>");
+        label->set_xalign(0.0f);
+        label->set_ellipsize(Pango::EllipsizeMode::END);
+        label->set_margin(4);
+        list->append(*label);
+        shown->push_back(loc);
+    }
+    list->signal_row_activated().connect([this, shown](Gtk::ListBoxRow* row) {
+        const LspLocation chosen = (*shown)[static_cast<size_t>(row->get_index())];
+        locationsPopover_.popdown();
+        Glib::signal_idle().connect_once(sigc::track_obj([this, chosen] { openLocation(chosen); }, *this));
+    });
+    auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+    auto* title = Gtk::make_managed<Gtk::Label>();
+    const Glib::ustring plural = what.raw().ends_with("s") ? what : what + "s"; // several, so plural
+    title->set_markup("<b>" + std::to_string(locations.size()) + " " + Glib::Markup::escape_text(plural) + "</b>  " +
+                      "<span alpha=\"60%\">click one to go there</span>");
+    title->set_xalign(0.0f);
+    box->append(*title);
+    auto* scroller = Gtk::make_managed<Gtk::ScrolledWindow>();
+    scroller->set_child(*list);
+    scroller->set_propagate_natural_height(true);
+    scroller->set_max_content_height(360);
+    scroller->set_min_content_width(520);
+    box->append(*scroller);
+    locationsPopover_.set_child(*box);
+    // Under the word, in editorArea_'s coordinates.
+    GdkRectangle rect;
+    gtk_text_view_get_iter_location(GTK_TEXT_VIEW(tab->view()), &at, &rect);
+    int wx = 0, wy = 0;
+    gtk_text_view_buffer_to_window_coords(GTK_TEXT_VIEW(tab->view()), GTK_TEXT_WINDOW_WIDGET, rect.x, rect.y, &wx, &wy);
+    graphene_point_t point = GRAPHENE_POINT_INIT(float(wx), float(wy)), inArea;
+    if (!gtk_widget_compute_point(GTK_WIDGET(tab->view()), GTK_WIDGET(editorArea_.gobj()), &point, &inArea)) return;
+    locationsPopover_.set_pointing_to(Gdk::Rectangle(int(inArea.x), int(inArea.y), std::max(rect.width, 1), rect.height));
+    locationsPopover_.popup();
+    setStatus(std::to_string(locations.size()) + " " + plural + ": choose one");
 }
 
 void MainWindow::scheduleSymbolsRefresh() {
@@ -3043,8 +3429,13 @@ void MainWindow::showProjectOptions(bool packagesPage) {
         showError(*this, "No project open", "Project options belong to a Kev-C++ project. Create or open one first.");
         return;
     }
+    if (!session_->project().buildFileManaged) {
+        chooseProgram();
+        return;
+    }
     if (session_->project().kind == ProjectKind::WebTs) {
-        setStatus("TypeScript projects have no compiler or linker options");
+        if (packagesPage) showNpmPackages();
+        else setStatus("Web projects have no compiler or linker options: Project → Packages manages their npm packages");
         return;
     }
     using Page = ProjectOptionsDialog::Page;

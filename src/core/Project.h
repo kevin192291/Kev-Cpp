@@ -1,5 +1,7 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 #include <filesystem>
 #include <map>
 #include <string>
@@ -24,6 +26,18 @@ struct Package {
     bool operator==(const Package&) const = default;
 };
 
+// How the IDE shows a project, saved with it so it opens the same for everyone: toolbar groups and
+// panels shown or hidden (by id; ones not listed follow the IDE's defaults for the kind of project),
+// and the Debug/Release choice.
+struct ProjectUi {
+    std::map<std::string, bool> toolbars;
+    std::map<std::string, bool> panels;
+    std::string buildConfig; // "Debug" or "Release"; empty: Debug
+
+    bool empty() const { return toolbars.empty() && panels.empty() && buildConfig.empty(); }
+    bool operator==(const ProjectUi&) const = default;
+};
+
 struct Project {
     std::string name;
     ProjectKind kind = ProjectKind::Cpp;
@@ -33,6 +47,9 @@ struct Project {
 
     // When false the IDE adopted an existing CMakeLists.txt whose target it must not redefine.
     bool ownsTarget = true;
+    // When false the project's CMakeLists.txt is entirely its own ("Build As It Is"): Kev-C++ writes
+    // no managed block and doesn't track sources; it builds with CMake and runs `targetName`.
+    bool buildFileManaged = true;
     std::string targetName; // CMake target / Makefile TARGET
 
     std::vector<std::string> sources;         // relative to the project root, sorted
@@ -47,6 +64,7 @@ struct Project {
     std::vector<std::string> linkerFlags;
     bool staticRuntime = false; // -static-libstdc++ -static-libgcc
     std::vector<Package> packages;
+    ProjectUi ui;
     // Top-level .kevc keys this version doesn't use (as JSON text), written back on save so a
     // project saved by an older Kev-C++ keeps what a newer one added.
     std::map<std::string, std::string> extra;
@@ -62,6 +80,10 @@ struct Project {
     std::string effectiveOutputName() const { return outputName.empty() ? targetName : outputName; }
     std::filesystem::path buildFileName() const; // CMakeLists.txt or Makefile
 };
+
+// The "ui" object of a .kevc (and of a web project's remembered state).
+nlohmann::json uiToJson(const ProjectUi& ui);
+ProjectUi uiFromJson(const nlohmann::json& j);
 
 std::string toString(ProjectKind kind);
 std::string toString(TargetType type);

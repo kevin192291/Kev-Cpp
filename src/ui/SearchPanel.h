@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -49,6 +50,10 @@ public:
     }
     // Escape in the search field: back to the editor.
     sigc::signal<void()>& signalDone() { return done_; }
+    // Replace All in a file that's open with unsaved changes: its new text, for the editor.
+    sigc::signal<void(const std::filesystem::path&, const std::string&)>& signalReplaceInEditor() {
+        return replaceInEditor_;
+    }
 
 private:
     void search();
@@ -59,11 +64,16 @@ private:
     void onBindItem(const Glib::RefPtr<Gtk::ListItem>& item);
     void onActivate(guint position);
     void setupOption(Gtk::ToggleButton& button, const char* markup, const char* tooltip);
+    void replaceAll(); // asks first
+    void doReplaceAll(const std::string& text, const std::string& with);
+    std::shared_ptr<const search::Matcher> matcher(const std::string& text) const;
 
     std::filesystem::path root_;
     Gtk::SearchEntry query_;
     Gtk::ToggleButton matchCase_, wholeWord_, regex_;
     Gtk::Entry include_;
+    Gtk::Entry replace_;
+    Gtk::Button replaceAll_{"Replace All"};
     Gtk::Label summary_;
     Gtk::ScrolledWindow scroller_;
     Gtk::ListView list_;
@@ -77,6 +87,7 @@ private:
     std::function<std::map<std::filesystem::path, std::string>()> unsaved_;
     sigc::signal<void(const std::filesystem::path&, int, size_t, size_t)> open_;
     sigc::signal<void()> done_;
+    sigc::signal<void(const std::filesystem::path&, const std::string&)> replaceInEditor_;
     BackgroundJob job_; // last: stopped before anything it posts to goes away
 };
 

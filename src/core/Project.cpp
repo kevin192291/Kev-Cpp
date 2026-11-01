@@ -63,6 +63,29 @@ bool hasExtension(const Array& exts, const std::string& ext) {
 
 } // namespace
 
+nlohmann::json uiToJson(const ProjectUi& ui) {
+    json j = json::object();
+    if (!ui.toolbars.empty()) j["toolbars"] = ui.toolbars;
+    if (!ui.panels.empty()) j["panels"] = ui.panels;
+    if (!ui.buildConfig.empty()) j["buildConfig"] = ui.buildConfig;
+    return j;
+}
+
+ProjectUi uiFromJson(const nlohmann::json& j) {
+    ProjectUi ui;
+    if (!j.is_object()) return ui;
+    for (const char* key : {"toolbars", "panels"}) {
+        const auto it = j.find(key);
+        if (it == j.end() || !it->is_object()) continue;
+        auto& out = std::string(key) == "toolbars" ? ui.toolbars : ui.panels;
+        for (const auto& [id, shown] : it->items())
+            if (shown.is_boolean()) out[id] = shown.get<bool>();
+    }
+    const std::string config = j.value("buildConfig", "");
+    if (config == "Debug" || config == "Release") ui.buildConfig = config;
+    return ui;
+}
+
 Project Project::load(const std::filesystem::path& projectFile) {
     std::ifstream in(projectFile);
     if (!in) throw std::runtime_error("cannot open " + projectFile.string());
@@ -75,6 +98,7 @@ Project Project::load(const std::filesystem::path& projectFile) {
     p.standard = j.value("standard", p.kind == ProjectKind::C ? "17" : "20");
     p.outputName = j.value("outputName", "");
     p.ownsTarget = j.value("ownsTarget", true);
+    p.buildFileManaged = j.value("buildFileManaged", true);
     p.targetName = j.value("targetName", sanitizeTargetName(p.name));
     p.sources = j.value("sources", std::vector<std::string>{});
     p.excludedSources = j.value("excludedSources", std::vector<std::string>{});
@@ -93,10 +117,11 @@ Project Project::load(const std::filesystem::path& projectFile) {
     p.staticRuntime = linker.value("staticRuntime", false);
 
     p.packages = j.value("packages", std::vector<Package>{});
+    p.ui = uiFromJson(j.value("ui", json::object()));
 
     static const std::array known{"kevcFormat", "name", "kind", "targetType", "standard", "outputName",
-                                  "ownsTarget", "targetName", "sources", "excludedSources", "compiler",
-                                  "linker", "packages"};
+                                  "ownsTarget", "buildFileManaged", "targetName", "sources", "excludedSources",
+                                  "compiler", "linker", "packages", "ui"};
     for (const auto& [key, value] : j.items())
         if (std::find(known.begin(), known.end(), key) == known.end()) p.extra[key] = value.dump();
     return p;
@@ -127,6 +152,8 @@ void Project::save(const std::filesystem::path& projectFile) const {
           {"staticRuntime", staticRuntime}}},
         {"packages", packages},
     };
+    if (!buildFileManaged) j["buildFileManaged"] = false;
+    if (!ui.empty()) j["ui"] = uiToJson(ui);
     for (const auto& [key, text] : extra)
         if (!j.contains(key)) j[key] = json::parse(text, nullptr, false);
     // Write to a temp file and rename so a crash never leaves a half-written project file.

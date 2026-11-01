@@ -15,6 +15,9 @@ enum class ProjectTemplate { CppConsole, CppStatic, CppShared, CConsole, GtkmmAp
 
 // Directories never scanned for sources or shown in the project tree.
 bool isIgnoredDirName(const std::string& name);
+// The executables a CMake project defines (add_executable, not IMPORTED or ALIAS ones), the top
+// CMakeLists.txt's first, then its subfolders' in path order.
+std::vector<std::string> cmakeExecutables(const std::filesystem::path& root);
 
 // A project open on disk: the .kevc model plus the files it manages.
 class ProjectSession {
@@ -37,6 +40,9 @@ public:
     static ProjectSession create(const std::filesystem::path& parentDir, const std::string& name, ProjectTemplate tmpl);
     // Adds a .kevc and a managed block to a CMake project that Kev-C++ did not create.
     static ProjectSession adoptCMake(const std::filesystem::path& root);
+    // A CMake project built as it is: only a .kevc is written (buildFileManaged = false), whose
+    // targetName is the first executable its CMakeLists.txt files define.
+    static ProjectSession useCMakeAsIs(const std::filesystem::path& root);
     // A TypeScript project for a folder with a package.json but no .kevc. It lives in memory only:
     // nothing is written to the folder, so opening someone's npm project leaves it as it was.
     static ProjectSession openWebFolder(const std::filesystem::path& root);

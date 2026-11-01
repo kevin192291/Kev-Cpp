@@ -1,6 +1,7 @@
 #include "ui/SearchPanel.h"
 
 #include "core/Icons.h"
+#include "ui/Dialogs.h"
 #include "ui/SearchMarkup.h"
 
 #include <chrono>
@@ -61,6 +62,22 @@ SearchPanel::SearchPanel() : Gtk::Box(Gtk::Orientation::VERTICAL, 4) {
     top->append(wholeWord_);
     top->append(regex_);
     append(*top);
+
+    // Replace: always there, under the search field, so it's found without looking for it.
+    auto* replaceRow = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 4);
+    replaceRow->set_margin_start(4);
+    replaceRow->set_margin_end(4);
+    replace_.set_placeholder_text("Replace with…");
+    replace_.set_tooltip_text("What every match becomes when you press Replace All. With .* on, $1 inserts the "
+                              "first ( ) group of the match");
+    replace_.set_hexpand(true);
+    replace_.signal_activate().connect(sigc::mem_fun(*this, &SearchPanel::replaceAll));
+    replaceAll_.set_tooltip_text("Replace every match in the list (asks first)");
+    replaceAll_.set_sensitive(false);
+    replaceAll_.signal_clicked().connect(sigc::mem_fun(*this, &SearchPanel::replaceAll));
+    replaceRow->append(replace_);
+    replaceRow->append(replaceAll_);
+    append(*replaceRow);
 
     include_.set_placeholder_text("Files to include: *.cpp, src/, !tests/");
     include_.set_tooltip_text("Comma-separated: *.h matches file names, src/ a folder, src/*.h paths; "
@@ -151,6 +168,64 @@ void SearchPanel::focusSearch(const Glib::ustring& text) {
 void SearchPanel::clearResults() {
     files_->remove_all();
     shownFiles_ = shownMatches_ = 0;
+    replaceAll_.set_sensitive(false);
+}
+
+std::shared_ptr<const search::Matcher> SearchPanel::matcher(const std::string& text) const {
+    return std::make_shared<const search::Matcher>(
+        search::TextQuery{text, matchCase_.get_active(), wholeWord_.get_active(), regex_.get_active()});
+}
+
+void SearchPanel::replaceAll() {
+    const std::string text = query_.get_text(), with = replace_.get_text();
+    auto* window = dynamic_cast<Gtk::Window*>(get_root());
+    if (text.empty() || root_.empty() || shownMatches_ == 0 || !window) return;
+    const Glib::ustring what = shownMatches_ == 1 ? "1 match" : thousands(shownMatches_) + " matches";
+    const Glib::ustring where = shownFiles_ == 1 ? "1 file" : thousands(shownFiles_) + " files";
+    askChoice(*window, "Replace " + what + " in " + where + "?",
+              "\u201c" + text + "\u201d becomes \u201c" + with +
+                  "\u201d. Files open with unsaved changes change in their editor (save them to keep it); the "
+                  "others are saved now. Undo with Ctrl+Z in an editor, or with git.",
+              {"Cancel", "Replace All"}, 0, 1, [this, text, with](int choice) {
+                  if (choice == 1) doReplaceAll(text, with);
+              });
+}
+
+void SearchPanel::doReplaceAll(const std::string& text, const std::string& with) {
+    const auto m = matcher(text);
+    if (!m->valid()) return;
+    const search::PathFilter filter{std::string(include_.get_text())};
+    auto unsaved = unsaved_ ? unsaved_() : std::map<fs::path, std::string>{};
+    // The files in the list (what the user saw), each searched again as it is now.
+    std::vector<std::string> files;
+    for (guint i = 0; i < files_->get_n_items(); ++i) files.push_back(files_->get_item(i)->rel);
+    size_t total = 0, changedFiles = 0;
+    std::vector<std::string> failed;
+    for (const auto& rel : files) {
+        std::error_code ec;
+        const fs::path file = fs::weakly_canonical(root_ / rel, ec);
+        size_t n = 0;
+        if (auto it = unsaved.find(file); it != unsaved.end()) {
+            std::string replaced = m->replace(it->second, with, &n);
+            if (n) replaceInEditor_.emit(file, replaced);
+        } else {
+            try {
+                const std::string replaced = m->replace(Glib::file_get_contents(file.string()), with, &n);
+                if (n) Glib::file_set_contents(file.string(), replaced); // an open editor reloads it
+            } catch (const Glib::Error&) {
+                failed.push_back(rel);
+                n = 0;
+            }
+        }
+        total += n;
+        if (n) ++changedFiles;
+    }
+    clearResults();
+    replaceResults_ = false;
+    Glib::ustring summary = "Replaced " + thousands(total) + (total == 1 ? " match in " : " matches in ") +
+                            thousands(changedFiles) + (changedFiles == 1 ? " file." : " files.");
+    if (!failed.empty()) summary += " Couldn't change " + failed.front() + (failed.size() > 1 ? " and others." : ".");
+    summary_.set_text(summary);
 }
 
 void SearchPanel::search() {
@@ -164,8 +239,7 @@ void SearchPanel::search() {
     };
     if (root_.empty()) return stop("Open a project or folder to search its files.");
     if (text.empty()) return stop("");
-    auto matcher = std::make_shared<const search::Matcher>(
-        search::TextQuery{text, matchCase_.get_active(), wholeWord_.get_active(), regex_.get_active()});
+    auto matcher = this->matcher(text);
     if (!matcher->valid()) return stop(matcher->error());
     auto filter = std::make_shared<const search::PathFilter>(std::string(include_.get_text()));
 
@@ -242,6 +316,7 @@ void SearchPanel::finish(const search::Totals& totals) {
         summary_.set_text("No results in " + thousands(totals.files) + (totals.files == 1 ? " file." : " files."));
         return;
     }
+    replaceAll_.set_sensitive(true);
     std::string text = thousands(shownMatches_) + (shownMatches_ == 1 ? " result in " : " results in ") +
                        thousands(shownFiles_) + (shownFiles_ == 1 ? " file" : " files");
     if (totals.truncated) text += ". Stopped at " + thousands(kMaxMatches) + ": narrow the search to see the rest";

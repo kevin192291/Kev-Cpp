@@ -56,6 +56,13 @@ public:
                     std::function<void(const json& items, bool incomplete)> done);
     void hover(EditorTab* tab, const GtkTextIter& at, std::function<void(const std::string& pangoMarkup)> done);
     void definition(EditorTab* tab, const GtkTextIter& at, std::function<void(std::optional<LspLocation>)> done);
+    // Every location a position request answers: "textDocument/definition", "…/declaration",
+    // "…/typeDefinition", "…/implementation" or "…/references". Empty when there's none (or no server).
+    void locations(const std::string& method, EditorTab* tab, const GtkTextIter& at,
+                   std::function<void(std::vector<LspLocation>)> done);
+    // TypeScript's "Go to Source Definition": the JavaScript a library's .d.ts declarations describe.
+    // Empty for other servers.
+    void sourceDefinition(EditorTab* tab, const GtkTextIter& at, std::function<void(std::vector<LspLocation>)> done);
     void documentSymbols(EditorTab* tab, std::function<void(const json& symbols)> done);
 
     std::vector<std::string> triggerCharacters(EditorTab* tab) const;

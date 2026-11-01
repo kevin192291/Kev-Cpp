@@ -5,6 +5,7 @@
 #include "core/BuildPlan.h"
 #include "core/Diagnostics.h"
 #include "core/ProjectSession.h"
+#include "core/ProjectState.h"
 #include "core/RecentProjects.h"
 #include "core/Version.h"
 #include "core/WebProject.h"
@@ -135,6 +136,9 @@ private:
     std::map<std::filesystem::path, std::string> unsavedEditorText();
     Glib::ustring selectedLineText(); // the current editor's selection, if it's on one line
     void showFindBar();
+    void showReplaceBar(); // the find bar with its Replace row (Ctrl+R)
+    void replaceNext();
+    void replaceAllInFile();
     void findNext(bool forward, bool incremental = false);
     void gotoLine();
 
@@ -167,6 +171,11 @@ private:
     // Web projects (package.json): flavour, scripts, dependencies, SvelteKit creation.
     void refreshWebProject();
     void installDependencies();
+    // Project → Packages in a web project: versions, locking, the package source (NpmPackagesDialog).
+    void showNpmPackages();
+    // A Build As It Is project: which of its add_executable() programs Run and Debug start.
+    void chooseProgram();
+    void npmLogin(const std::string& registry); // `npm login` in the Run tab, where the password is typed
     void runScript(const std::string& name);
     Glib::ustring createSvelteKitApp(const std::string& name, const std::filesystem::path& parent);
     void openUrl(const std::string& url);
@@ -210,13 +219,32 @@ private:
     void toggleBreakpointAtCursor();
     void onBreakpointToggled(EditorTab* tab, int line, bool on);
     void syncBreakpoints(EditorTab* tab);
+    // Breakpoints and watches are remembered per project (core/ProjectState): saved whenever they
+    // change and before the project closes, restored when it opens.
+    void saveProjectState();
+    void restoreProjectState();
+    // The open project's look (core/Project's ProjectUi): toolbars and panels shown, Debug/Release.
+    // Kept in its .kevc, or with the remembered state for a web folder; with nothing open, View →
+    // Toolbars/Panels change the IDE's defaults for that kind of project instead.
+    bool toolbarShown(const std::string& group) const;
+    bool panelShownHere(const std::string& panel) const;
+    void setToolbarShownHere(const std::string& group, bool shown);
+    void setPanelShownHere(const std::string& panel, bool shown);
+    void saveProjectUi();
     void updateBreakpointsPanel();
     void addWatch();
     bool debugHover(EditorTab* tab, const GtkTextIter& at, std::function<void(GtkWidget*)> show);
 
     // IntelliSense
     void setupIntelliSense(EditorTab* tab);
-    void gotoDefinition(EditorTab* tab, const GtkTextIter& at);
+    // Go to Definition (through to a TypeScript library's own source when it lands in a .d.ts),
+    // Declaration, Type Definition, Implementation, or Find All References: the editor's right-click
+    // menu and the Search menu. One answer opens it; several are listed at the cursor to choose from.
+    enum class Lookup { Definition, Declaration, TypeDefinition, Implementation, References };
+    void lookUp(EditorTab* tab, const GtkTextIter& at, Lookup what);
+    void lookUpAtCursor(Lookup what);
+    void showLocations(EditorTab* tab, const GtkTextIter& at, const Glib::ustring& what, std::vector<LspLocation> locations);
+    void openLocation(const LspLocation& location);
     void refreshSymbols();
     void scheduleSymbolsRefresh();
     void showProjectOptions(bool packagesPage);
@@ -258,6 +286,8 @@ private:
     std::vector<TestCase> lastFailed_;
     sigc::connection symbolsTimer_;
     Gtk::Box editorArea_{Gtk::Orientation::VERTICAL};
+    Gtk::Popover locationsPopover_; // several answers to a Go to…, at the cursor
+    Glib::RefPtr<Gio::Menu> editorMenu_, cppEditorMenu_; // added to the editors' right-click menu
     Gtk::Notebook editors_;
     Gtk::Widget* welcomePage_ = nullptr;
     Gtk::Box* welcomeLists_ = nullptr; // pinned and recent projects, left of the shortcuts
@@ -270,6 +300,9 @@ private:
     Gtk::SearchEntry findEntry_;
     Gtk::CheckButton findCase_{"Match case"};
     Gtk::Label findCount_;
+    Gtk::ToggleButton replaceToggle_; // shows the Replace row
+    Gtk::Box replaceRow_{Gtk::Orientation::HORIZONTAL, 6};
+    Gtk::Entry replaceEntry_;
     Gtk::Notebook bottomDock_;
     Gtk::TextView compileLog_;
     Glib::RefPtr<Gtk::TextMark> logEnd_;
@@ -292,6 +325,7 @@ private:
     std::map<std::string, Glib::RefPtr<Gio::SimpleAction>> toolbarActions_;
     std::map<std::string, Glib::RefPtr<Gio::SimpleAction>> panelActions_;
     std::string profile_ = "none";
+    bool applyingProfile_ = false; // setting the Debug/Release choice from the project, not the user
     TaskButton* continueButton_ = nullptr; // Continue while paused, Pause while the program runs
     TaskButton* devServerButton_ = nullptr;
     std::vector<Gtk::Button*> stepButtons_; // only while paused in the debugger
@@ -329,6 +363,7 @@ private:
     DebugPanel debugPanel_;
     WatchPanel watches_;
     std::map<std::filesystem::path, std::set<int>> breakpoints_; // file -> 1-based lines
+    ProjectStateStore projectState_{ProjectStateStore::defaultFile()};
     EditorTab* execTab_ = nullptr;
     std::vector<StackFrame> frames_;
     unsigned stopGeneration_ = 0; // results from an earlier pause are ignored

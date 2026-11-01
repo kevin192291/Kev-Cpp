@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 187 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 210 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -42,11 +42,15 @@ verified by driving the real app (see "GUI testing").
   (the designer's catalog of container slots; placing, moving, wrapping, removing objects; signals),
   `UiCodegen` (gtkmm/C code and Blueprint from a design; Go to handler stubs), `FileOps` (the Project
   tab's rename/move checks, where open files go after a move), `Search` (project file listing, Go to
-  File fuzzy ranking, Find in Files matching, include filters, result previews).
-- `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon), `MainWindow`
+  File fuzzy ranking, Find in Files matching and replacing, include filters, result previews),
+  `ProjectState` (breakpoints, watches and a web folder's look, per project, in
+  `$XDG_STATE_HOME/kev-cpp/projects.json`), `NpmPackages` (version rules in words, text-preserving
+  package.json edits, .npmrc registries), `CppStyle` (the C/C++ layout kept while typing).
+- `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon, the splash), `MainWindow`
   (everything wired together: menus, actions, build/run, debugging, IntelliSense, dev server).
-- `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), ProjectTree (with Go to File
-  search, context menu, drag and drop), SymbolsPanel, and DocumentPage, the interface MainWindow saves,
+- `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), CppIndenter (the
+  GtkSourceIndenter for C/C++ files, using core/CppStyle), ProjectTree (with Go to File search,
+  context menu, drag and drop), SymbolsPanel, and DocumentPage, the interface MainWindow saves,
   closes and moves editor-area pages through.
 - `src/designer/` DesignerPage: the GTK designer's page for `.ui` files (preview, outline, properties,
   signals, XML); DesignerEditing.cpp holds its palette, drag and drop, clipboard and context menu;
@@ -65,7 +69,8 @@ verified by driving the real app (see "GUI testing").
 - `src/ui/` Dialogs, ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
   bottom/right/floating or closed; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton,
   icon tab labels), QuickSearch (the menu bar's search field), SearchPanel (the left dock's Search
-  tab: Find in Files), SearchMarkup (their shared highlighting), and the web panels
+  tab: Find in Files), SearchMarkup (their shared highlighting), NpmPackagesDialog (a web project's
+  Project → Packages), SplashWindow (start-up splash), and the web panels
   EnvPanel, TestsPanel, TracesPanel, DependenciesPanel (`src/editor/RoutesPanel` is the left-dock
   Routes tab, with a filter field).
 - `src/devserver/DevServer` runs the bundled `tools/devserver/devserver.mjs` or the project's Vite.
@@ -202,6 +207,37 @@ verified by driving the real app (see "GUI testing").
   or a press on the main window's own surface outside the field: presses in the popover also pass
   through the window's capture controllers, so the surface check matters. Row activation is deferred
   to idle because activating empties the list.
+- **Per-project state**: breakpoints and watches (and, for web folders, which have no .kevc, the
+  ProjectUi: toolbars/panels shown, Debug/Release) are saved to ProjectStateStore whenever they change
+  and before a project closes, and restored when it opens. C/C++ projects keep their ProjectUi in the
+  .kevc ("ui"). With a project open, View → Toolbars/Panels and the Debug/Release choice change the
+  project's ProjectUi; with nothing open, the per-profile settings as before. GUI tests must set
+  XDG_STATE_HOME (and XDG_DATA_HOME, for the trash) to scratch folders.
+- **No project open**: updateToolbar() also enables/disables the win.* build, run, debug and project
+  actions, so menus grey out and their keys do nothing.
+- **C/C++ indenter**: a GtkSourceIndenter set on C/C++ buffers. GtkSourceView 5 asks is_trigger on key
+  press, lets the input method insert the key, then calls indent() just after it (only if the IM
+  inserted exactly that character). Triggers: Return, '{', '}', ':'. Decisions are in core/CppStyle
+  (Allman braces, access specifiers at the class's indentation, ';' after a class body).
+- **Go to…**: LspManager::locations() for definition/declaration/typeDefinition/implementation/
+  references; Go to Definition that lands only in .d.ts files asks typescript-language-server's
+  `_typescript.goToSourceDefinition`. Several answers show in locationsPopover_ (parented to
+  editorArea_). Right-click moves the cursor (outside a selection) so the menu acts on the clicked
+  word; the items are the editors' extra_menu.
+- **Replace**: the find bar's Replace row uses GtkSourceSearchContext replace/replace_all; Find in
+  Files' Replace All re-runs the matcher on each listed file (search::Matcher::replace, $1 groups for
+  regex), writes files directly, and hands open modified editors their new text (one undo step).
+- **npm Packages dialog**: package.json is edited as text (npm::setDependency/removeDependency), so
+  formatting and key order stay; .npmrc keeps every line but registry ones. Newest versions and
+  lookups for Add use `npm view … --json` with the dialog's registry flags, 4 at a time.
+- **Build As It Is** (Project::buildFileManaged = false): no managed block, no source sync; the
+  project's CMakeLists.txt builds as usual and runnableOutput() looks for `targetName` anywhere under
+  the build folder. cmakeExecutables() lists add_executable() targets for the chooser. The repository
+  has its own Kev-Cpp.kevc this way.
+- **Splash** ("Kev-C++ Pro", the app icon, the version bottom right): Application::on_activate shows
+  it once per start after presenting the main window, transient and modal so window managers centre
+  it there (GTK 4 can't place windows). 640 px wide for the CF-19's crocus; closes after 2.2 s or on a
+  click or key; `/startup/splash` false turns it off. GUI tests: it covers the window for ~2 s.
 - **git in the Project tab** is read-only: `watchGit()` (on every folder open) asks git for the work tree
   and .git folder, watches .git for index/HEAD rewrites (a commit or add in any terminal), and
   `refreshGitStatus()` also runs after saves, source syncs, window activation and every 5 s while the
@@ -234,9 +270,10 @@ verified by driving the real app (see "GUI testing").
 ## State and known gaps
 
 All seven planned milestones are done (projects, build/run, options & packages, IntelliSense,
-debugger, dev server) plus docking panels. Not done yet: Replace (Ctrl+R) is a placeholder (there is
-no replace in Find in Files either); breakpoints/watches aren't saved between sessions; the dev server can't resolve npm
-packages; floating panel window positions aren't remembered (GTK 4 can't position windows).
+debugger, dev server) plus docking panels. Not done yet: the bundled TypeScript dev server (projects
+without Vite) can't resolve npm packages; floating panel window positions aren't remembered (GTK 4 can't
+position windows; the user doesn't mind); Kev-C++'s own windows are built in code, not .ui files, so
+the GTK designer can't edit them yet.
 
 Roadmap: docs/ROADMAP.md. Done: M0 (foundations), W1–W5 (web/SvelteKit, including server and
 browser debugging, checked end to end) G1–G3 (GTK designer: model, preview, properties; palette, drag and

@@ -247,11 +247,11 @@ Matcher::Matcher(TextQuery query) : query_(std::move(query)) {
     }
 }
 
-std::vector<std::pair<size_t, size_t>> Matcher::find(std::string_view line) const {
-    std::vector<std::pair<size_t, size_t>> out;
-    if (query_.text.empty() || !valid()) return out;
+template <typename F>
+void Matcher::scan(std::string_view line, F&& f) const {
+    if (query_.text.empty() || !valid()) return;
     if (regex_) {
-        if (line.size() > kMaxRegexLine) return out;
+        if (line.size() > kMaxRegexLine) return;
         const char* begin = line.data();
         const char* end = begin + line.size();
         const char* p = begin;
@@ -263,12 +263,12 @@ std::vector<std::pair<size_t, size_t>> Matcher::find(std::string_view line) cons
                 if (first >= end) break;
                 p = first + 1;
             } else {
-                out.emplace_back(static_cast<size_t>(first - begin), static_cast<size_t>(m.length(0)));
+                f(static_cast<size_t>(first - begin), static_cast<size_t>(m.length(0)), &m);
                 p = m[0].second;
             }
             flags |= std::regex_constants::match_prev_avail; // so \b and ^ see the character before p
         }
-        return out;
+        return;
     }
     std::string low;
     std::string_view hay = line;
@@ -279,9 +279,42 @@ std::vector<std::pair<size_t, size_t>> Matcher::find(std::string_view line) cons
             ++pos;
             continue;
         }
-        out.emplace_back(pos, needle_.size());
+        f(pos, needle_.size(), static_cast<const std::cmatch*>(nullptr));
         pos = end;
     }
+}
+
+std::vector<std::pair<size_t, size_t>> Matcher::find(std::string_view line) const {
+    std::vector<std::pair<size_t, size_t>> out;
+    scan(line, [&out](size_t column, size_t length, const std::cmatch*) { out.emplace_back(column, length); });
+    return out;
+}
+
+std::string Matcher::replace(std::string_view contents, const std::string& with, size_t* count) const {
+    size_t n = 0;
+    if (count) *count = 0;
+    if (query_.text.empty() || !valid() || looksBinary(contents)) return std::string(contents);
+    std::string out;
+    out.reserve(contents.size());
+    for (size_t start = 0; start <= contents.size();) {
+        const size_t newline = contents.find('\n', start);
+        std::string_view line = contents.substr(start, newline == std::string_view::npos ? std::string_view::npos : newline - start);
+        const bool cr = !line.empty() && line.back() == '\r';
+        if (cr) line.remove_suffix(1);
+        size_t done = 0;
+        scan(line, [&](size_t column, size_t length, const std::cmatch* m) {
+            out.append(line.substr(done, column - done));
+            out += m ? m->format(with) : with;
+            done = column + length;
+            ++n;
+        });
+        out.append(line.substr(done));
+        if (cr) out += '\r';
+        if (newline == std::string_view::npos) break;
+        out += '\n';
+        start = newline + 1;
+    }
+    if (count) *count = n;
     return out;
 }
 

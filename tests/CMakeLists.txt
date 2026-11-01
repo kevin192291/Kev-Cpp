@@ -4,6 +4,7 @@ include(GoogleTest)
 add_executable(kevc_tests
   BuildFilesTest.cpp
   BuildPlanTest.cpp
+  CppStyleTest.cpp
   DapTest.cpp
   DiagnosticsTest.cpp
   FileOpsTest.cpp
@@ -12,8 +13,10 @@ add_executable(kevc_tests
   LspTest.cpp
   ManagedBlockTest.cpp
   MiTest.cpp
+  NpmPackagesTest.cpp
   PackagesTest.cpp
   ProjectSessionTest.cpp
+  ProjectStateTest.cpp
   RecentProjectsTest.cpp
   SearchTest.cpp
   SettingsTest.cpp

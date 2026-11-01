@@ -189,3 +189,22 @@ TEST(Search, SearchFilesUsesUnsavedTextAndStopsAtTheLimit) {
     EXPECT_TRUE(found.empty());
     fs::remove_all(dir);
 }
+
+TEST(Search, ReplaceKeepsEverythingButTheMatches) {
+    size_t n = 0;
+    EXPECT_EQ(search::Matcher({"foo"}).replace("Foo foo\r\nbar FOO\n", "baz", &n), "baz baz\r\nbar baz\n");
+    EXPECT_EQ(n, 3u);
+    EXPECT_EQ(search::Matcher({"foo", true}).replace("Foo foo", "x", &n), "Foo x");
+    EXPECT_EQ(search::Matcher({"id", false, true}).replace("id idx (id)", "key", &n), "key idx (key)");
+    EXPECT_EQ(n, 2u);
+    // Regular expressions: groups in the replacement.
+    EXPECT_EQ(search::Matcher({"(\\w+)\\.size\\(\\)", true, false, true}).replace("a.size() + bb.size()", "std::size($1)", &n),
+              "std::size(a) + std::size(bb)");
+    EXPECT_EQ(n, 2u);
+    // Nothing found, no trailing newline, binary: unchanged.
+    EXPECT_EQ(search::Matcher({"zzz"}).replace("abc", "x", &n), "abc");
+    EXPECT_EQ(n, 0u);
+    const std::string binary("foo\0foo", 7);
+    EXPECT_EQ(search::Matcher({"foo"}).replace(binary, "x", &n), binary);
+    EXPECT_EQ(n, 0u);
+}

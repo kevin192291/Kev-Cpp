@@ -23,6 +23,7 @@ find_package(Threads REQUIRED) # Find in Files and the Project tab search run on
 add_library(kevc_core STATIC
   src/core/BuildFiles.cpp
   src/core/BuildPlan.cpp
+  src/core/CppStyle.cpp
   src/core/Dap.cpp
   src/core/Diagnostics.cpp
   src/core/FileOps.cpp
@@ -30,11 +31,13 @@ add_library(kevc_core STATIC
   src/core/Icons.cpp
   src/core/Lsp.cpp
   src/core/ManagedBlock.cpp
+  src/core/NpmPackages.cpp
   src/core/Mi.cpp
   src/core/Packages.cpp
   src/core/Project.cpp
   src/core/ProjectKinds.cpp
   src/core/ProjectSession.cpp
+  src/core/ProjectState.cpp
   src/core/RecentProjects.cpp
   src/core/Search.cpp
   src/core/Settings.cpp
@@ -97,6 +100,7 @@ add_executable(kev-cpp
   src/designer/DesignerEditing.cpp
   src/designer/DesignerPage.cpp
   src/designer/DesignerTypes.cpp
+  src/editor/CppIndenter.cpp
   src/editor/EditorTab.cpp
   src/editor/ProjectTree.cpp
   src/editor/RoutesPanel.cpp
@@ -114,10 +118,12 @@ add_executable(kev-cpp
   src/ui/DockManager.cpp
   src/ui/EnvPanel.cpp
   src/ui/IconWidgets.cpp
+  src/ui/NpmPackagesDialog.cpp
   src/ui/ProjectOptionsDialog.cpp
   src/ui/QuickSearch.cpp
   src/ui/SearchMarkup.cpp
   src/ui/SearchPanel.cpp
+  src/ui/SplashWindow.cpp
   src/ui/TestsPanel.cpp
   src/ui/TracesPanel.cpp
 )

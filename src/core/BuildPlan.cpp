@@ -74,7 +74,21 @@ std::vector<Command> buildCommands(const Project& p, const fs::path& root, Build
 
 std::optional<fs::path> runnableOutput(const Project& p, const fs::path& root, BuildConfig config) {
     if (p.kind == ProjectKind::WebTs || p.targetType != TargetType::Console) return std::nullopt;
-    return buildDir(root, config) / p.effectiveOutputName();
+    const fs::path dir = buildDir(root, config);
+    if (p.buildFileManaged) return dir / p.effectiveOutputName();
+    // A project's own CMakeLists.txt may build it in a subfolder (tests/…): look for it.
+    std::error_code ec;
+    for (auto it = fs::recursive_directory_iterator(dir, fs::directory_options::skip_permission_denied, ec);
+         !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        if (it->is_directory(ec)) {
+            if (it->path().filename() == "CMakeFiles" || it->path().filename() == "_deps") it.disable_recursion_pending();
+            continue;
+        }
+        if (it->path().filename() == p.targetName && it->is_regular_file(ec) &&
+            (fs::status(it->path(), ec).permissions() & fs::perms::owner_exec) != fs::perms::none)
+            return it->path();
+    }
+    return dir / p.targetName;
 }
 
 bool linkCompileCommands(const fs::path& root, BuildConfig config) {

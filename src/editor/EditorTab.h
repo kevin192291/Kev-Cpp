@@ -54,6 +54,14 @@ public:
     bool find(const Glib::ustring& text, bool forward, bool caseSensitive, bool incremental = false);
     int matchCount() const;
     void clearSearch();
+    // Replace: the selected match (when the selection is one) becomes `with`, then the next match is
+    // selected; false when there's nothing to replace or find. replaceAll returns how many it replaced
+    // (one undo step).
+    bool replace(const Glib::ustring& needle, const Glib::ustring& with, bool caseSensitive);
+    int replaceAll(const Glib::ustring& needle, const Glib::ustring& with, bool caseSensitive);
+    // New text for the whole buffer as one undo step (Find in Files' Replace All in an open file),
+    // keeping the cursor's line and the breakpoints.
+    void replaceText(const std::string& contents);
 
     sigc::signal<void()>& signalCloseRequested() override { return closeRequested_; }
     sigc::signal<void(bool)>& signalModifiedChanged() { return modifiedChanged_; }
@@ -67,7 +75,9 @@ private:
     // Reloads the file when it changes on disk, as long as the buffer has no unsaved edits.
     void onFileChanged(Gio::FileMonitor::Event event);
     void watchFile();
+    void applyIndenter(); // the C/C++ one for C/C++ files
     void reloadFromDisk();
+    void setTextKeepingPlace(const std::string& contents, bool undoable);
     static void onMatchCountChanged(GObject* search, GParamSpec*, gpointer self);
     void updateTitle();
     void scrollToCursor();

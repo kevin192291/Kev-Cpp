@@ -1,0 +1,27 @@
+{
+  "buildFileManaged": false,
+  "compiler": {
+    "debugOptimization": "",
+    "defines": [],
+    "flags": [],
+    "includeDirs": [],
+    "releaseOptimization": ""
+  },
+  "excludedSources": [],
+  "kevcFormat": 1,
+  "kind": "cpp-cmake",
+  "linker": {
+    "dirs": [],
+    "flags": [],
+    "libraries": [],
+    "staticRuntime": false
+  },
+  "name": "Kev-Cpp",
+  "outputName": "",
+  "ownsTarget": false,
+  "packages": [],
+  "sources": [],
+  "standard": "20",
+  "targetName": "kev-cpp",
+  "targetType": "console"
+}

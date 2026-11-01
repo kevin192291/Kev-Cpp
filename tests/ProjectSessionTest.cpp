@@ -1,3 +1,4 @@
+#include "core/BuildPlan.h"
 #include "core/ManagedBlock.h"
 #include "core/ProjectSession.h"
 
@@ -247,4 +248,42 @@ TEST_F(ProjectSessionTest, GtkCApplicationBuildsWithMake) {
     const std::string root = "'" + s.root().string() + "'";
     ASSERT_EQ(run("make -C " + root + " DEBUG=1"), 0);
     EXPECT_TRUE(fs::exists(s.root() / "build/debug/cnotes"));
+}
+
+// A project with its own CMake set-up (several targets, sources listed its own way), opened with
+// "Build As It Is": Kev-C++ writes only the .kevc and runs the executable it picks.
+TEST_F(ProjectSessionTest, BuildAsItIsLeavesCMakeListsAlone) {
+    const fs::path root = dir_ / "tool";
+    const std::string top = "cmake_minimum_required(VERSION 3.20)\nproject(tool CXX)\n"
+                            "add_library(core STATIC src/core.cpp)\n"
+                            "add_executable(Qt5::moc IMPORTED)\n"
+                            "add_executable(tool-app\n  src/main.cpp)\n"
+                            "add_subdirectory(tests)\n";
+    touch(root / "CMakeLists.txt", top);
+    touch(root / "tests/CMakeLists.txt", "add_executable(tool_tests t.cpp)\nadd_executable(alias ALIAS tool_tests)\n");
+    touch(root / "build/debug/CMakeLists.txt", "add_executable(ignored x.cpp)\n");
+    touch(root / "src/main.cpp", "int main() {}\n");
+    touch(root / "src/core.cpp");
+
+    EXPECT_EQ(cmakeExecutables(root), (std::vector<std::string>{"tool-app", "tool_tests"}));
+    ProjectSession s = ProjectSession::useCMakeAsIs(root);
+    EXPECT_EQ(slurp(root / "CMakeLists.txt"), top); // untouched
+    EXPECT_TRUE(fs::exists(root / "tool.kevc"));
+    EXPECT_EQ(s.project().targetName, "tool-app");
+    EXPECT_FALSE(s.project().buildFileManaged);
+    // New files don't touch anything either.
+    touch(root / "src/extra.cpp");
+    EXPECT_TRUE(s.sync().added.empty());
+    EXPECT_EQ(slurp(root / "CMakeLists.txt"), top);
+    // Reopened from its .kevc it's still as-it-is.
+    const ProjectSession again = ProjectSession::open(root / "tool.kevc");
+    EXPECT_FALSE(again.project().buildFileManaged);
+
+    // Run finds the program wherever CMake put it.
+    Project p = s.project();
+    p.targetName = "tool_tests";
+    touch(root / "build/debug/tests/tool_tests", "#!/bin/sh\n");
+    fs::permissions(root / "build/debug/tests/tool_tests", fs::perms::owner_all);
+    touch(root / "build/debug/CMakeFiles/tool_tests", ""); // not the program
+    EXPECT_EQ(runnableOutput(p, root, BuildConfig::Debug), root / "build/debug/tests/tool_tests");
 }

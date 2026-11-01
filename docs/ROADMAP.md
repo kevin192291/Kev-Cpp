@@ -326,7 +326,10 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
   - A light/dark switch for the preview: it shows GTK's dark theme, where the app may run light.
   - Showing other stack and notebook pages in the preview, not only the visible one.
   - Checking the Blueprint export with blueprint-compiler when it's installed.
-- Existing gaps: Replace, Find Results, saved breakpoints and recent projects.
+- Existing gaps (Replace, Find Results, saved breakpoints and recent projects are done): the bundled
+  TypeScript dev server can't load npm packages.
+- Kev-C++'s own windows in the designer: they're built in code; moving them, dialogs first, to `.ui`
+  files loaded with Gtk::Builder would let the designer edit them (see docs/IMPORTANT_TODO.md).
 - ESLint and Tailwind language servers (from W2). LspManager has to route one file to several
   servers and merge their diagnostics.
 - From M0: Toolchain Info listing the tools ToolLocator finds (e.g. both STM32CubeIDE toolchains),

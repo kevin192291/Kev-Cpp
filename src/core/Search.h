@@ -69,8 +69,15 @@ public:
     std::vector<std::pair<size_t, size_t>> find(std::string_view line) const;
     // Every match in a file's text, up to `limit`; none for binary files.
     std::vector<LineMatch> search(std::string_view contents, size_t limit) const;
+    // `contents` with every match replaced by `with` (for regular expressions $1, $& and $$ work as in
+    // JavaScript), line endings kept; `count` gets how many. Binary files come back unchanged.
+    std::string replace(std::string_view contents, const std::string& with, size_t* count = nullptr) const;
 
 private:
+    // Calls f(column, length, regex match or nullptr) for each match in a line, left to right.
+    template <typename F>
+    void scan(std::string_view line, F&& f) const;
+
     TextQuery query_;
     std::string needle_; // lower-cased unless matchCase
     std::optional<std::regex> regex_;

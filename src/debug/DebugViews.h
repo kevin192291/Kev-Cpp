@@ -100,6 +100,8 @@ public:
 
     const std::vector<std::string>& expressions() const { return expressions_; }
     void addExpression(const std::string& expression);
+    // The project's saved watches (or none); doesn't signal a change.
+    void setExpressions(std::vector<std::string> expressions);
     // One row per expression, in order (VarNodes or error rows).
     void setRows(const std::vector<Gtk::Widget*>& rows);
     void showPlaceholders(); // expressions without values (not debugging)

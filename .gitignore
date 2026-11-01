@@ -3,3 +3,4 @@
 tools/node_modules/
 tools/js-debug/
 *.swp
+compile_commands.json

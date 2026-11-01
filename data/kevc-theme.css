@@ -302,3 +302,23 @@ notebook.kevc-compact-tabs > header > tabs > tab {
 .kevc-quick-results list {
   background-color: transparent;
 }
+
+/* The start-up splash (SplashWindow), in the manner of Dev-C++'s: deep slate to the logo's blue. */
+window.kevc-splash {
+  background-image: linear-gradient(135deg, #1b252c 0%, #263238 45%, #12335c 100%);
+  border: 1px solid #0d47a1;
+  color: @kevc_fg;
+}
+.kevc-splash-title {
+  font-size: 34pt;
+  font-weight: 800;
+  color: #ffffff;
+}
+.kevc-splash-subtitle {
+  font-size: 12pt;
+  color: #b7c7d3;
+}
+.kevc-splash-small {
+  font-size: 9pt;
+  color: #8fa3b0;
+}

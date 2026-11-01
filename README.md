@@ -74,6 +74,9 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
 
 ## Features
 
+- **Splash screen**: Kev-C++ Pro starts with a Dev-C++-style splash (the logo, the name and the
+  version in the corner) over the main window for two seconds; a click or a key closes it sooner.
+  `/startup/splash: false` in settings turns it off.
 - **Search**: the field in the middle of the menu bar (**Ctrl+P**) finds anything in the open project.
   Type and a list drops down with the files whose names match (letters in order: `mwc` finds
   `MainWindow.cpp`) and the first places the text appears; click one, or use Up/Down and Enter. Its
@@ -97,7 +100,13 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   back when you close the last file, and with File → Close Project (Close Folder for a plain folder),
   which asks about unsaved files and stops the project's build, program, debugger and dev server.
 - **Projects**: File → New Project creates C++ (console, static or shared library), C console or
-  TypeScript web projects. Each has a `<name>.kevc` project file.
+  TypeScript web projects. Each has a `<name>.kevc` project file, which also keeps how the project
+  looks (toolbars and panels shown, Debug or Release), so it opens the same for everyone.
+- **Existing CMake projects**: opening one asks how to build it. **Build As It Is** builds, runs and
+  debugs it with its own CMakeLists.txt, which Kev-C++ never edits (it only adds a `.kevc`;
+  Project → Program to Run and Debug picks among its executables). **Manage Sources** also keeps its
+  source list in a marked block (below). Kev-C++ itself opens this way, so it can be built and
+  debugged in Kev-C++ (`Kev-Cpp.kevc`).
 - **Managed build files**: Kev-C++ owns one marked block in `CMakeLists.txt` / `Makefile` and keeps it
   in sync. New, deleted and renamed source files are added and removed automatically. Everything
   outside the block is yours and is never touched.
@@ -106,8 +115,15 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
 - **Packages** (Project → Packages): add libraries from a catalog (fmt, spdlog, nlohmann_json, CLI11,
   magic_enum, glm, googletest, Catch2, glfw, raylib, SDL3) or any Git repository via CMake
   FetchContent ("Detect Targets" finds what to link), or system libraries via pkg-config.
-- **IntelliSense**: completion, hover, go to definition (Ctrl+click / Ctrl+F12), live diagnostics and a
-  symbol list, from clangd (C/C++) and typescript-language-server (JS/TS).
+- **IntelliSense**: completion, hover, live diagnostics and a symbol list, from clangd (C/C++) and
+  typescript-language-server (JS/TS). Right-click a name for **Go to Definition** (also Ctrl+click /
+  Ctrl+F12), Go to Implementation (from an interface or virtual method to the code that implements
+  it), Go to Type Definition, Go to Declaration (C/C++) and Find All References; with several answers
+  a list opens at the cursor. In TypeScript, Go to Definition of something from a library goes on to
+  its JavaScript source instead of stopping at the `.d.ts` declarations.
+- **C/C++ layout as you type**: a `{` after a class, function or `if (…)` moves to a line of its own;
+  `public:`, `private:` and `protected:` snap to the class's own indentation, members one level in;
+  the `}` that closes a class, struct, union or enum gets its `;`.
 - **Build & run**: errors and warnings are listed in the Compiler tab (double-click to jump); programs run in
   the Run tab; the Terminal tab is a shell in the project folder.
 - **Slate colours**: the dark slate palette of Embarcadero Dev-C++ 6, for the window and the editor,
@@ -121,7 +137,13 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   Layout puts everything back.
 - **Debugger** (gdb): click a line number to set a breakpoint; stepping, call stack, locals, watches and a gdb
   console. Hover a variable while paused to see its value; pointers are followed automatically
-  (`p = 0x7ffe… → {x = 3, y = 4}`).
+  (`p = 0x7ffe… → {x = 3, y = 4}`). Breakpoints and watches are remembered for each project
+  (`~/.local/state/kev-cpp/projects.json`). Docked on the right, the Debug panel can be dragged narrow:
+  its Locals, Call Stack, Breakpoints and GDB Console tabs then scroll left and right.
+- **Find and replace**: Ctrl+F finds in the current file; Ctrl+R (or the ⇄ button on the find bar)
+  adds a Replace row (Replace, Replace All; one Ctrl+Z undoes it). The Search tab's Replace All
+  replaces every match in the list across files, after asking; files open with unsaved changes
+  change in their editor. With no project open, building, running and debugging are greyed out.
 - **TypeScript dev server**: serves the project on http://127.0.0.1:5465/ (this computer only),
   converts `.ts` to JavaScript on request, and reloads the browser on save. Compile (F9) type-checks
   with `tsc --noEmit`.
@@ -161,7 +183,15 @@ Svelte and Vite apps apart (the title bar says which) and which package manager 
 
 - **SvelteKit App** (File → New Project) runs the official `sv create` (Svelte 5, TypeScript) and opens
   the result. **Install Dependencies** and **Project → Scripts** run `npm install` and any package.json
-  script.
+  script. npm, pnpm, yarn and bun projects all work (pnpm's `.bin` shims included), and Kev-C++ finds
+  nvm's (or fnm's, Volta's…) Node and pnpm even when started from the menu or a file manager.
+- **Packages** (Project → Packages, or the toolbar): every dependency with the version package.json
+  asks for, what's installed and the newest one (Check for Newer Versions; click one to use it), a
+  **Lock** box (exactly this version) and the update rule in plain words: bug fixes only (`~`), new
+  features and fixes (`^`), any newer (`>=`), any (`*`). Add and remove packages. **Package source**:
+  your company's npm server for all packages or per `@scope`, saved in the project's `.npmrc`
+  (Log In… runs `npm login`; tokens stay in your own `~/.npmrc`). Nothing changes until Save;
+  package.json keeps its formatting.
 - **Run (F10)** starts the project's own Vite on 127.0.0.1, on the first free port from 5173, and opens
   the browser. **Compile (F9)** runs `svelte-kit sync` and `svelte-check`, with errors in the Compiler tab;
   **Rebuild (F12)** runs the `build` script.
@@ -190,8 +220,10 @@ Svelte and Vite apps apart (the title bar says which) and which package manager 
 
 `~/.config/kev-cpp/settings.json` holds what View → Toolbars/Panels remember, plus a few options:
 `/web/browser` (a command to open pages with instead of the default browser), `/web/chrome` (the
-Chromium-based browser for debugging), `/web/vitePort` (the first port to try, 5173), and
-`/tools/<name>` (the path of a tool, e.g. `/tools/arm-none-eabi-gcc`).
+Chromium-based browser for debugging), `/web/vitePort` (the first port to try, 5173),
+`/tools/<name>` (the path of a tool, e.g. `/tools/arm-none-eabi-gcc`) and `/startup/splash` (false: no
+splash screen). With a project open, View → Toolbars/Panels and Debug/Release are saved with the
+project instead.
 
 ## Keyboard shortcuts
 
@@ -207,5 +239,6 @@ Chromium-based browser for debugging), `/web/vitePort` (the first port to try, 5
 | Ctrl+Space | Completion | Ctrl+F12 | Go to definition |
 | Ctrl+P | Search files and text | Ctrl+Shift+F | Find in all files (Search tab) |
 | Ctrl+F | Find in the current file | F2 / Delete | Rename / delete in the Project tab |
+| Ctrl+R | Replace in the current file | Right-click | Go to Definition / Implementation / References |
 
 Logs from the language servers are in `~/.cache/kev-cpp/logs/`.

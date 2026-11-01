@@ -1,6 +1,8 @@
 #include "app/Application.h"
 
+#include "app/BuildInfo.h"
 #include "app/MainWindow.h"
+#include "ui/SplashWindow.h"
 
 #include <gtksourceview/gtksource.h>
 
@@ -115,11 +117,17 @@ void Application::on_activate() {
         showMissingToolsAndQuit();
         return;
     }
-    if (!window_) {
+    const bool starting = !window_;
+    if (starting) {
         window_ = new MainWindow(*this);
         add_window(*window_);
     }
     window_->present();
+    // The splash, once per start (settings /startup/splash: false turns it off).
+    if (starting && settings_.get<bool>("/startup/splash", true)) {
+        auto* splash = new SplashWindow(*window_, buildVersion().text); // deletes itself
+        splash->present();
+    }
 }
 
 void Application::on_window_removed(Gtk::Window* window) {

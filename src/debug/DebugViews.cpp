@@ -167,6 +167,10 @@ void VarNode::setExpanded(bool expand) {
 // --- DebugPanel ----------------------------------------------------------------------------------
 
 DebugPanel::DebugPanel() {
+    // Docked on the right the panel can be dragged narrow: its tabs then scroll left and right
+    // (arrows at the ends) instead of holding the panel as wide as all four side by side.
+    set_scrollable(true);
+    add_css_class("kevc-compact-tabs");
     localsMessage_.add_css_class("dim-label");
     localsMessage_.set_margin(12);
     localsMessage_.set_wrap(true);
@@ -197,6 +201,7 @@ DebugPanel::DebugPanel() {
     consoleScroller_.set_child(consoleView_);
     consoleScroller_.set_vexpand(true);
     consoleEntry_.set_placeholder_text("gdb command, e.g. info registers rip   (Enter to run)");
+    consoleEntry_.set_width_chars(8); // the placeholder mustn't set how narrow the panel can be
     consoleEntry_.signal_activate().connect([this] {
         const std::string text = consoleEntry_.get_text();
         if (text.empty()) return;
@@ -313,6 +318,11 @@ WatchPanel::WatchPanel() : Gtk::Box(Gtk::Orientation::VERTICAL, 4) {
 void WatchPanel::addExpression(const std::string& expression) {
     expressions_.push_back(expression);
     changed_.emit();
+}
+
+void WatchPanel::setExpressions(std::vector<std::string> expressions) {
+    expressions_ = std::move(expressions);
+    showPlaceholders();
 }
 
 void WatchPanel::showPlaceholders() {

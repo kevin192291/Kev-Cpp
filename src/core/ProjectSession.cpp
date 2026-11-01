@@ -358,6 +358,56 @@ ProjectSession ProjectSession::adoptCMake(const fs::path& rootIn) {
     return session;
 }
 
+std::vector<std::string> cmakeExecutables(const fs::path& root) {
+    std::vector<fs::path> files;
+    std::error_code ec;
+    if (fs::exists(root / "CMakeLists.txt", ec)) files.push_back(root / "CMakeLists.txt");
+    std::vector<fs::path> nested;
+    for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+         !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        if (it->is_directory(ec)) {
+            if (isIgnoredDirName(it->path().filename().string())) it.disable_recursion_pending();
+            continue;
+        }
+        if (it->path().filename() == "CMakeLists.txt" && it->path().parent_path() != root) nested.push_back(it->path());
+    }
+    std::sort(nested.begin(), nested.end());
+    files.insert(files.end(), nested.begin(), nested.end());
+
+    static const std::regex executable(R"(add_executable\s*\(\s*([A-Za-z0-9_.+-]+)([^)]*))");
+    std::vector<std::string> out;
+    for (const auto& file : files) {
+        const std::string text = readFile(file);
+        for (auto it = std::sregex_iterator(text.begin(), text.end(), executable); it != std::sregex_iterator(); ++it) {
+            const std::string rest = (*it)[2];
+            if (rest.find("IMPORTED") != std::string::npos || rest.find("ALIAS") != std::string::npos) continue;
+            const std::string name = (*it)[1];
+            if (name.find("${") == std::string::npos && std::find(out.begin(), out.end(), name) == out.end())
+                out.push_back(name);
+        }
+    }
+    return out;
+}
+
+ProjectSession ProjectSession::useCMakeAsIs(const fs::path& rootIn) {
+    fs::path root = fs::absolute(rootIn).lexically_normal();
+    if (root.filename().empty()) root = root.parent_path();
+    Project p;
+    p.name = root.filename().string();
+    p.kind = ProjectKind::Cpp;
+    p.targetType = TargetType::Console;
+    p.ownsTarget = false;
+    p.buildFileManaged = false;
+    const auto executables = cmakeExecutables(root);
+    p.targetName = executables.empty() ? sanitizeTargetName(p.name) : executables.front();
+    p.standard = "20";
+    p.debugOptimization.clear();
+    p.releaseOptimization.clear();
+    ProjectSession session(std::move(p), root / (root.filename().string() + ".kevc"));
+    session.project_.save(session.projectFile_); // nothing else is written
+    return session;
+}
+
 ProjectSession ProjectSession::openWebFolder(const fs::path& rootIn) {
     fs::path root = fs::absolute(rootIn).lexically_normal();
     if (root.filename().empty()) root = root.parent_path(); // "dir/" → "dir"
@@ -400,6 +450,7 @@ std::vector<std::string> ProjectSession::scanSources() const {
 }
 
 ProjectSession::SyncResult ProjectSession::sync() {
+    if (!project_.buildFileManaged) return {}; // the CMakeLists.txt lists its own sources
     std::vector<std::string> before = project_.sources;
     if (!project_.setSources(scanSources())) return {};
 
@@ -421,7 +472,7 @@ ProjectSession::SyncResult ProjectSession::saveAndRegenerate() {
 
 bool ProjectSession::writeBuildFile(std::vector<std::string>& warnings) {
     fs::path file = buildFile();
-    if (file.empty()) return false;
+    if (file.empty() || !project_.buildFileManaged) return false;
 
     std::string body;
     std::string fresh;

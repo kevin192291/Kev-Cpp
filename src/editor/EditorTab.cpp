@@ -1,5 +1,7 @@
 #include "editor/EditorTab.h"
 
+#include "editor/CppIndenter.h"
+
 #include "lsp/LspManager.h"
 
 #include <algorithm>
@@ -48,6 +50,7 @@ EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_
     gtk_text_buffer_place_cursor(text, &start);
 
     view_ = GTK_SOURCE_VIEW(gtk_source_view_new_with_buffer(buffer_));
+    applyIndenter();
     const bool isMakefile = file.filename() == "Makefile" || file.extension() == ".mk";
     gtk_source_view_set_show_line_numbers(view_, TRUE);
     gtk_source_view_set_highlight_current_line(view_, TRUE);
@@ -138,6 +141,17 @@ void EditorTab::save() {
     saved_.emit();
 }
 
+void EditorTab::applyIndenter() {
+    // C and C++ keep Kev-C++'s layout as you type (see core/CppStyle); other files use GtkSourceView's.
+    if (isCppLanguage(gtk_source_buffer_get_language(buffer_))) {
+        GtkSourceIndenter* indenter = newCppIndenter();
+        gtk_source_view_set_indenter(view_, indenter);
+        g_object_unref(indenter);
+    } else {
+        gtk_source_view_set_indenter(view_, nullptr);
+    }
+}
+
 void EditorTab::watchFile() {
     if (monitor_) monitor_->cancel();
     monitor_.reset();
@@ -157,6 +171,7 @@ void EditorTab::moveTo(const std::filesystem::path& file) {
     watchFile();
     // A new extension can mean a new language (main.c → main.cpp).
     gtk_source_buffer_set_language(buffer_, languageFor(file, cppHeaders_));
+    applyIndenter();
     tabTitle_.set_tooltip_text(file.string());
     updateTitle();
 }
@@ -184,15 +199,26 @@ void EditorTab::reloadFromDisk() {
     g_free(current);
     if (same) return; // our own save, or a touch without changes
 
+    setTextKeepingPlace(contents, false);
+    gtk_text_buffer_set_modified(text, FALSE);
+}
+
+void EditorTab::replaceText(const std::string& contents) {
+    setTextKeepingPlace(contents, true);
+}
+
+void EditorTab::setTextKeepingPlace(const std::string& contents, bool undoable) {
+    GtkTextBuffer* text = GTK_TEXT_BUFFER(buffer_);
     GtkTextIter cursor;
     gtk_text_buffer_get_iter_at_mark(text, &cursor, gtk_text_buffer_get_insert(text));
     const int line = gtk_text_iter_get_line(&cursor);
     // Replacing the whole text would slide every mark to line 1; put breakpoints back by line.
     const std::vector<int> breakpointLines = breakpoints();
-    gtk_text_buffer_begin_irreversible_action(text);
+    if (undoable) gtk_text_buffer_begin_user_action(text);
+    else gtk_text_buffer_begin_irreversible_action(text);
     gtk_text_buffer_set_text(text, contents.data(), static_cast<int>(contents.size()));
-    gtk_text_buffer_end_irreversible_action(text);
-    gtk_text_buffer_set_modified(text, FALSE);
+    if (undoable) gtk_text_buffer_end_user_action(text);
+    else gtk_text_buffer_end_irreversible_action(text);
     std::vector<int> kept;
     for (int l : breakpointLines)
         if (l <= gtk_text_buffer_get_line_count(text)) kept.push_back(l);
@@ -385,6 +411,35 @@ bool EditorTab::find(const Glib::ustring& needle, bool forward, bool caseSensiti
     gtk_text_buffer_select_range(text, &matchStart, &matchEnd);
     gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(view_), &matchStart, 0.2, FALSE, 0.0, 0.0);
     return true;
+}
+
+bool EditorTab::replace(const Glib::ustring& needle, const Glib::ustring& with, bool caseSensitive) {
+    if (needle.empty()) return false;
+    gtk_source_search_settings_set_case_sensitive(searchSettings_, caseSensitive);
+    gtk_source_search_settings_set_search_text(searchSettings_, needle.c_str());
+    GtkTextBuffer* text = GTK_TEXT_BUFFER(buffer_);
+    GtkTextIter start, end;
+    gtk_text_buffer_get_selection_bounds(text, &start, &end);
+    // Only a selection that is a match is replaced; otherwise the first press just finds one.
+    if (gtk_source_search_context_get_occurrence_position(search_, &start, &end) > 0) {
+        GError* error = nullptr;
+        if (!gtk_source_search_context_replace(search_, &start, &end, with.c_str(), -1, &error)) {
+            if (error) g_error_free(error);
+            return false;
+        }
+        gtk_text_buffer_place_cursor(text, &end); // after the replacement, so the next match is found
+    }
+    return find(needle, true, caseSensitive);
+}
+
+int EditorTab::replaceAll(const Glib::ustring& needle, const Glib::ustring& with, bool caseSensitive) {
+    if (needle.empty()) return 0;
+    gtk_source_search_settings_set_case_sensitive(searchSettings_, caseSensitive);
+    gtk_source_search_settings_set_search_text(searchSettings_, needle.c_str());
+    GError* error = nullptr;
+    const guint count = gtk_source_search_context_replace_all(search_, with.c_str(), -1, &error);
+    if (error) g_error_free(error);
+    return static_cast<int>(count);
 }
 
 int EditorTab::matchCount() const {
