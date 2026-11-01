@@ -1,6 +1,7 @@
 # Icons
 
-Kev-C++ uses Dev-C++-style pixel icons. The source art is `data/art/icon-sprite-sheet.png` (an 8×8 grid);
+Kev-C++ uses Dev-C++-style pixel icons. The source art is `data/art/icon-sprite-sheet.png` (an 8×8 grid)
+and `data/art/classic-toolbar-sheet.png` (the classic Dev-C++ toolbar, 8×4; see below);
 `data/art/make_icons.py` cuts each icon out, removes the semi-transparent halo around it, draws the
 few icons the sheet lacks, and writes 16/24/32/48 px PNGs to `data/icons/hicolor/<size>/actions/` plus
 `data/kevcpp-ui-icons.gresource.xml`. The output is committed, so building needs neither Python nor
@@ -83,6 +84,50 @@ Rows and columns as on the sheet; the icon is `kevc-<name>`.
 | 62 | 8, 6 | Call stack | Three overlapping gray stack frames | `call-stack` |
 | 63 | 8, 7 | Memory | Black chip with gold pins | `memory` |
 | 64 | 8, 8 | Error list | Document with red X and gray lines | `error-list` |
+
+## The classic Dev-C++ toolbar sheet
+
+`classic-toolbar-sheet.png`, 8 icons across and 4 down. Its rows aren't evenly spaced, so the script
+finds each icon's cell from the transparent gaps between them. The icon is `kevc-classic-<name>`;
+"Toolbar" says which button uses it.
+
+| # | Row, col | Meaning | Looks like | Name | Toolbar |
+|---|---|---|---|---|---|
+| 1 | 1, 1 | New file | Blank page with a folded corner | `new-file` | New Source File |
+| 2 | 1, 2 | Open file | Open yellow folder | `open-file` | Open Project or Folder |
+| 3 | 1, 3 | Save | Grey floppy disk | `save` | Save |
+| 4 | 1, 4 | Save all | Two grey floppy disks | `save-all` | Save All |
+| 5 | 1, 5 | Close file | Lined page with a red X | `close-file` | Close File |
+| 6 | 1, 6 | Print | Grey printer with paper | `print` | (no printing yet) |
+| 7 | 1, 7 | Undo | Blue arrow curving left | `undo` | Undo |
+| 8 | 1, 8 | Redo | Blue arrow curving right | `redo` | Redo |
+| 9 | 2, 1 | Find | Lined page with a magnifying glass | `find` | Find |
+| 10 | 2, 2 | Find previous | Magnifying glass, green left arrow | `find-previous` | |
+| 11 | 2, 3 | Find next | Magnifying glass, green right arrow | `find-next` | |
+| 12 | 2, 4 | Replace | Lined page with a yellow highlight | `replace` | Replace |
+| 13 | 2, 5 | Go to line | Green arrow into a page | `go-to-line` | Go to Line |
+| 14 | 2, 6 | Project options | Page with green squares and lines | `project-options` | Project Options |
+| 15 | 2, 7 | Compiler options | Orange and gold settings disc | `compiler-options` | |
+| 16 | 2, 8 | New project | Gold shield | `new-project` | New Project |
+| 17 | 3, 1 | Compile | Green, red, yellow and blue squares | `compile` | Compile |
+| 18 | 3, 2 | Run | Empty window with a gold title bar | `run` | Run |
+| 19 | 3, 3 | Compile and run | Window with the four coloured squares | `compile-and-run` | Compile & Run |
+| 20 | 3, 4 | Rebuild all | Four pale grey squares | `rebuild-all` | Rebuild All |
+| 21 | 3, 5 | Debug | Purple check mark | `debug` | Debug |
+| 22 | 3, 6 | Help | Yellow question mark | `help` | |
+| 23 | 3, 7 | Tips | Yellow smiling face | `tips` | |
+| 24 | 3, 8 | Resources | Red, blue and yellow pages | `resources` | |
+| 25 | 4, 1 | Insert | Lined page with an insertion arrow | `insert` | |
+| 26 | 4, 2 | Toggle | Gold puzzle piece with a green plus | `toggle` | Toggle Breakpoint |
+| 27 | 4, 3 | Go to | Blue lined page | `go-to` | |
+| 28 | 4, 4 | Project folder | Yellow folder | `project-folder` | |
+| 29 | 4, 5 | Source file | Page with code punctuation | `source-file` | |
+| 30 | 4, 6 | Resource file | Page with a grid of dots | `resource-file` | |
+| 31 | 4, 7 | Compile log | Green, red, yellow and blue bars | `compile-log` | |
+| 32 | 4, 8 | Application | Blue monitor on a stand | `application` | |
+
+Buttons the classic toolbar didn't have (Find in Files, Clean, Continue/Pause, the step buttons, Add
+Watch and the web group) keep the icons from `icon-sprite-sheet.png`, as do the panel tabs and menus.
 
 ## Made for Kev-C++ (same style)
 

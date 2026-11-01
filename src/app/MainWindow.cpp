@@ -591,23 +591,28 @@ Gtk::Widget& MainWindow::buildToolbar() {
         bar->append(*b);
     };
 
+    // The classic Dev-C++ toolbar's icons (kevc-classic-*, data/art/classic-toolbar-sheet.png) where
+    // it had the button; the others come from Kev-C++'s own sheet.
     newRow();
     group("file");
-    button("kevc-new-project", "win.new-project", "New Project (Ctrl+Shift+N)");
-    button("kevc-new-file", "win.new-file", "New Source File (Ctrl+N)");
-    button("kevc-open", "win.open-project", "Open Project or Folder (Ctrl+O)");
-    button("kevc-save", "win.save", "Save (Ctrl+S)");
-    button("kevc-save-all", "win.save-all", "Save All (Ctrl+Shift+S)");
+    button("kevc-classic-new-project", "win.new-project", "New Project (Ctrl+Shift+N)");
+    button("kevc-classic-new-file", "win.new-file", "New Source File (Ctrl+N)");
+    button("kevc-classic-open-file", "win.open-project", "Open Project or Folder (Ctrl+O)");
+    button("kevc-classic-save", "win.save", "Save (Ctrl+S)");
+    button("kevc-classic-save-all", "win.save-all", "Save All (Ctrl+Shift+S)");
+    button("kevc-classic-close-file", "win.close-tab", "Close File (Ctrl+W)");
     group("edit");
-    button("kevc-undo", "win.undo", "Undo (Ctrl+Z)");
-    button("kevc-redo", "win.redo", "Redo (Ctrl+Shift+Z)");
-    button("kevc-find", "win.find", "Find (Ctrl+F)");
+    button("kevc-classic-undo", "win.undo", "Undo (Ctrl+Z)");
+    button("kevc-classic-redo", "win.redo", "Redo (Ctrl+Shift+Z)");
+    button("kevc-classic-find", "win.find", "Find (Ctrl+F)");
+    button("kevc-classic-replace", "win.replace", "Replace (Ctrl+R)");
     button("kevc-find-in-files", "win.find-in-files", "Find in Files (Ctrl+Shift+F)");
+    button("kevc-classic-go-to-line", "win.goto-line", "Go to Line (Ctrl+G)");
     group("build");
-    task(Task::Compile, "kevc-compile", "win.compile", "Compile (F9)", "Stop compiling (Ctrl+F2)");
-    task(Task::Run, "kevc-run", "win.run", "Run (F10)", "Stop the program (Ctrl+F2)");
-    task(Task::CompileRun, "kevc-compile-run", "win.compile-run", "Compile & Run (F11)", "Stop (Ctrl+F2)");
-    task(Task::Rebuild, "kevc-rebuild", "win.rebuild", "Rebuild All (F12)", "Stop rebuilding (Ctrl+F2)");
+    task(Task::Compile, "kevc-classic-compile", "win.compile", "Compile (F9)", "Stop compiling (Ctrl+F2)");
+    task(Task::Run, "kevc-classic-run", "win.run", "Run (F10)", "Stop the program (Ctrl+F2)");
+    task(Task::CompileRun, "kevc-classic-compile-and-run", "win.compile-run", "Compile & Run (F11)", "Stop (Ctrl+F2)");
+    task(Task::Rebuild, "kevc-classic-rebuild-all", "win.rebuild", "Rebuild All (F12)", "Stop rebuilding (Ctrl+F2)");
     task(Task::Clean, "kevc-clean", "win.clean", "Clean", "Stop cleaning (Ctrl+F2)");
     configDrop_ = Gtk::make_managed<Gtk::DropDown>(std::vector<Glib::ustring>{"Debug", "Release"});
     configDrop_->set_tooltip_text("Build configuration");
@@ -623,7 +628,7 @@ Gtk::Widget& MainWindow::buildToolbar() {
 
     newRow();
     group("debug");
-    task(Task::Debug, "kevc-debug", "win.debug", "Debug (F5)", "Stop debugging (Shift+F5)");
+    task(Task::Debug, "kevc-classic-debug", "win.debug", "Debug (F5)", "Stop debugging (Shift+F5)");
     continueButton_ = Gtk::make_managed<TaskButton>("kevc-continue", "Continue (F8)", "kevc-pause", "Pause");
     continueButton_->signalStart().connect([this] { activate_action("win.debug-continue"); });
     continueButton_->signalStop().connect([this] { activate_action("win.debug-pause"); });
@@ -631,10 +636,10 @@ Gtk::Widget& MainWindow::buildToolbar() {
     stepButtons_ = {button("kevc-step-over", "win.step-over", "Step Over (F6)"),
                     button("kevc-step-into", "win.step-into", "Step Into (F7)"),
                     button("kevc-step-out", "win.step-out", "Step Out (Shift+F7)")};
-    button("kevc-breakpoint", "win.toggle-breakpoint", "Toggle Breakpoint (Ctrl+F5)");
+    button("kevc-classic-toggle", "win.toggle-breakpoint", "Toggle Breakpoint (Ctrl+F5)");
     button("kevc-watch", "win.add-watch", "Add Watch");
     group("project");
-    button("kevc-project", "win.project-options", "Project Options (Alt+P)");
+    button("kevc-classic-project-options", "win.project-options", "Project Options (Alt+P)");
     group("web");
     button("kevc-workspace", "win.web-install", "Install Dependencies (npm install)");
     button("kevc-settings", "win.packages", "Packages: versions, locking and where they come from");

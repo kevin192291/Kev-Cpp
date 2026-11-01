@@ -83,7 +83,8 @@ verified by driving the real app (see "GUI testing").
   loopback OTLP/HTTP JSON collector. `data/language-specs/svelte.lang` is copied to the cache like the
   style scheme.
 - `data/` icons (GResource-embedded), `packages.json` catalog, `.desktop` template. `data/art/` holds the
-  icon sprite sheet, the C++/C/TypeScript logos (`logos/`, New Project dialog) and `make_icons.py`, which generates `data/icons/hicolor/*/actions/kevc-*.png` and
+  icon sprite sheet, the classic Dev-C++ toolbar sheet (`classic-toolbar-sheet.png` → `kevc-classic-*`,
+  used by the toolbar where Dev-C++ had the button), the C++/C/TypeScript logos (`logos/`, New Project dialog) and `make_icons.py`, which generates `data/icons/hicolor/*/actions/kevc-*.png` and
   `data/kevcpp-ui-icons.gresource.xml` (committed; see docs/ICONS.md). Only the app icon is installed
   into the system icon theme. `data/kevc-theme.css` + `data/styles/kevc-slate.xml` are the Slate colours.
 

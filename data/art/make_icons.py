@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Cuts the toolbar/panel icons out of icon-sprite-sheet.png and draws the few the sheet lacks.
+"""Cuts the toolbar/panel icons out of icon-sprite-sheet.png and classic-toolbar-sheet.png, and draws
+the few the sheets lack.
 
 Writes data/icons/hicolor/<size>x<size>/actions/kevc-*.png and data/kevcpp-ui-icons.gresource.xml.
 The output is committed, so building Kev-C++ doesn't need Python or Pillow; run this again only
@@ -16,6 +17,17 @@ from PIL import Image, ImageDraw, ImageFont
 HERE = Path(__file__).resolve().parent
 DATA = HERE.parent
 SHEET = HERE / "icon-sprite-sheet.png"
+# Classic Dev-C++ toolbar icons (8 x 4; the table in docs/ICONS.md). Named kevc-classic-<name>.
+CLASSIC_SHEET = HERE / "classic-toolbar-sheet.png"
+CLASSIC_NAMES = [
+    "new-file", "open-file", "save", "save-all", "close-file", "print", "undo", "redo",
+    "find", "find-previous", "find-next", "replace", "go-to-line", "project-options", "compiler-options", "new-project",
+    "compile", "run", "compile-and-run", "rebuild-all", "debug", "help", "tips", "resources",
+    "insert", "toggle", "go-to", "project-folder", "source-file", "resource-file", "compile-log", "application",
+]
+# Most classic icons are about 150 sheet pixels across; smaller ones (the question mark) keep their
+# smaller look rather than being blown up to fill the button.
+CLASSIC_MIN_SIDE = 150
 # Language logos for the New Project dialog, from Wikimedia Commons (see docs/ICONS.md).
 LOGOS = {"cpp-logo": "cpp.png", "c-logo": "c.png", "ts-logo": "typescript.png", "svelte-logo": "svelte.png"}
 SIZES = (16, 24, 32, 48)
@@ -53,6 +65,40 @@ def sheet_icon(sheet, name):
     alpha = tile.getchannel("A").point(lambda a: 255 if a >= 128 else 0)
     tile.putalpha(alpha)
     return tile.crop(alpha.getbbox())
+
+
+def spans(alpha, horizontal):
+    """The runs of columns (or rows) holding any icon pixels; the empty runs between them are the gaps."""
+    n = alpha.width if horizontal else alpha.height
+    out, start = [], None
+    for i in range(n):
+        line = alpha.crop((i, 0, i + 1, alpha.height) if horizontal else (0, i, alpha.width, i + 1))
+        empty = line.getextrema()[1] < 32
+        if not empty and start is None:
+            start = i
+        if empty and start is not None:
+            out.append((start, i))
+            start = None
+    if start is not None:
+        out.append((start, n))
+    return out
+
+
+def classic_icons(sheet):
+    """The classic sheet's icons by name. Its rows aren't evenly spaced (row 1 reaches below a
+    quarter of the height), so cells are found from the transparent gaps between icons."""
+    alpha = sheet.getchannel("A")
+    cols, rows = spans(alpha, True), spans(alpha, False)
+    if len(cols) != 8 or len(rows) != 4:
+        raise SystemExit(f"{CLASSIC_SHEET.name}: expected 8 x 4 icons, found {len(cols)} x {len(rows)}")
+    icons = {}
+    for n, name in enumerate(CLASSIC_NAMES):
+        r, c = divmod(n, 8)
+        tile = sheet.crop((cols[c][0], rows[r][0], cols[c][1], rows[r][1]))
+        a = tile.getchannel("A").point(lambda v: 255 if v >= 128 else 0)  # drop the faint halo
+        tile.putalpha(a)
+        icons["classic-" + name] = square(tile.crop(a.getbbox()), min_side=CLASSIC_MIN_SIDE)
+    return icons
 
 
 def square(img, min_side=MIN_SIDE, pad=4):
@@ -310,6 +356,7 @@ def build(sheet):
     icons["static-library"] = library(get("copy"), gear, [(0.56, 0.68, 0.70)])
     for name, file in LOGOS.items():
         icons[name] = logo(HERE / "logos" / file)
+    icons.update(classic_icons(Image.open(CLASSIC_SHEET).convert("RGBA")))
     return icons
 
 

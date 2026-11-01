@@ -16,6 +16,38 @@
     <file>icons/hicolor/16x16/actions/kevc-call-stack.png</file>
     <file>icons/hicolor/16x16/actions/kevc-char-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-class.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-application.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-close-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-compile.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-compile-and-run.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-compile-log.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-compiler-options.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-debug.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-find.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-find-next.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-find-previous.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-go-to.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-go-to-line.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-help.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-insert.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-new-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-new-project.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-open-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-print.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-project-folder.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-project-options.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-rebuild-all.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-redo.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-replace.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-resource-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-resources.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-run.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-save.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-save-all.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-source-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-tips.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-toggle.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-classic-undo.png</file>
     <file>icons/hicolor/16x16/actions/kevc-clean.png</file>
     <file>icons/hicolor/16x16/actions/kevc-compile.png</file>
     <file>icons/hicolor/16x16/actions/kevc-compile-run.png</file>
@@ -106,6 +138,38 @@
     <file>icons/hicolor/24x24/actions/kevc-call-stack.png</file>
     <file>icons/hicolor/24x24/actions/kevc-char-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-class.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-application.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-close-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-compile.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-compile-and-run.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-compile-log.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-compiler-options.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-debug.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-find.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-find-next.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-find-previous.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-go-to.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-go-to-line.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-help.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-insert.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-new-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-new-project.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-open-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-print.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-project-folder.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-project-options.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-rebuild-all.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-redo.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-replace.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-resource-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-resources.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-run.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-save.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-save-all.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-source-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-tips.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-toggle.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-classic-undo.png</file>
     <file>icons/hicolor/24x24/actions/kevc-clean.png</file>
     <file>icons/hicolor/24x24/actions/kevc-compile.png</file>
     <file>icons/hicolor/24x24/actions/kevc-compile-run.png</file>
@@ -196,6 +260,38 @@
     <file>icons/hicolor/32x32/actions/kevc-call-stack.png</file>
     <file>icons/hicolor/32x32/actions/kevc-char-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-class.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-application.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-close-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-compile.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-compile-and-run.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-compile-log.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-compiler-options.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-debug.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-find.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-find-next.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-find-previous.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-go-to.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-go-to-line.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-help.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-insert.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-new-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-new-project.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-open-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-print.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-project-folder.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-project-options.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-rebuild-all.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-redo.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-replace.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-resource-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-resources.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-run.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-save.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-save-all.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-source-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-tips.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-toggle.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-classic-undo.png</file>
     <file>icons/hicolor/32x32/actions/kevc-clean.png</file>
     <file>icons/hicolor/32x32/actions/kevc-compile.png</file>
     <file>icons/hicolor/32x32/actions/kevc-compile-run.png</file>
@@ -286,6 +382,38 @@
     <file>icons/hicolor/48x48/actions/kevc-call-stack.png</file>
     <file>icons/hicolor/48x48/actions/kevc-char-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-class.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-application.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-close-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-compile.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-compile-and-run.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-compile-log.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-compiler-options.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-debug.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-find.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-find-next.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-find-previous.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-go-to.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-go-to-line.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-help.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-insert.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-new-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-new-project.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-open-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-print.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-project-folder.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-project-options.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-rebuild-all.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-redo.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-replace.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-resource-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-resources.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-run.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-save.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-save-all.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-source-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-tips.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-toggle.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-classic-undo.png</file>
     <file>icons/hicolor/48x48/actions/kevc-clean.png</file>
     <file>icons/hicolor/48x48/actions/kevc-compile.png</file>
     <file>icons/hicolor/48x48/actions/kevc-compile-run.png</file>

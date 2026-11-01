@@ -128,7 +128,9 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   the Run tab; the Terminal tab is a shell in the project folder.
 - **Slate colours**: the dark slate palette of Embarcadero Dev-C++ 6, for the window and the editor,
   whatever the desktop theme is.
-- **Dev-C++-style toolbar**: pixel icons in the Dev-C++ style (see [docs/ICONS.md](docs/ICONS.md)). Each
+- **Dev-C++-style toolbar**: the classic Dev-C++ toolbar icons (New, Open, Save, Close, Undo, Find,
+  Replace, Go to Line, Compile, Run, Rebuild, Debug, Toggle Breakpoint, Project Options) and pixel icons
+  in the same style for the rest (see [docs/ICONS.md](docs/ICONS.md)). Each
   button that starts something (Compile, Run, Compile & Run, Rebuild All, Clean, Debug, the dev server)
   turns into a Stop button while it runs; Continue turns into Pause while the debugged program runs.
 - **Movable panels**: every bottom panel can be docked at the bottom, docked on the right, or opened in
