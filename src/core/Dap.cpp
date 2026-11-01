@@ -65,9 +65,17 @@ json chromeLaunch(const std::string& url, const fs::path& root, const fs::path& 
             {"skipFiles", json::array({"**/node_modules/**", "**/@vite/**"})}};
 }
 
-json setBreakpointsArguments(const fs::path& file, const std::set<int>& lines) {
+json setBreakpointsArguments(const fs::path& file, const FileBreakpoints& breakpoints, const std::map<int, int>& liveIds) {
     json bps = json::array();
-    for (int line : lines) bps.push_back({{"line", line}});
+    for (const auto& [line, bp] : breakpoints) {
+        json b = {{"line", line}};
+        if (bp.kind == BreakKind::Conditional && !bp.condition.empty()) b["condition"] = bp.condition;
+        // A live breakpoint naming no values stays a plain breakpoint: JsDebugger reads the locals
+        // when it stops there and carries on (a logpoint can't list them).
+        if (bp.kind == BreakKind::Live && !bp.show.empty())
+            if (auto it = liveIds.find(line); it != liveIds.end()) b["logMessage"] = liveLogMessage(it->second, bp.show);
+        bps.push_back(std::move(b));
+    }
     return {{"source", {{"path", file.string()}, {"name", file.filename().string()}}}, {"breakpoints", bps}};
 }
 

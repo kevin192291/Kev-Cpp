@@ -29,17 +29,19 @@ protected:
 TEST_F(ProjectStateTest, BreakpointsAndWatchesSurviveARestart) {
     const fs::path file = dir_ / "state/projects.json", root = dir_ / "proj";
     ProjectState state;
-    state.breakpoints[root / "src/main.cpp"] = {3, 12};
-    state.breakpoints[dir_ / "lib/vec.h"] = {7}; // outside the project: kept by its full path
+    state.breakpoints[root / "src/main.cpp"] = {{3, {}}, {12, {BreakKind::Conditional, "i > 2", {}}}};
+    state.breakpoints[dir_ / "lib/vec.h"] = {{7, {BreakKind::Live, "", {"size"}}}}; // outside: full path
     state.breakpoints[root / "src/util.cpp"] = {};  // nothing there: not saved
     state.watches = {"x", "p->next"};
+    state.valueWatches = {"total"};
     ProjectStateStore(file).save(root, state);
 
     const ProjectState again = ProjectStateStore(file).load(root);
     EXPECT_EQ(again.breakpoints.size(), 2u);
-    EXPECT_EQ(again.breakpoints.at(root / "src/main.cpp"), (std::set<int>{3, 12}));
-    EXPECT_EQ(again.breakpoints.at(dir_ / "lib/vec.h"), (std::set<int>{7}));
+    EXPECT_EQ(again.breakpoints.at(root / "src/main.cpp"), state.breakpoints.at(root / "src/main.cpp"));
+    EXPECT_EQ(again.breakpoints.at(dir_ / "lib/vec.h").at(7).show, (std::vector<std::string>{"size"}));
     EXPECT_EQ(again.watches, (std::vector<std::string>{"x", "p->next"}));
+    EXPECT_EQ(again.valueWatches, (std::vector<std::string>{"total"}));
     // Files inside the project are stored relative to it.
     std::ifstream in(file);
     const auto json = nlohmann::json::parse(in);
@@ -52,7 +54,10 @@ TEST_F(ProjectStateTest, BreakpointsAndWatchesSurviveARestart) {
 TEST_F(ProjectStateTest, GoneFilesAreDroppedAndEmptyStatesRemoved) {
     const fs::path file = dir_ / "projects.json", root = dir_ / "proj";
     ProjectStateStore store(file);
-    store.save(root, {{{root / "src/main.cpp", {1}}, {root / "src/util.cpp", {2}}}, {}});
+    ProjectState two;
+    two.breakpoints[root / "src/main.cpp"] = {{1, {}}};
+    two.breakpoints[root / "src/util.cpp"] = {{2, {}}};
+    store.save(root, two);
     fs::remove(root / "src/util.cpp");
     EXPECT_EQ(ProjectStateStore(file).load(root).breakpoints.size(), 1u);
     store.save(root, {});
@@ -63,14 +68,14 @@ TEST_F(ProjectStateTest, GoneFilesAreDroppedAndEmptyStatesRemoved) {
 TEST_F(ProjectStateTest, KeepsTheMostRecentProjectsAndSurvivesADamagedFile) {
     const fs::path file = dir_ / "projects.json";
     ProjectStateStore store(file);
-    for (int i = 0; i < 5; ++i) store.save(dir_ / ("p" + std::to_string(i)), {{}, {"w"}}, 3);
+    for (int i = 0; i < 5; ++i) store.save(dir_ / ("p" + std::to_string(i)), {{}, {"w"}, {}, {}}, 3);
     ProjectStateStore reread(file);
     EXPECT_TRUE(reread.load(dir_ / "p0").watches.empty()); // the oldest went
     EXPECT_FALSE(reread.load(dir_ / "p4").watches.empty());
     std::ofstream(file) << "{ not json";
     ProjectStateStore damaged(file);
     EXPECT_EQ(damaged.load(dir_ / "p4"), ProjectState{});
-    damaged.save(dir_ / "p9", {{}, {"y"}});
+    damaged.save(dir_ / "p9", {{}, {"y"}, {}, {}});
     EXPECT_EQ(ProjectStateStore(file).load(dir_ / "p9").watches, (std::vector<std::string>{"y"}));
 }
 
@@ -106,4 +111,12 @@ TEST_F(ProjectStateTest, KevcKeepsTheProjectsLook) {
     EXPECT_FALSE(nlohmann::json::parse(in).contains("ui"));
     // Junk is ignored, not an error.
     EXPECT_TRUE(uiFromJson(nlohmann::json{{"toolbars", {{"web", "yes"}}}, {"buildConfig", "Fast"}}).empty());
+}
+
+TEST_F(ProjectStateTest, OlderStateFilesStillLoad) {
+    const fs::path file = dir_ / "projects.json", root = dir_ / "proj";
+    std::ofstream(file) << nlohmann::json{{root.string(), {{"breakpoints", {{"src/main.cpp", {4, 9}}}}, {"saved", 1}}}}.dump();
+    const auto state = ProjectStateStore(file).load(root);
+    ASSERT_EQ(state.breakpoints.at(root / "src/main.cpp").size(), 2u);
+    EXPECT_EQ(state.breakpoints.at(root / "src/main.cpp").at(9).kind, BreakKind::Standard);
 }

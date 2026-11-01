@@ -5,13 +5,28 @@
 #include "lsp/LspManager.h"
 
 #include <algorithm>
+#include <array>
+#include <tuple>
 #include <stdexcept>
 
 namespace kevc {
 
 namespace {
 
-constexpr const char* kBreakpointCategory = "kevc-breakpoint";
+constexpr const char* kBreakpointCategory = "kevc-breakpoint";      // standard
+constexpr const char* kConditionalCategory = "kevc-breakpoint-if"; // stops when its condition holds
+constexpr const char* kLiveCategory = "kevc-breakpoint-live";      // shows values, never stops
+constexpr const char* kBreakpointData = "kevc-breakpoint";         // the Breakpoint on a mark
+constexpr std::array kBreakpointCategories{kBreakpointCategory, kConditionalCategory, kLiveCategory};
+
+const char* categoryOf(kevc::BreakKind kind) {
+    switch (kind) {
+    case kevc::BreakKind::Conditional: return kConditionalCategory;
+    case kevc::BreakKind::Live: return kLiveCategory;
+    case kevc::BreakKind::Standard: break;
+    }
+    return kBreakpointCategory;
+}
 constexpr const char* kExecutionCategory = "kevc-execution";
 
 GtkSourceLanguage* languageFor(const std::filesystem::path& file, bool cppHeaders) {
@@ -72,12 +87,45 @@ EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_
     gtk_source_mark_attributes_set_background(bp, &breakpointBg);
     gtk_source_view_set_mark_attributes(view_, kBreakpointCategory, bp, 10);
     g_object_unref(bp);
+    // The other kinds: their own icons, and a tint that says which (red: stops; teal: never stops).
+    for (const auto& [category, icon, tint] :
+         {std::tuple{kConditionalCategory, "kevc-breakpoint-if", "rgba(224,27,36,0.12)"},
+          std::tuple{kLiveCategory, "kevc-breakpoint-live", "rgba(26,170,196,0.14)"}}) {
+        GdkRGBA background;
+        gdk_rgba_parse(&background, tint);
+        GtkSourceMarkAttributes* attributes = gtk_source_mark_attributes_new();
+        gtk_source_mark_attributes_set_icon_name(attributes, icon);
+        gtk_source_mark_attributes_set_background(attributes, &background);
+        gtk_source_view_set_mark_attributes(view_, category, attributes, 10);
+        g_object_unref(attributes);
+    }
+    // Live values stay after their line as lines above them change.
+    g_signal_connect_swapped(buffer_, "changed", G_CALLBACK(+[](EditorTab* tab) { tab->placeLiveLabels(); }), this);
     GtkSourceMarkAttributes* exec = gtk_source_mark_attributes_new();
     gtk_source_mark_attributes_set_icon_name(exec, "kevc-exec-arrow");
     gtk_source_mark_attributes_set_background(exec, &executionBg);
     gtk_source_view_set_mark_attributes(view_, kExecutionCategory, exec, 20);
     g_object_unref(exec);
     g_signal_connect(view_, "line-mark-activated", G_CALLBACK(&EditorTab::onLineMarkActivated), this);
+    // A right-click on the line numbers or marks: the breakpoint kinds for that line (setGutterMenu),
+    // not the text's menu, which the view would otherwise open there too.
+    GtkGesture* gutterClick = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(gutterClick), GDK_BUTTON_SECONDARY);
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(gutterClick), GTK_PHASE_CAPTURE);
+    auto onGutterPress = +[](GtkGestureClick* gesture, int, double x, double y, gpointer self) {
+        auto* tab = static_cast<EditorTab*>(self);
+        GtkTextView* text = GTK_TEXT_VIEW(tab->view_);
+        GtkWidget* gutter = gtk_text_view_get_gutter(text, GTK_TEXT_WINDOW_LEFT);
+        if (!tab->gutterPopover_ || !gutter || x >= gtk_widget_get_width(gutter)) return;
+        gtk_gesture_set_state(GTK_GESTURE(gesture), GTK_EVENT_SEQUENCE_CLAIMED);
+        int bx = 0, by = 0;
+        gtk_text_view_window_to_buffer_coords(text, GTK_TEXT_WINDOW_WIDGET, 0, static_cast<int>(y), &bx, &by);
+        GtkTextIter line;
+        gtk_text_view_get_line_at_y(text, &line, by, nullptr);
+        tab->showGutterMenu(gtk_text_iter_get_line(&line));
+    };
+    g_signal_connect(gutterClick, "pressed", G_CALLBACK(onGutterPress), this);
+    gtk_widget_add_controller(GTK_WIDGET(view_), GTK_EVENT_CONTROLLER(gutterClick));
 
     // Clicking a line number toggles a breakpoint, as in Dev-C++. The line-number renderer is
     // private to GtkSourceView, so find it among the gutter's children by type name.
@@ -114,6 +162,8 @@ EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_
 
 EditorTab::~EditorTab() {
     if (monitor_) monitor_->cancel();
+    for (auto& [mark, label] : liveLabels_) g_object_unref(mark);
+    if (gutterPopover_) gtk_widget_unparent(GTK_WIDGET(gutterPopover_));
     g_signal_handlers_disconnect_by_data(view_, this);
     if (lineNumbers_) g_signal_handlers_disconnect_by_data(lineNumbers_, this);
     g_signal_handlers_disconnect_by_data(buffer_, this);
@@ -213,15 +263,15 @@ void EditorTab::setTextKeepingPlace(const std::string& contents, bool undoable) 
     gtk_text_buffer_get_iter_at_mark(text, &cursor, gtk_text_buffer_get_insert(text));
     const int line = gtk_text_iter_get_line(&cursor);
     // Replacing the whole text would slide every mark to line 1; put breakpoints back by line.
-    const std::vector<int> breakpointLines = breakpoints();
+    const FileBreakpoints breakpointsBefore = breakpoints();
     if (undoable) gtk_text_buffer_begin_user_action(text);
     else gtk_text_buffer_begin_irreversible_action(text);
     gtk_text_buffer_set_text(text, contents.data(), static_cast<int>(contents.size()));
     if (undoable) gtk_text_buffer_end_user_action(text);
     else gtk_text_buffer_end_irreversible_action(text);
-    std::vector<int> kept;
-    for (int l : breakpointLines)
-        if (l <= gtk_text_buffer_get_line_count(text)) kept.push_back(l);
+    FileBreakpoints kept;
+    for (const auto& [l, bp] : breakpointsBefore)
+        if (l <= gtk_text_buffer_get_line_count(text)) kept[l] = bp;
     setBreakpoints(kept);
     GtkTextIter restored;
     gtk_text_buffer_get_iter_at_line(text, &restored, line);
@@ -315,44 +365,147 @@ void EditorTab::showDiagnostics(const std::vector<LspDiagnostic>& diagnostics) {
     }
 }
 
-void EditorTab::setBreakpoints(const std::vector<int>& lines) {
+void EditorTab::setBreakpoints(const FileBreakpoints& breakpoints) {
     GtkTextIter start, end;
     gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffer_), &start, &end);
-    gtk_source_buffer_remove_source_marks(buffer_, &start, &end, kBreakpointCategory);
-    for (int line : lines) {
+    clearLiveValues();
+    for (const char* category : kBreakpointCategories) gtk_source_buffer_remove_source_marks(buffer_, &start, &end, category);
+    const int lines = gtk_text_buffer_get_line_count(GTK_TEXT_BUFFER(buffer_));
+    for (const auto& [line, bp] : breakpoints) {
+        if (line < 1 || line > lines) continue;
         GtkTextIter at;
         gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(buffer_), &at, line - 1);
-        gtk_source_buffer_create_source_mark(buffer_, nullptr, kBreakpointCategory, &at);
+        GtkSourceMark* mark = gtk_source_buffer_create_source_mark(buffer_, nullptr, categoryOf(bp.kind), &at);
+        g_object_set_data_full(G_OBJECT(mark), kBreakpointData, new Breakpoint(bp),
+                               [](gpointer data) { delete static_cast<Breakpoint*>(data); });
     }
 }
 
-std::vector<int> EditorTab::breakpoints() const {
-    std::vector<int> lines;
-    GtkTextIter iter;
-    gtk_text_buffer_get_start_iter(GTK_TEXT_BUFFER(buffer_), &iter);
-    // A mark at the very start isn't reached by "forward to mark", so check line 1 first.
-    GSList* first = gtk_source_buffer_get_source_marks_at_iter(buffer_, &iter, kBreakpointCategory);
-    if (first) lines.push_back(1);
-    g_slist_free(first);
-    while (gtk_source_buffer_forward_iter_to_source_mark(buffer_, &iter, kBreakpointCategory)) {
-        const int line = gtk_text_iter_get_line(&iter) + 1;
-        if (lines.empty() || lines.back() != line) lines.push_back(line);
+FileBreakpoints EditorTab::breakpoints() const {
+    FileBreakpoints out;
+    for (const char* category : kBreakpointCategories) {
+        GtkTextIter iter;
+        gtk_text_buffer_get_start_iter(GTK_TEXT_BUFFER(buffer_), &iter);
+        // A mark at the very start isn't reached by "forward to mark", so look there first.
+        bool first = true;
+        while (first || gtk_source_buffer_forward_iter_to_source_mark(buffer_, &iter, category)) {
+            first = false;
+            GSList* marks = gtk_source_buffer_get_source_marks_at_iter(buffer_, &iter, category);
+            for (GSList* m = marks; m; m = m->next) {
+                const auto* bp = static_cast<const Breakpoint*>(g_object_get_data(G_OBJECT(m->data), kBreakpointData));
+                out[gtk_text_iter_get_line(&iter) + 1] = bp ? *bp : Breakpoint{};
+            }
+            g_slist_free(marks);
+        }
     }
-    return lines;
+    return out;
+}
+
+std::optional<Breakpoint> EditorTab::breakpointAt(int line) const {
+    for (const char* category : kBreakpointCategories) {
+        GSList* marks = gtk_source_buffer_get_source_marks_at_line(buffer_, line - 1, category);
+        std::optional<Breakpoint> found;
+        if (marks) {
+            const auto* bp = static_cast<const Breakpoint*>(g_object_get_data(G_OBJECT(marks->data), kBreakpointData));
+            found = bp ? *bp : Breakpoint{};
+        }
+        g_slist_free(marks);
+        if (found) return found;
+    }
+    return std::nullopt;
+}
+
+void EditorTab::removeBreakpointMarks(int line) {
+    for (const char* category : kBreakpointCategories) {
+        GSList* marks = gtk_source_buffer_get_source_marks_at_line(buffer_, line - 1, category);
+        for (GSList* m = marks; m; m = m->next) {
+            GtkTextMark* mark = GTK_TEXT_MARK(m->data);
+            if (auto it = liveLabels_.find(mark); it != liveLabels_.end()) {
+                retireLiveLabel(it->second);
+                liveLabels_.erase(it);
+                g_object_unref(mark);
+            }
+            gtk_text_buffer_delete_mark(GTK_TEXT_BUFFER(buffer_), mark);
+        }
+        g_slist_free(marks);
+    }
+}
+
+void EditorTab::setBreakpoint(int line, const std::optional<Breakpoint>& breakpoint) {
+    if (line < 1 || line > gtk_text_buffer_get_line_count(GTK_TEXT_BUFFER(buffer_))) return;
+    removeBreakpointMarks(line);
+    if (breakpoint) {
+        GtkTextIter at;
+        gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(buffer_), &at, line - 1);
+        GtkSourceMark* mark = gtk_source_buffer_create_source_mark(buffer_, nullptr, categoryOf(breakpoint->kind), &at);
+        g_object_set_data_full(G_OBJECT(mark), kBreakpointData, new Breakpoint(*breakpoint),
+                               [](gpointer data) { delete static_cast<Breakpoint*>(data); });
+    }
+    breakpointChanged_.emit(line, breakpoint);
 }
 
 void EditorTab::toggleBreakpoint(int line) {
-    GSList* marks = gtk_source_buffer_get_source_marks_at_line(buffer_, line - 1, kBreakpointCategory);
-    const bool on = marks == nullptr;
-    if (on) {
-        GtkTextIter at;
-        gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(buffer_), &at, line - 1);
-        gtk_source_buffer_create_source_mark(buffer_, nullptr, kBreakpointCategory, &at);
-    } else {
-        for (GSList* m = marks; m; m = m->next) gtk_text_buffer_delete_mark(GTK_TEXT_BUFFER(buffer_), GTK_TEXT_MARK(m->data));
-    }
+    setBreakpoint(line, breakpointAt(line) ? std::nullopt : std::optional<Breakpoint>(Breakpoint{}));
+}
+
+void EditorTab::showLiveValues(int line, const std::string& text) {
+    GSList* marks = gtk_source_buffer_get_source_marks_at_line(buffer_, line - 1, kLiveCategory);
+    GtkTextMark* mark = marks ? GTK_TEXT_MARK(marks->data) : nullptr;
     g_slist_free(marks);
-    breakpointToggled_.emit(line, on);
+    if (!mark) return;
+    Gtk::Label*& label = liveLabels_[mark];
+    if (!label) {
+        // Ours until the label goes: deleting its line deletes the mark, and placeLiveLabels must
+        // still be able to ask whether it was.
+        g_object_ref(mark);
+        if (!spareLiveLabels_.empty()) {
+            label = spareLiveLabels_.back();
+            spareLiveLabels_.pop_back();
+            label->set_visible(true);
+        } else {
+            label = Gtk::make_managed<Gtk::Label>();
+            label->add_css_class("kevc-live-values");
+            label->set_can_target(false); // clicks go to the text under it
+            gtk_text_view_add_overlay(GTK_TEXT_VIEW(view_), GTK_WIDGET(label->gobj()), 0, 0);
+        }
+    }
+    label->set_text(text);
+    placeLiveLabels();
+}
+
+void EditorTab::placeLiveLabels() {
+    // Each label just after the end of its breakpoint's line.
+    for (auto it = liveLabels_.begin(); it != liveLabels_.end();) {
+        if (gtk_text_mark_get_deleted(it->first)) {
+            retireLiveLabel(it->second);
+            g_object_unref(it->first);
+            it = liveLabels_.erase(it);
+            continue;
+        }
+        GtkTextIter end;
+        gtk_text_buffer_get_iter_at_mark(GTK_TEXT_BUFFER(buffer_), &end, it->first);
+        if (!gtk_text_iter_ends_line(&end)) gtk_text_iter_forward_to_line_end(&end);
+        GdkRectangle where;
+        gtk_text_view_get_iter_location(GTK_TEXT_VIEW(view_), &end, &where);
+        gtk_text_view_move_overlay(GTK_TEXT_VIEW(view_), GTK_WIDGET(it->second->gobj()), where.x + 28, where.y);
+        ++it;
+    }
+}
+
+void EditorTab::clearLiveValues() {
+    for (auto& [mark, label] : liveLabels_) {
+        retireLiveLabel(label);
+        g_object_unref(mark);
+    }
+    liveLabels_.clear();
+}
+
+void EditorTab::retireLiveLabel(Gtk::Label* label) {
+    // Hidden and kept for the next live breakpoint: GTK 4.14's gtk_text_view_remove() refuses
+    // overlay children ("not a child of GtkTextView"), and unparenting one behind the view's back
+    // would leave the view a dangling entry.
+    label->set_visible(false);
+    spareLiveLabels_.push_back(label);
 }
 
 void EditorTab::setExecutionLine(int line) {
@@ -377,7 +530,35 @@ std::string EditorTab::lineText(int line) const {
     return out;
 }
 
-void EditorTab::onLineMarkActivated(GtkSourceView*, const GtkTextIter* iter, guint button, GdkModifierType, gint,
+void EditorTab::setGutterMenu(const Glib::RefPtr<Gio::MenuModel>& menu) {
+    if (!gutterPopover_) {
+        gutterPopover_ = GTK_POPOVER(gtk_popover_menu_new_from_model(nullptr));
+        gtk_widget_set_parent(GTK_WIDGET(gutterPopover_), GTK_WIDGET(view_));
+        gtk_popover_set_position(gutterPopover_, GTK_POS_RIGHT);
+        gtk_popover_set_has_arrow(gutterPopover_, FALSE);
+    }
+    gtk_popover_menu_set_menu_model(GTK_POPOVER_MENU(gutterPopover_), menu ? menu->gobj() : nullptr);
+}
+
+void EditorTab::showGutterMenu(int line) {
+    // The cursor goes to that line: the menu's items (IF, Live…) act on the cursor's line.
+    GtkTextBuffer* buffer = GTK_TEXT_BUFFER(buffer_);
+    GtkTextIter at;
+    gtk_text_buffer_get_iter_at_line(buffer, &at, line);
+    gtk_text_buffer_place_cursor(buffer, &at);
+    if (!gutterPopover_) return;
+    GdkRectangle where;
+    gtk_text_view_get_iter_location(GTK_TEXT_VIEW(view_), &at, &where);
+    int x = 0, y = 0;
+    gtk_text_view_buffer_to_window_coords(GTK_TEXT_VIEW(view_), GTK_TEXT_WINDOW_WIDGET, where.x, where.y, &x, &y);
+    GtkWidget* gutter = gtk_text_view_get_gutter(GTK_TEXT_VIEW(view_), GTK_TEXT_WINDOW_LEFT);
+    const GdkRectangle point{gutter ? gtk_widget_get_width(gutter) : 0, y, 1, std::max(where.height, 1)};
+    gtk_popover_set_pointing_to(gutterPopover_, &point);
+    // After the click that opened it has finished, or the popover would see its release.
+    g_idle_add_once([](gpointer p) { gtk_popover_popup(GTK_POPOVER(p)); }, gutterPopover_);
+}
+
+void EditorTab::onLineMarkActivated(GtkSourceView* view, const GtkTextIter* iter, guint button, GdkModifierType, gint,
                                     gpointer self) {
     if (button != GDK_BUTTON_PRIMARY) return;
     static_cast<EditorTab*>(self)->toggleBreakpoint(gtk_text_iter_get_line(iter) + 1);
@@ -385,8 +566,9 @@ void EditorTab::onLineMarkActivated(GtkSourceView*, const GtkTextIter* iter, gui
 
 void EditorTab::onLineNumberActivated(GtkSourceGutterRenderer* renderer, GtkTextIter* iter, GdkRectangle*,
                                       guint button, GdkModifierType, gint, gpointer self) {
+    auto* tab = static_cast<EditorTab*>(self);
     if (button != GDK_BUTTON_PRIMARY) return;
-    static_cast<EditorTab*>(self)->toggleBreakpoint(gtk_text_iter_get_line(iter) + 1);
+    tab->toggleBreakpoint(gtk_text_iter_get_line(iter) + 1);
     // The renderer's default is to select the line; a breakpoint click shouldn't do that.
     g_signal_stop_emission_by_name(renderer, "activate");
 }

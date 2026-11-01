@@ -5,6 +5,7 @@
 #include <gtkmm.h>
 
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -55,6 +56,19 @@ private:
     Gtk::Box children_{Gtk::Orientation::VERTICAL};
 };
 
+// A row of the Breakpoints tab.
+struct BreakpointItem {
+    std::filesystem::path file;
+    int line = 0;
+    Breakpoint breakpoint;
+};
+// A "break when the value changes" watch and what the debugger says about it.
+struct ValueWatchItem {
+    std::string expression;
+    std::string state; // e.g. "watching", "waiting: …", "changed from 1 to 2"
+    bool armed = false;
+};
+
 // The bottom "Debug" tab: Locals, Call Stack, Breakpoints and the GDB console.
 class DebugPanel : public Gtk::Notebook {
 public:
@@ -63,13 +77,20 @@ public:
     void showMessage(const Glib::ustring& text); // clears locals and stack
     void setLocals(const std::vector<Gtk::Widget*>& nodes);
     void setFrames(const std::vector<StackFrame>& frames, int selected);
-    void setBreakpoints(const std::vector<std::pair<std::filesystem::path, int>>& breakpoints);
+    // The Breakpoints tab: every breakpoint (with its kind, condition or values) and value watch.
+    void setBreakpoints(const std::vector<BreakpointItem>& breakpoints, const std::vector<ValueWatchItem>& watches);
+    // A live breakpoint's latest values, kept across setBreakpoints until cleared.
+    void setLiveValues(const std::filesystem::path& file, int line, const std::string& text);
+    void clearLiveValues();
     void appendConsole(const std::string& text);
     void clearConsole();
 
     sigc::signal<void(int level)>& signalFrameActivated() { return frameActivated_; }
     sigc::signal<void(const std::filesystem::path&, int line)>& signalBreakpointActivated() { return bpActivated_; }
     sigc::signal<void(const std::filesystem::path&, int line)>& signalBreakpointRemoved() { return bpRemoved_; }
+    // Change an IF breakpoint's condition or a live breakpoint's values.
+    sigc::signal<void(const std::filesystem::path&, int line)>& signalBreakpointEdit() { return bpEdit_; }
+    sigc::signal<void(const std::string& expression)>& signalValueWatchRemoved() { return watchRemoved_; }
     sigc::signal<void(const std::string&)>& signalConsoleCommand() { return consoleCommand_; }
 
 private:
@@ -79,9 +100,13 @@ private:
     Gtk::ScrolledWindow stackScroller_;
     Gtk::ListBox stack_;
     std::vector<int> stackLevels_;
+    Gtk::Box bpPage_{Gtk::Orientation::VERTICAL};
+    Gtk::FlowBox bpButtons_; // wraps when the panel is docked narrow
     Gtk::ScrolledWindow bpScroller_;
     Gtk::ListBox breakpoints_;
     std::vector<std::pair<std::filesystem::path, int>> bpItems_;
+    std::map<std::pair<std::filesystem::path, int>, Gtk::Label*> liveLabels_;
+    std::map<std::pair<std::filesystem::path, int>, std::string> liveTexts_;
     Gtk::Box console_{Gtk::Orientation::VERTICAL};
     Gtk::ScrolledWindow consoleScroller_;
     Gtk::TextView consoleView_;
@@ -90,6 +115,8 @@ private:
     sigc::signal<void(int)> frameActivated_;
     sigc::signal<void(const std::filesystem::path&, int)> bpActivated_;
     sigc::signal<void(const std::filesystem::path&, int)> bpRemoved_;
+    sigc::signal<void(const std::filesystem::path&, int)> bpEdit_;
+    sigc::signal<void(const std::string&)> watchRemoved_;
     sigc::signal<void(const std::string&)> consoleCommand_;
 };
 

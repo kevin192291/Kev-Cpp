@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/Breakpoints.h"
+
 #include <nlohmann/json.hpp>
 
 #include <filesystem>
@@ -30,7 +32,10 @@ json nodeLaunch(const std::filesystem::path& root, const std::string& node, cons
 json chromeLaunch(const std::string& url, const std::filesystem::path& root, const std::filesystem::path& chrome,
                   const std::filesystem::path& profileDir);
 
-json setBreakpointsArguments(const std::filesystem::path& file, const std::set<int>& lines);
+// A file's breakpoints for setBreakpoints: conditions as js-debug conditions, live breakpoints that
+// name values as logpoints whose message liveIds (line -> id) marks (see core/Breakpoints).
+json setBreakpointsArguments(const std::filesystem::path& file, const FileBreakpoints& breakpoints,
+                             const std::map<int, int>& liveIds = {});
 // Files a breakpoint can go in for js-debug (it maps them through source maps).
 bool debuggableSource(const std::filesystem::path& file);
 // Whether a session of this adapter type ("pwa-node", "pwa-chrome", …) gets this file's breakpoints.

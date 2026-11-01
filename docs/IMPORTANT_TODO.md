@@ -19,6 +19,15 @@ Done items say where to find them. Last updated 2026-11-01.
   search field in the menu bar (Ctrl+P, files and text) and the Search tab (Ctrl+Shift+F, with
   Replace All).
 - ✅ **No project open: Execute/Debug items and toolbar buttons greyed out** (their keys do nothing).
+- ✅ **Four kinds of breakpoint** for C/C++ (gdb) and JavaScript (js-debug): standard, IF, live
+  (shows values each time the line runs, without stopping) and break when a value changes.
+  Right-click a line number, the Debug menu, or the Breakpoints tab (core/Breakpoints,
+  DebugController, JsDebugger). STM32 gets them through the same gdb code (S3).
+- ✅ **Closing or killing Kev-C++ while debugging JavaScript left Vite running** (js-debug's
+  watchdog kept it waiting); stopped processes now take their whole tree with them, and SIGTERM
+  closes the window properly.
+- ✅ **The editor was cut off on the left** when the Debug panel was docked on the right; the docks
+  now give way instead.
 - ✅ **The .kevc holds the project's settings**: toolbars and panels shown or hidden and the Debug /
   Release choice (`"ui"`). Web folders have no .kevc by design, so theirs are kept with the project's
   remembered state (`~/.local/state/kev-cpp/projects.json`).

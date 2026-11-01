@@ -80,6 +80,17 @@ public:
 
     json tuple() {
         expect('{');
+        // gdb's own quirk: a breakpoint's commands come as script={"printf …","continue"}, values
+        // without names. Read them as a list.
+        if (peek() == '"' || peek() == '{' || peek() == '[') {
+            json out = json::array();
+            while (!atEnd() && peek() != '}') {
+                out.push_back(value());
+                if (peek() == ',') ++i_;
+            }
+            expect('}');
+            return out;
+        }
         json out = results('}');
         expect('}');
         return out;

@@ -92,6 +92,9 @@ Rows and columns as on the sheet; the icon is `kevc-<name>`.
 | `continue` | Continue (debugger) | One Pause bar and the Run triangle |
 | `new-project` | New Project | Project folder with the New file sparkle |
 | `error`, `breakpoint-dot` | Compiler errors, breakpoint gutter mark | The red badges of Error list and Toggle breakpoint |
+| `breakpoint-if` | IF breakpoint (gutter, Breakpoints tab) | Drawn: red circle with a white ? |
+| `breakpoint-live` | Live breakpoint | Drawn: teal diamond |
+| `breakpoint-change` | Break when a value changes | Drawn: amber circle with Δ |
 | `warning` | Compiler warnings | Drawn: yellow triangle with ! |
 | `globe` | Dev server | Drawn |
 | `terminal` | Terminal and GDB Console tabs | Drawn |

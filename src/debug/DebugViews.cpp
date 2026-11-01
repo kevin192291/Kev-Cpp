@@ -5,6 +5,7 @@
 #include "ui/IconWidgets.h"
 
 #include <algorithm>
+#include <tuple>
 
 namespace kevc {
 
@@ -191,8 +192,33 @@ DebugPanel::DebugPanel() {
         const int i = row->get_index();
         if (i >= 0 && static_cast<size_t>(i) < bpItems_.size()) bpActivated_.emit(bpItems_[i].first, bpItems_[i].second);
     });
+    // The kinds of breakpoint, where anyone looking at the tab sees them. They act on the line the
+    // cursor is on (as Debug's menu items and the editor's right-click menu do).
+    bpButtons_.set_selection_mode(Gtk::SelectionMode::NONE);
+    bpButtons_.set_max_children_per_line(4);
+    bpButtons_.set_column_spacing(4);
+    bpButtons_.set_row_spacing(2);
+    bpButtons_.set_margin(4);
+    for (const auto& [icon, text, action, tip] :
+         {std::tuple{"kevc-breakpoint", "Breakpoint", "win.toggle-breakpoint", "Stop at the cursor's line (Ctrl+F5)"},
+          std::tuple{"kevc-breakpoint-if", "IF Breakpoint…", "win.if-breakpoint", "Stop at the cursor's line only when a condition is true"},
+          std::tuple{"kevc-breakpoint-live", "Live Breakpoint…", "win.live-breakpoint",
+                     "Show values each time the cursor's line runs, without stopping"},
+          std::tuple{"kevc-breakpoint-change", "Break When Value Changes…", "win.value-watch",
+                     "Stop when a variable's value changes"}}) {
+        auto* button = Gtk::make_managed<Gtk::Button>();
+        button->set_child(*makeIconLabel(icon, text));
+        button->set_action_name(action);
+        button->set_tooltip_text(tip);
+        button->set_has_frame(false);
+        bpButtons_.append(*button);
+    }
+    bpPage_.append(bpButtons_);
+    bpPage_.append(*Gtk::make_managed<Gtk::Separator>());
     bpScroller_.set_child(breakpoints_);
-    append_page(bpScroller_, *makeIconLabel("kevc-breakpoint", "Breakpoints"));
+    bpScroller_.set_vexpand(true);
+    bpPage_.append(bpScroller_);
+    append_page(bpPage_, *makeIconLabel("kevc-breakpoint", "Breakpoints"));
 
     consoleView_.set_editable(false);
     consoleView_.set_cursor_visible(false);
@@ -214,7 +240,7 @@ DebugPanel::DebugPanel() {
     append_page(console_, *makeIconLabel("kevc-terminal", "GDB Console"));
 
     showMessage("Press F5 to debug. Click a line number to set a breakpoint.");
-    setBreakpoints({});
+    setBreakpoints({}, {});
 }
 
 void DebugPanel::showMessage(const Glib::ustring& text) {
@@ -255,34 +281,119 @@ void DebugPanel::setFrames(const std::vector<StackFrame>& frames, int selected) 
     }
 }
 
-void DebugPanel::setBreakpoints(const std::vector<std::pair<std::filesystem::path, int>>& items) {
+namespace {
+
+Gtk::Button* smallButton(const char* icon, const char* tip) {
+    auto* button = Gtk::make_managed<Gtk::Button>();
+    button->set_icon_name(icon);
+    button->set_has_frame(false);
+    button->set_tooltip_text(tip);
+    button->set_valign(Gtk::Align::CENTER);
+    return button;
+}
+
+} // namespace
+
+void DebugPanel::setBreakpoints(const std::vector<BreakpointItem>& items, const std::vector<ValueWatchItem>& watches) {
     clearList(breakpoints_);
-    bpItems_ = items;
-    if (items.empty()) {
-        breakpoints_.append(dim("No breakpoints. Click a line number, or press Ctrl+F5."));
+    bpItems_.clear();
+    liveLabels_.clear();
+    if (items.empty() && watches.empty()) {
+        breakpoints_.append(dim("No breakpoints. Click a line number, or use the buttons above."));
         return;
     }
-    for (const auto& [file, line] : items) {
+    for (const auto& item : items) {
+        const auto& bp = item.breakpoint;
         auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
         row->set_margin(2);
-        auto* dot = Gtk::make_managed<Gtk::Label>();
-        dot->set_markup("<span foreground=\"#e01b24\">●</span>");
-        auto* label = Gtk::make_managed<Gtk::Label>(file.filename().string() + ":" + std::to_string(line));
-        label->set_tooltip_text(file.string());
+        const char* icon = bp.kind == BreakKind::Conditional ? "kevc-breakpoint-if"
+                           : bp.kind == BreakKind::Live      ? "kevc-breakpoint-live"
+                                                             : "kevc-breakpoint";
+        auto* image = Gtk::make_managed<Gtk::Image>();
+        image->set_from_icon_name(icon);
+        image->set_valign(Gtk::Align::START);
+        image->set_margin_top(2);
+        auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+        text->set_hexpand(true);
+        auto* label = Gtk::make_managed<Gtk::Label>();
+        std::string detail;
+        if (bp.kind == BreakKind::Conditional) detail = "if " + bp.condition;
+        else if (bp.kind == BreakKind::Live) detail = "live: " + (bp.show.empty() ? std::string("its local variables") : joinExpressions(bp.show));
+        label->set_markup("<b>" + esc(item.file.filename().string() + ":" + std::to_string(item.line)) + "</b>" +
+                          (detail.empty() ? "" : "  <span foreground=\"#a3b1b7\">" + esc(detail) + "</span>"));
+        label->set_tooltip_text(item.file.string());
         label->set_xalign(0.0f);
-        label->set_hexpand(true);
-        auto* remove = Gtk::make_managed<Gtk::Button>();
-        remove->set_icon_name("edit-delete-symbolic");
-        remove->set_has_frame(false);
-        remove->set_tooltip_text("Remove breakpoint");
-        remove->signal_clicked().connect([this, f = file, l = line] {
+        label->set_ellipsize(Pango::EllipsizeMode::END);
+        text->append(*label);
+        if (bp.kind == BreakKind::Live) {
+            auto* values = Gtk::make_managed<Gtk::Label>();
+            values->add_css_class("kevc-live-values");
+            values->set_xalign(0.0f);
+            values->set_ellipsize(Pango::EllipsizeMode::END);
+            values->set_selectable(true);
+            const auto key = std::make_pair(item.file, item.line);
+            const auto latest = liveTexts_.find(key);
+            values->set_text(latest == liveTexts_.end() ? std::string("not run yet") : latest->second);
+            liveLabels_[key] = values;
+            text->append(*values);
+        }
+        row->append(*image);
+        row->append(*text);
+        if (bp.kind != BreakKind::Standard) {
+            auto* edit = smallButton("document-edit-symbolic", bp.kind == BreakKind::Live ? "Change the values it shows" : "Change the condition");
+            edit->signal_clicked().connect([this, f = item.file, l = item.line] {
+                Glib::signal_idle().connect_once([this, f, l] { bpEdit_.emit(f, l); });
+            });
+            row->append(*edit);
+        }
+        auto* remove = smallButton("edit-delete-symbolic", "Remove breakpoint");
+        remove->signal_clicked().connect([this, f = item.file, l = item.line] {
             Glib::signal_idle().connect_once([this, f, l] { bpRemoved_.emit(f, l); });
         });
-        row->append(*dot);
-        row->append(*label);
+        row->append(*remove);
+        breakpoints_.append(*row);
+        bpItems_.emplace_back(item.file, item.line);
+    }
+    for (const auto& watch : watches) {
+        auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+        row->set_margin(2);
+        auto* image = Gtk::make_managed<Gtk::Image>();
+        image->set_from_icon_name("kevc-breakpoint-change");
+        image->set_valign(Gtk::Align::START);
+        image->set_margin_top(2);
+        auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+        text->set_hexpand(true);
+        auto* label = Gtk::make_managed<Gtk::Label>();
+        label->set_markup("Break when <b>" + esc(watch.expression) + "</b> changes");
+        label->set_xalign(0.0f);
+        label->set_ellipsize(Pango::EllipsizeMode::END);
+        auto* state = Gtk::make_managed<Gtk::Label>(watch.state);
+        state->add_css_class(watch.armed ? "kevc-live-values" : "dim-label");
+        state->set_xalign(0.0f);
+        state->set_ellipsize(Pango::EllipsizeMode::END);
+        state->set_tooltip_text(watch.state);
+        text->append(*label);
+        text->append(*state);
+        auto* remove = smallButton("edit-delete-symbolic", "Stop watching it");
+        remove->signal_clicked().connect([this, e = watch.expression] {
+            Glib::signal_idle().connect_once([this, e] { watchRemoved_.emit(e); });
+        });
+        row->append(*image);
+        row->append(*text);
         row->append(*remove);
         breakpoints_.append(*row);
     }
+}
+
+void DebugPanel::setLiveValues(const std::filesystem::path& file, int line, const std::string& text) {
+    const auto key = std::make_pair(file, line);
+    liveTexts_[key] = text;
+    if (auto it = liveLabels_.find(key); it != liveLabels_.end()) it->second->set_text(text);
+}
+
+void DebugPanel::clearLiveValues() {
+    liveTexts_.clear();
+    for (auto& [key, label] : liveLabels_) label->set_text("not run yet");
 }
 
 void DebugPanel::appendConsole(const std::string& text) {

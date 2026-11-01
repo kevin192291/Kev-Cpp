@@ -4,7 +4,10 @@
 #include "app/MainWindow.h"
 #include "ui/SplashWindow.h"
 
+#include <glib-unix.h>
 #include <gtksourceview/gtksource.h>
+
+#include <csignal>
 
 namespace kevc {
 
@@ -37,6 +40,22 @@ Glib::RefPtr<Application> Application::create() {
 
 void Application::on_startup() {
     Gtk::Application::on_startup();
+    // SIGTERM, SIGINT, SIGHUP (logging out, kill, Ctrl+C where it was started): shut down as a
+    // closed window does, so gdb, the language servers, the dev server and js-debug's process group
+    // stop. Killed outright, a Vite started under the JavaScript debugger (js-debug's child) kept
+    // running, and its page in the debug browser kept hitting breakpoints in the next session.
+    for (int sig : {SIGTERM, SIGINT, SIGHUP})
+        g_unix_signal_add(
+            sig,
+            +[](gpointer self) -> gboolean {
+                auto* app = static_cast<Application*>(self);
+                // As if the window were closed, without asking about unsaved files: nobody is
+                // there to answer. on_window_removed then deletes it and the app ends.
+                if (app->window_) app->window_->closeWithoutQuestions();
+                else app->quit();
+                return G_SOURCE_CONTINUE;
+            },
+            this);
     useCairoWithoutGl();
     gtk_source_init();
 

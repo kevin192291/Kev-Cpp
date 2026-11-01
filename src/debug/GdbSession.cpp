@@ -1,6 +1,7 @@
 #include "debug/GdbSession.h"
 
 #include <csignal>
+#include <cstdlib>
 
 namespace kevc {
 
@@ -34,6 +35,8 @@ void GdbSession::start(const std::filesystem::path& cwd) {
                                 // No interactive questions (Ubuntu's gdb asks about debuginfod) and no
                                 // downloads of debug symbols for system libraries.
                                 "-iex", "set debuginfod enabled off", "-iex", "set confirm off"});
+    // KEVC_GDB_LOG=<file>: every command sent and line read, for debugging the debugger.
+    if (const char* log = std::getenv("KEVC_GDB_LOG"); log && *log) log_ = std::make_unique<std::ofstream>(log, std::ios::app);
     input_ = process_->get_stdin_pipe();
     output_ = Gio::DataInputStream::create(process_->get_stdout_pipe());
     cancellable_ = Gio::Cancellable::create();
@@ -66,6 +69,7 @@ void GdbSession::send(const std::string& command, Callback callback) {
     const int token = nextToken_++;
     if (callback) pending_[token] = std::move(callback);
     const std::string line = std::to_string(token) + command + "\n";
+    if (log_) *log_ << "> " << line << std::flush;
     try {
         gsize written = 0;
         input_->write_all(line, written);
@@ -98,6 +102,7 @@ void GdbSession::readNext() {
 }
 
 void GdbSession::dispatch(const std::string& line) {
+    if (log_) *log_ << "< " << line << "\n" << std::flush;
     const mi::Record record = mi::parseLine(line);
     switch (record.type) {
     case mi::Record::Type::Result:

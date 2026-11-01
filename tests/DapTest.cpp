@@ -50,10 +50,24 @@ TEST(Dap, LaunchConfigurations) {
 }
 
 TEST(Dap, Breakpoints) {
-    const json args = dap::setBreakpointsArguments("/app/src/routes/+page.server.ts", {12, 4});
+    FileBreakpoints file;
+    file[12] = {};
+    file[4] = {};
+    const json args = dap::setBreakpointsArguments("/app/src/routes/+page.server.ts", file);
     EXPECT_EQ(args["source"]["path"], "/app/src/routes/+page.server.ts");
     ASSERT_EQ(args["breakpoints"].size(), 2u);
     EXPECT_EQ(args["breakpoints"][0]["line"], 4); // sorted
+    EXPECT_FALSE(args["breakpoints"][0].contains("condition"));
+    // IF breakpoints are js-debug conditions; live ones logpoints carrying their id.
+    file[20] = {BreakKind::Conditional, "count > 3", {}};
+    file[30] = {BreakKind::Live, "", {"count"}};
+    const json rich = dap::setBreakpointsArguments("/app/a.ts", file, {{30, 5}});
+    EXPECT_EQ(rich["breakpoints"][2]["condition"], "count > 3");
+    EXPECT_EQ(rich["breakpoints"][3]["logMessage"], "<<kevc-live:5>>{count}");
+    // One naming nothing stays a plain breakpoint (JsDebugger reads the locals there).
+    file[40] = {BreakKind::Live, "", {}};
+    const json locals = dap::setBreakpointsArguments("/app/a.ts", file, {{30, 5}, {40, 6}});
+    EXPECT_FALSE(locals["breakpoints"][4].contains("logMessage"));
     EXPECT_TRUE(dap::debuggableSource("a/+page.svelte"));
     EXPECT_TRUE(dap::debuggableSource("hooks.server.ts"));
     EXPECT_FALSE(dap::debuggableSource("main.cpp"));

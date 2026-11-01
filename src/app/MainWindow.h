@@ -49,6 +49,9 @@ class MainWindow : public Gtk::ApplicationWindow {
 public:
     explicit MainWindow(Application& app);
     ~MainWindow() override;
+    // Closes as the window's close button does, but unsaved files aren't asked about (a SIGTERM at
+    // logout: nobody is there to answer). Breakpoints and the project's state are still saved.
+    void closeWithoutQuestions();
 
     void setStatus(const Glib::ustring& message);
     // Opens a project folder, a .kevc file, or a single file (from the command line).
@@ -217,7 +220,24 @@ private:
     void showFrame(const StackFrame& frame);
     void clearExecutionLine();
     void toggleBreakpointAtCursor();
-    void onBreakpointToggled(EditorTab* tab, int line, bool on);
+    // The four kinds of breakpoint (core/Breakpoints): standard, IF, live, and break when a value
+    // changes. setBreakpointAt goes through the file's editor when it's open, so its marks agree;
+    // onBreakpointChanged then hands the change to the debugger, the panel and the saved state.
+    void setBreakpointAt(const std::filesystem::path& file, int line, const std::optional<Breakpoint>& breakpoint);
+    void onBreakpointChanged(const std::filesystem::path& file, int line, const std::optional<Breakpoint>& breakpoint);
+    void promptConditional(const std::filesystem::path& file, int line);
+    void promptLive(const std::filesystem::path& file, int line);
+    void promptValueWatch();
+    void removeValueWatch(const std::string& expression);
+    std::vector<std::string> valueWatchExpressions() const;
+    void resetValueWatchStates(); // nothing debugging: they wait for it
+    void noteWatchTriggered(const std::string& description);
+    void onLiveHit(const std::filesystem::path& file, int line, const std::vector<std::string>& names,
+                   const std::vector<std::string>& values);
+    bool flushLiveValues(); // the latest values on screen, a few times a second at most
+    void clearLiveValues();
+    bool cursorLine(std::filesystem::path& file, int& line); // false (and says why) without an editor
+    std::string expressionAtCursor();
     void syncBreakpoints(EditorTab* tab);
     // Breakpoints and watches are remembered per project (core/ProjectState): saved whenever they
     // change and before the project closes, restored when it opens.
@@ -288,6 +308,7 @@ private:
     Gtk::Box editorArea_{Gtk::Orientation::VERTICAL};
     Gtk::Popover locationsPopover_; // several answers to a Go to…, at the cursor
     Glib::RefPtr<Gio::Menu> editorMenu_, cppEditorMenu_; // added to the editors' right-click menu
+    Glib::RefPtr<Gio::Menu> gutterMenu_;                 // a right-click on a line number
     Gtk::Notebook editors_;
     Gtk::Widget* welcomePage_ = nullptr;
     Gtk::Box* welcomeLists_ = nullptr; // pinned and recent projects, left of the shortcuts
@@ -362,7 +383,15 @@ private:
     std::string jsServerUrl_; // the Vite the JS debugger runs, once it's serving
     DebugPanel debugPanel_;
     WatchPanel watches_;
-    std::map<std::filesystem::path, std::set<int>> breakpoints_; // file -> 1-based lines
+    BreakpointMap breakpoints_;                // file -> 1-based line -> kind
+    std::vector<ValueWatchItem> valueWatches_; // break when these change
+    struct LiveHit {
+        std::string text;
+        long hits = 0;
+    };
+    std::map<std::pair<std::filesystem::path, int>, LiveHit> liveHits_;
+    std::set<std::pair<std::filesystem::path, int>> liveDirty_; // not yet on screen
+    sigc::connection liveFlush_;
     ProjectStateStore projectState_{ProjectStateStore::defaultFile()};
     EditorTab* execTab_ = nullptr;
     std::vector<StackFrame> frames_;

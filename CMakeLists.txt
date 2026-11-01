@@ -21,6 +21,7 @@ find_package(Threads REQUIRED) # Find in Files and the Project tab search run on
 
 # Pure logic with no GTK dependency, so it can be unit tested headlessly.
 add_library(kevc_core STATIC
+  src/core/Breakpoints.cpp
   src/core/BuildFiles.cpp
   src/core/BuildPlan.cpp
   src/core/CppStyle.cpp
@@ -37,6 +38,7 @@ add_library(kevc_core STATIC
   src/core/Project.cpp
   src/core/ProjectKinds.cpp
   src/core/ProjectSession.cpp
+  src/core/ProcessTree.cpp
   src/core/ProjectState.cpp
   src/core/RecentProjects.cpp
   src/core/Search.cpp

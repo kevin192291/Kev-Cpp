@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Breakpoints.h"
 #include "core/Project.h"
 
 #include <nlohmann/json.hpp>
@@ -16,8 +17,9 @@ namespace kevc {
 // and watch expressions. Not in the .kevc: they change all the time and are yours, not the
 // project's (and web projects have no .kevc).
 struct ProjectState {
-    std::map<std::filesystem::path, std::set<int>> breakpoints; // absolute paths
+    BreakpointMap breakpoints; // absolute paths
     std::vector<std::string> watches;
+    std::vector<std::string> valueWatches; // "break when the value changes" expressions
     ProjectUi ui; // only for projects without a .kevc to keep it in (web folders)
 
     bool operator==(const ProjectState&) const = default;

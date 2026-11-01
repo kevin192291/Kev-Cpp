@@ -1,5 +1,7 @@
 #include "debug/DebugController.h"
 
+#include <cstdlib>
+
 namespace fs = std::filesystem;
 
 namespace kevc {
@@ -41,7 +43,7 @@ DebugController::DebugController(std::string gdbPath, fs::path executable, fs::p
     : executable_(std::move(executable)), cwd_(std::move(cwd)), tty_(std::move(inferiorTty)), gdb_(std::move(gdbPath)),
       self_(std::make_shared<DebugController*>(this)) {
     gdb_.signalExec().connect(sigc::mem_fun(*this, &DebugController::onExec));
-    gdb_.signalConsole().connect([this](const std::string& text) { console_.emit(text); });
+    gdb_.signalConsole().connect(sigc::mem_fun(*this, &DebugController::onConsole));
     gdb_.signalExited().connect([this] {
         if (state_ != State::Finished) finish("The debugger stopped unexpectedly");
     });
@@ -63,7 +65,7 @@ void DebugController::finish(const std::string& outcome) {
     finished_.emit(outcome);
 }
 
-void DebugController::start(const std::vector<std::pair<fs::path, int>>& breakpoints) {
+void DebugController::start(const BreakpointMap& breakpoints, const std::vector<std::string>& valueWatches) {
     try {
         gdb_.start(cwd_);
     } catch (const Glib::Error& e) {
@@ -78,10 +80,43 @@ void DebugController::start(const std::vector<std::pair<fs::path, int>>& breakpo
     });
     gdb_.send("-environment-cd " + mi::quote(cwd_.string()));
     if (!tty_.empty()) gdb_.send("-inferior-tty-set " + tty_);
-    for (const auto& [file, line] : breakpoints) setBreakpoint(file, line, true);
-    gdb_.send("-exec-run", [this](const mi::Record& r) {
-        if (!ok(r)) finish("Could not start the program: " + errorOf(r));
+    for (const auto& [file, lines] : breakpoints)
+        for (const auto& [line, bp] : lines) setBreakpoint(file, line, bp);
+    for (const auto& expression : valueWatches) addValueWatch(expression);
+    // Live breakpoints need to know whether this gdb runs Python; the rest waits for its answer.
+    std::weak_ptr<DebugController*> weak = self_;
+    gdb_.send("-interpreter-exec console " + mi::quote(gdbLivePython()), [weak, this](const mi::Record& r) {
+        if (!weak.lock() || state_ == State::Finished) return;
+        // KEVC_GDB_NO_PYTHON=1 tries the fallback a gdb without Python gets (live breakpoints that
+        // stop for a moment), for testing.
+        const char* noPython = std::getenv("KEVC_GDB_NO_PYTHON");
+        python_ = ok(r) && !(noPython && *noPython == '1');
+        ready_ = true;
+        for (const auto& [key, placed] : breakpointIds_) place(key);
+        armPendingWatches();
+        gdb_.send("-exec-run", [this](const mi::Record& r) {
+            if (!ok(r)) finish("Could not start the program: " + errorOf(r));
+        });
     });
+}
+
+void DebugController::onConsole(const std::string& text) {
+    if (auto log = parseLiveLog(text)) {
+        if (auto it = liveIds_.find(log->id); it != liveIds_.end()) emitLive(it->second, log->values);
+        return; // not the user's business, even when stale
+    }
+    console_.emit(text);
+}
+
+void DebugController::emitLive(const Key& key, const std::vector<std::string>& values) {
+    auto it = breakpointIds_.find(key);
+    if (it == breakpointIds_.end()) return;
+    if (it->second.breakpoint.show.empty()) {
+        auto [names, vals] = splitNamedValues(values);
+        liveHit_.emit(key.first, key.second, names, vals);
+    } else {
+        liveHit_.emit(key.first, key.second, it->second.breakpoint.show, values);
+    }
 }
 
 void DebugController::execCommand(const std::string& command) {
@@ -106,31 +141,127 @@ void DebugController::terminate() {
     finish("Debugging stopped");
 }
 
-void DebugController::setBreakpoint(const fs::path& file, int line, bool enabled) {
-    const auto key = std::make_pair(file.string(), line);
-    if (!enabled) {
-        auto it = breakpointIds_.find(key);
-        if (it == breakpointIds_.end()) return;
-        gdb_.send("-break-delete " + it->second);
+void DebugController::setBreakpoint(const fs::path& file, int line, const std::optional<Breakpoint>& breakpoint) {
+    const Key key{file.string(), line};
+    if (auto it = breakpointIds_.find(key); it != breakpointIds_.end()) {
+        if (breakpoint && it->second.breakpoint == *breakpoint) return; // already placed like that
+        if (!it->second.number.empty()) gdb_.send("-break-delete " + it->second.number);
+        if (it->second.liveId) liveIds_.erase(it->second.liveId);
         breakpointIds_.erase(it);
-        return;
     }
-    if (breakpointIds_.count(key)) return;
-    breakpointIds_[key] = "";
+    if (!breakpoint) return;
+    breakpointIds_[key] = {"", *breakpoint, 0};
+    if (ready_) place(key);
+}
+
+void DebugController::place(const Key& key) {
+    auto& placed = breakpointIds_.at(key);
+    const Breakpoint& bp = placed.breakpoint;
+    const std::string location = mi::quote(key.first + ":" + std::to_string(key.second));
     // -f creates a pending breakpoint if the location isn't loaded yet (e.g. in a shared library).
-    gdb_.send("-break-insert -f " + mi::quote(file.string() + ":" + std::to_string(line)),
-              [this, key](const mi::Record& r) {
-                  if (!ok(r)) {
-                      breakpointIds_.erase(key);
-                      console_.emit("Breakpoint at " + key.first + ":" + std::to_string(key.second) +
-                                    " failed: " + errorOf(r) + "\n");
-                      return;
-                  }
-                  auto it = breakpointIds_.find(key);
-                  const std::string number = r.results.value("bkpt", json::object()).value("number", "");
-                  if (it != breakpointIds_.end()) it->second = number;
-                  else if (!number.empty()) gdb_.send("-break-delete " + number); // removed while inserting
-              });
+    std::string command;
+    if (bp.kind == BreakKind::Live && python_) {
+        placed.liveId = nextLiveId_++;
+        liveIds_[placed.liveId] = key;
+        command = "-dprintf-insert -f " + location;
+        for (const auto& arg : gdbLiveArguments(placed.liveId, bp.show)) command += " " + mi::quote(arg);
+    } else {
+        command = "-break-insert -f ";
+        if (bp.kind == BreakKind::Conditional && !bp.condition.empty()) command += "-c " + mi::quote(bp.condition) + " ";
+        command += location;
+    }
+    const Breakpoint wanted = bp;
+    std::weak_ptr<DebugController*> weak = self_;
+    gdb_.send(command, [weak, this, key, wanted](const mi::Record& r) {
+        if (!weak.lock()) return;
+        auto it = breakpointIds_.find(key);
+        const bool current = it != breakpointIds_.end() && it->second.breakpoint == wanted && it->second.number.empty();
+        if (!ok(r)) {
+            console_.emit("Breakpoint at " + key.first + ":" + std::to_string(key.second) + " failed: " + errorOf(r) + "\n");
+            return;
+        }
+        const std::string number = r.results.value("bkpt", json::object()).value("number", "");
+        if (current) it->second.number = number;
+        else if (!number.empty()) gdb_.send("-break-delete " + number); // changed or removed while inserting
+    });
+}
+
+void DebugController::onLiveHit(const fs::path& file, int line, const Breakpoint& breakpoint) {
+    // Read what it shows, then carry on: the program is never reported as paused.
+    std::weak_ptr<DebugController*> weak = self_;
+    if (breakpoint.show.empty()) {
+        gdb_.send("-stack-list-locals --simple-values", [weak, this, file, line](const mi::Record& r) {
+            if (!weak.lock()) return;
+            std::vector<std::string> names, values;
+            for (const auto& local : r.results.value("locals", json::array())) {
+                names.push_back(local.value("name", ""));
+                values.push_back(local.value("value", std::string("{\u2026}")));
+            }
+            liveHit_.emit(file, line, names, values);
+        });
+    } else {
+        auto values = std::make_shared<std::vector<std::string>>();
+        for (size_t i = 0; i < breakpoint.show.size(); ++i) {
+            const bool last = i + 1 == breakpoint.show.size();
+            gdb_.send("-data-evaluate-expression " + mi::quote(breakpoint.show[i]),
+                      [weak, this, values, file, line, names = breakpoint.show, last](const mi::Record& r) {
+                          if (!weak.lock()) return;
+                          values->push_back(ok(r) ? r.results.value("value", "") : "<" + errorOf(r) + ">");
+                          if (last) liveHit_.emit(file, line, names, *values);
+                      });
+        }
+    }
+    gdb_.send("-exec-continue");
+}
+
+void DebugController::addValueWatch(const std::string& expression) {
+    if (expression.empty() || watches_.count(expression)) return;
+    watches_[expression] = {};
+    if (ready_) armWatch(expression);
+}
+
+void DebugController::removeValueWatch(const std::string& expression) {
+    auto it = watches_.find(expression);
+    if (it == watches_.end()) return;
+    if (!it->second.number.empty()) gdb_.send("-break-delete " + it->second.number);
+    watches_.erase(it);
+}
+
+void DebugController::setWatchState(const std::string& expression, bool armed, const std::string& note) {
+    auto it = watches_.find(expression);
+    if (it == watches_.end()) return;
+    // Pending watches are retried at every pause: only say so when something changed.
+    const auto now = std::make_pair(armed, note);
+    if (it->second.reported == now) return;
+    it->second.reported = now;
+    watchState_.emit(expression, armed, note);
+}
+
+void DebugController::armWatch(const std::string& expression) {
+    std::weak_ptr<DebugController*> weak = self_;
+    gdb_.send("-break-watch " + mi::quote(expression), [weak, this, expression](const mi::Record& r) {
+        if (!weak.lock()) return;
+        std::string number;
+        for (const char* key : {"wpt", "hw-wpt", "hw-awpt", "hw-rwpt"})
+            if (r.results.contains(key)) number = r.results[key].value("number", "");
+        auto it = watches_.find(expression);
+        if (it == watches_.end() || !it->second.number.empty()) { // removed, or placed twice
+            if (!number.empty()) gdb_.send("-break-delete " + number);
+            return;
+        }
+        if (!ok(r) || number.empty()) {
+            const std::string why = ok(r) ? std::string("gdb didn't place it") : errorOf(r);
+            setWatchState(expression, false, why + "; tried again whenever the program pauses");
+            return;
+        }
+        it->second.number = number;
+        setWatchState(expression, true, {});
+    });
+}
+
+void DebugController::armPendingWatches() {
+    for (const auto& [expression, watch] : watches_)
+        if (watch.number.empty()) armWatch(expression);
 }
 
 void DebugController::onExec(const mi::Record& record) {
@@ -154,20 +285,57 @@ void DebugController::onExec(const mi::Record& record) {
         return;
     }
 
+    // A live breakpoint: read its values and carry on (see onLiveHit).
+    if (reason == "breakpoint-hit") {
+        const std::string number = record.results.value("bkptno", "");
+        for (const auto& [key, placed] : breakpointIds_)
+            if (placed.number == number && placed.breakpoint.kind == BreakKind::Live && !placed.liveId) {
+                onLiveHit(key.first, key.second, placed.breakpoint);
+                return;
+            }
+    }
+    // A watched local's function returned: gdb dropped the watchpoint. Wait to place it again.
+    if (reason == "watchpoint-scope") {
+        const std::string number = record.results.value("wpnum", "");
+        for (auto& [expression, watch] : watches_)
+            if (watch.number == number) {
+                watch.number.clear();
+                setWatchState(expression, false, "its function returned; placed again when the program pauses where it exists");
+            }
+        gdb_.send("-exec-continue");
+        return;
+    }
+
     StopInfo info;
     info.reason = reason;
     info.frame = frameFrom(record.results.value("frame", json::object()));
     const std::string where = info.frame.file.empty()
                                   ? info.frame.function + " (no source)"
                                   : info.frame.file.filename().string() + ":" + std::to_string(info.frame.line);
-    if (reason == "breakpoint-hit") info.description = "Breakpoint " + record.results.value("bkptno", "") + " at " + where;
+    if (reason == "breakpoint-hit") {
+        // gdb's numbers mean nothing to the user (live breakpoints take some): say which kind.
+        info.description = "Stopped at the breakpoint at " + where;
+        const std::string number = record.results.value("bkptno", "");
+        for (const auto& [key, placed] : breakpointIds_)
+            if (placed.number == number && placed.breakpoint.kind == BreakKind::Conditional)
+                info.description = "Stopped at " + where + ": " + placed.breakpoint.condition;
+    }
     else if (reason == "signal-received")
         info.description = record.results.value("signal-name", std::string("Signal")) + " (" +
                            record.results.value("signal-meaning", std::string("")) + ") at " + where;
     else if (reason == "function-finished") info.description = "Returned to " + where;
-    else info.description = "Paused at " + where;
+    else if (reason.find("watchpoint-trigger") != std::string::npos) {
+        json wpt = json::object();
+        for (const char* key : {"wpt", "hw-wpt", "hw-awpt", "hw-rwpt"})
+            if (record.results.contains(key)) wpt = record.results[key];
+        const json value = record.results.value("value", json::object());
+        info.description = wpt.value("exp", std::string("A watched value")) + " changed from " +
+                           value.value("old", std::string("?")) + " to " + value.value("new", std::string("?")) +
+                           " at " + where;
+    } else info.description = "Paused at " + where;
     selectedFrame_ = 0;
     setState(State::Stopped);
+    armPendingWatches(); // a local that wasn't in reach may be now
     stopped_.emit(info);
 }
 

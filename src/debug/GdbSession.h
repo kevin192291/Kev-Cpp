@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <string>
@@ -46,6 +47,7 @@ private:
     int nextToken_ = 1;
     std::map<int, Callback> pending_;
     std::shared_ptr<GdbSession*> self_;
+    std::unique_ptr<std::ofstream> log_;
 
     sigc::signal<void(const mi::Record&)> exec_;
     sigc::signal<void(const mi::Record&)> notify_;

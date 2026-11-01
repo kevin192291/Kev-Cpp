@@ -2,6 +2,7 @@ find_package(GTest REQUIRED)
 include(GoogleTest)
 
 add_executable(kevc_tests
+  BreakpointsTest.cpp
   BuildFilesTest.cpp
   BuildPlanTest.cpp
   CppStyleTest.cpp
@@ -16,6 +17,7 @@ add_executable(kevc_tests
   NpmPackagesTest.cpp
   PackagesTest.cpp
   ProjectSessionTest.cpp
+  ProcessTreeTest.cpp
   ProjectStateTest.cpp
   RecentProjectsTest.cpp
   SearchTest.cpp

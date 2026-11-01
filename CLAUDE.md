@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 210 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 222 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -30,6 +30,8 @@ verified by driving the real app (see "GUI testing").
   compile_commands.json for C), `BuildPlan` (commands per action/config), `Diagnostics` (gcc/ld/CMake/
   make/tsc output parser), `Packages` (catalog, pkg-config, FetchContent target detection), `Lsp`
   (framing, URIs, UTF-16 columns, markdown→Pango), `Mi` (GDB/MI parser, expression-under-cursor),
+  `Breakpoints` (the breakpoint kinds, their saved form, gdb dprintf and js-debug logpoint messages,
+  JavaScript watch traps), `ProcessTree` (a process's descendants from /proc),
   `Icons` (which kevc-* icon a file, LSP symbol/completion kind or gdb type gets), `RecentProjects`
   (the Welcome tab's recent and pinned folders, in settings under /recent), `GitStatus` (`git status
   --porcelain -z` → which files have uncommitted changes, for the Project tab), `Settings`
@@ -62,7 +64,8 @@ verified by driving the real app (see "GUI testing").
   Debug panel, Watches), DebugHover (hover provider); for web projects DapClient (one DAP session
   over TCP), JsDebugger (js-debug server + root/child sessions) and DapViews (DapVarNode).
 - `src/process/` ManagedProcess (long-running child: own process group, PR_SET_PDEATHSIG, stdin pipe,
-  line output; Vite, the dev server, js-debug, the OTLP collector), Capture (run + collect stdout) and
+  line output; Vite, the dev server, js-debug, the OTLP collector; stopping it signals the group and
+  every descendant that left it), Capture (run + collect stdout) and
   BackgroundJob (one worker thread at a time, results posted to the main loop, cancelled and joined
   before a new one starts or its owner goes; used by the searches).
 - `src/build/` BuildRunner (sequential subprocesses, line streaming), CompilerPanel.
@@ -110,6 +113,35 @@ verified by driving the real app (see "GUI testing").
   pointee via `-var-info-path-expression` + `-data-evaluate-expression *(…)`. Expanded rows are
   remembered by path across steps (`ExpandedRows`). Keys: F5 debug, F6 over, F7 into, Shift+F7 out,
   F8 continue, Shift+F5 stop; click a line number for a breakpoint.
+- **Breakpoint kinds** (core/Breakpoints; the user wants them for C/C++, JavaScript and later STM32):
+  standard, IF (stops when a condition holds), live (never stops; each time the line runs its values
+  show after the line and in the Breakpoints tab, `i = 41, total = 1523.5   ×42`), and break when a
+  value changes (a watch on an expression, not on a line). Right-clicking a line number shows them
+  (EditorTab's gutter popover, caught in the capture phase or the text menu opens instead); so do the
+  Debug menu, the text's right-click menu and the Breakpoints tab's buttons. Marks use one category
+  per kind with the Breakpoint on the mark (`kevc-breakpoint` data). Saved per project: standard ones
+  as plain line numbers as before, the others as objects; value watches as `valueWatches`.
+  - gdb: IF = `-break-insert -c`. Live = `-dprintf-insert` whose arguments go through Python
+    functions defined at start (`gdbLivePython`, sent hex-encoded): a dprintf whose expression fails
+    halts the program silently, the functions turn errors into `<message>` text. No expressions =
+    `$_kevc_locals()`. dprintf output arrives as console records starting `<<kevc-live:ID>>`; they
+    never reach the GDB Console. A gdb without Python (some arm-none-eabi-gdb) gets breakpoints that
+    stop, read, and `-exec-continue` without reporting a stop. Breakpoints are placed only after
+    gdb answers the Python command. Value watches = `-break-watch`; one that can't be placed yet (a
+    local not in scope) is retried at every pause and after `watchpoint-scope`.
+  - gdb's `=breakpoint-modified` records carry `script={"…"}`, a brace list of bare strings; the MI
+    parser reads it as a list (it used to fail and the raw line counted as a live hit).
+  - js-debug: IF = `condition`, live = `logMessage` (`<<kevc-live:ID>>{a}<<kevc>>{b}`), caught in
+    output events. A live breakpoint naming nothing stays a plain breakpoint: JsDebugger reads the
+    innermost scope with variables (not Global) and continues. js-debug has no data breakpoints, so a
+    watched property (`player.score`, `items[0]`; plain variables can't be) becomes a getter/setter
+    whose setter runs `debugger;` (`jsWatchInstall`, evaluated when paused); after each stop
+    `jsWatchLastChange()` says whether it was one, and the first frame with a file is shown.
+  - Live updates are drawn at most every 150 ms (`flushLiveValues`). Editor value labels are text
+    view overlays that are hidden and reused, never removed: GTK 4.14's gtk_text_view_remove()
+    refuses overlay children.
+  - Test hooks: `KEVC_GDB_NO_PYTHON=1` takes the no-Python path; `KEVC_GDB_LOG=<file>` logs gdb's MI
+    traffic both ways.
 - **Dev server**: loopback only, `..` rejected with 403, bare npm imports rewritten to an explanatory
   module, exits code 2 if the port is taken, and exits when its stdin pipe closes (IDE crash).
 - **Keys GTK steals**: F10 opens the menubar and Alt+letter triggers mnemonics, so MainWindow claims
@@ -243,6 +275,12 @@ verified by driving the real app (see "GUI testing").
   `refreshGitStatus()` also runs after saves, source syncs, window activation and every 5 s while the
   window is active. One `git status` at a time; paths are mapped from the work tree's top to the
   tree's spelling of the project root.
+- **Signals**: SIGTERM, SIGINT and SIGHUP close the window as its close button does, without asking
+  about unsaved files, so every child process is stopped. js-debug starts its watchdog in a session
+  of its own under Vite; while it lived Vite waited for its debugger and never exited, which is why
+  ManagedProcess signals descendants too (core/ProcessTree, read before signalling).
+- **Panes**: the middle column (editor + bottom dock) can't be shrunk below its minimum; GTK would
+  draw it at that width anyway, cut off on the left. The docks give way.
 - **Async safety**: callbacks from gdb/LSP/processes capture a `weak_ptr` token, never raw `this`
   alone (`sigc::track_obj` only protects sigc slots, not `std::function`). BackgroundJob's posts may
   capture `this`: they're dropped once the job is cancelled, and its owner's destructor cancels it.
@@ -266,6 +304,9 @@ verified by driving the real app (see "GUI testing").
   `GTK_THEME` in tests: it overrides the app's choice.
 - Stop test instances by their command line (the test project path), never by name (`pkill kev-cpp`,
   `pgrep -x gdb`): the user may have their own Kev-C++ or gdb running.
+- JavaScript debugging tests: delete `$XDG_CACHE_HOME/kev-cpp/debug-browser-profile` before a run.
+  Chromium restores the tabs of a session it didn't close, and a restored page whose Vite still runs
+  hits the same breakpoints (live counts double).
 
 ## State and known gaps
 

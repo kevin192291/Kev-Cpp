@@ -6,7 +6,10 @@
     <file>icons/hicolor/16x16/actions/kevc-array-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-bool-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-breakpoint.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-breakpoint-change.png</file>
     <file>icons/hicolor/16x16/actions/kevc-breakpoint-dot.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-breakpoint-if.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-breakpoint-live.png</file>
     <file>icons/hicolor/16x16/actions/kevc-build-project.png</file>
     <file>icons/hicolor/16x16/actions/kevc-c-file.png</file>
     <file>icons/hicolor/16x16/actions/kevc-c-logo.png</file>
@@ -93,7 +96,10 @@
     <file>icons/hicolor/24x24/actions/kevc-array-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-bool-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-breakpoint.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-breakpoint-change.png</file>
     <file>icons/hicolor/24x24/actions/kevc-breakpoint-dot.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-breakpoint-if.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-breakpoint-live.png</file>
     <file>icons/hicolor/24x24/actions/kevc-build-project.png</file>
     <file>icons/hicolor/24x24/actions/kevc-c-file.png</file>
     <file>icons/hicolor/24x24/actions/kevc-c-logo.png</file>
@@ -180,7 +186,10 @@
     <file>icons/hicolor/32x32/actions/kevc-array-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-bool-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-breakpoint.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-breakpoint-change.png</file>
     <file>icons/hicolor/32x32/actions/kevc-breakpoint-dot.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-breakpoint-if.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-breakpoint-live.png</file>
     <file>icons/hicolor/32x32/actions/kevc-build-project.png</file>
     <file>icons/hicolor/32x32/actions/kevc-c-file.png</file>
     <file>icons/hicolor/32x32/actions/kevc-c-logo.png</file>
@@ -267,7 +276,10 @@
     <file>icons/hicolor/48x48/actions/kevc-array-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-bool-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-breakpoint.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-breakpoint-change.png</file>
     <file>icons/hicolor/48x48/actions/kevc-breakpoint-dot.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-breakpoint-if.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-breakpoint-live.png</file>
     <file>icons/hicolor/48x48/actions/kevc-build-project.png</file>
     <file>icons/hicolor/48x48/actions/kevc-c-file.png</file>
     <file>icons/hicolor/48x48/actions/kevc-c-logo.png</file>

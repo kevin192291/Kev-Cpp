@@ -191,6 +191,26 @@ def draw_git_badge(fill, mark=None):
     return img
 
 
+def draw_breakpoint_kind(kind):
+    """The gutter marks of the other breakpoint kinds, beside the sheet's red dot: an IF breakpoint
+    (red with a question mark), a live one (a teal diamond: it never stops) and a value watch (an
+    amber dot with a delta: stops when the value changes)."""
+    img, d = canvas()
+    font = ImageFont.truetype(BOLD_FONT, 86)
+    if kind == "live":
+        diamond = [(64, 6), (122, 64), (64, 122), (6, 64)]
+        d.polygon(diamond, fill=(26, 170, 196, 255))
+        d.polygon([(64, 20), (100, 56), (64, 56), (28, 56)], fill=(110, 214, 232, 255))  # highlight
+        d.line(diamond + [diamond[0]], fill=OUTLINE, width=8, joint="curve")
+        return img
+    fill = (214, 40, 40, 255) if kind == "if" else (236, 168, 20, 255)
+    d.ellipse((8, 8, 120, 120), fill=fill, outline=OUTLINE, width=8)
+    text = "?" if kind == "if" else "\u0394"
+    colour = (255, 255, 255, 255) if kind == "if" else OUTLINE
+    d.text((64, 66), text, font=font, fill=colour, anchor="mm")
+    return img
+
+
 def greyed(img):
     """The same icon in light grey: the "not pinned" state."""
     out = img.copy()
@@ -267,6 +287,8 @@ def build(sheet):
 
     icons["error"] = square(circle_badge(get("error-list"), is_red), min_side=0)
     icons["breakpoint-dot"] = square(circle_badge(get("breakpoint"), is_red), min_side=0)
+    for kind in ("if", "live", "change"):
+        icons["breakpoint-" + kind] = square(draw_breakpoint_kind(kind), min_side=0)
     icons["warning"] = square(draw_warning(), min_side=0)
     icons["globe"] = square(draw_globe(), min_side=0)
     icons["terminal"] = square(draw_terminal(), min_side=0)

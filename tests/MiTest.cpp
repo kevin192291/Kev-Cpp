@@ -58,6 +58,15 @@ TEST(MiParse, ErrorsNotifyPromptAndGarbage) {
     EXPECT_EQ(parseLine("^done,x={unterminated").type, T::Unknown);
 }
 
+// gdb writes a breakpoint's commands as a brace list of bare strings.
+TEST(MiParse, BreakpointScriptIsAList) {
+    auto r = parseLine(R"mi(=breakpoint-modified,bkpt={number="1",type="dprintf",script={"printf \"<<kevc-live:1>>%s\\n\",$_kevc_value(\"i\")"},times="2"})mi");
+    EXPECT_EQ(r.type, T::Notify);
+    EXPECT_EQ(r.results["bkpt"]["times"], "2");
+    ASSERT_TRUE(r.results["bkpt"]["script"].is_array());
+    EXPECT_EQ(r.results["bkpt"]["script"].size(), 1u);
+}
+
 TEST(MiQuote, Escapes) {
     EXPECT_EQ(quote("/a b/c\"d\\e"), R"("/a b/c\"d\\e")");
 }

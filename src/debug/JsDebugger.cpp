@@ -18,9 +18,10 @@ JsDebugger::~JsDebugger() {
     sessions_.clear(); // closes the connections; server_ then stops js-debug, Vite and the browser
 }
 
-void JsDebugger::start(const std::map<fs::path, std::set<int>>& breakpoints) {
+void JsDebugger::start(const BreakpointMap& breakpoints, const std::vector<std::string>& valueWatches) {
     for (const auto& [file, lines] : breakpoints)
         if (dap::debuggableSource(file) && !lines.empty()) breakpoints_[file] = lines;
+    for (const auto& expression : valueWatches) addValueWatch(expression);
     port_ = findFreePort(8123);
     if (port_ == 0) {
         finish("No free port for the debugger");
@@ -86,10 +87,23 @@ JsDebugger::Session& JsDebugger::openSession(const std::string& adapter, bool ro
     return *s;
 }
 
+void JsDebugger::sendBreakpoints(Session& session, const fs::path& file) {
+    if (!dap::sessionWantsBreakpoints(session.adapter, file)) return;
+    const auto it = breakpoints_.find(file);
+    const FileBreakpoints none;
+    const FileBreakpoints& lines = it == breakpoints_.end() ? none : it->second;
+    std::map<int, int> live;
+    for (const auto& [line, bp] : lines)
+        if (bp.kind == BreakKind::Live) {
+            int& id = liveIds_[{file, line}];
+            if (!id) id = nextLiveId_++;
+            live[line] = id;
+        }
+    session.client->request("setBreakpoints", dap::setBreakpointsArguments(file, lines, live));
+}
+
 void JsDebugger::configure(Session& session) {
-    for (const auto& [file, lines] : breakpoints_)
-        if (dap::sessionWantsBreakpoints(session.adapter, file))
-            session.client->request("setBreakpoints", dap::setBreakpointsArguments(file, lines));
+    for (const auto& [file, lines] : breakpoints_) sendBreakpoints(session, file);
     session.client->request("configurationDone", json::object());
     session.configured = true;
     if (state_ == State::Starting) setState(State::Running);
@@ -100,29 +114,167 @@ void JsDebugger::onEvent(Session& session, const std::string& event, const json&
         configure(session);
     } else if (event == "output") {
         const std::string category = body.value("category", "console");
-        if (category != "telemetry") onOutputText(body.value("output", ""));
+        const std::string text = body.value("output", "");
+        if (auto log = parseLiveLog(text)) {
+            // A live breakpoint's logpoint: shown next to its line, not in the output.
+            for (const auto& [key, id] : liveIds_)
+                if (id == log->id) {
+                    const auto file = breakpoints_.find(key.first);
+                    if (file == breakpoints_.end()) break;
+                    const auto bp = file->second.find(key.second);
+                    if (bp != file->second.end()) liveHit_.emit(key.first, key.second, bp->second.show, log->values);
+                    break;
+                }
+            return;
+        }
+        if (category != "telemetry") onOutputText(text);
     } else if (event == "stopped") {
         stoppedSession_ = &session;
         stoppedThread_ = body.value("threadId", 0);
-        const std::string reason = body.value("reason", "pause");
-        setState(State::Stopped);
-        std::weak_ptr<JsDebugger*> weak = self_;
-        frames([this, weak, reason](std::vector<dap::Frame> frames) {
-            if (!weak.lock()) return;
-            // The first frame in a real file: the user's code (node internals have none).
-            dap::Frame top = frames.empty() ? dap::Frame{} : frames.front();
-            for (const auto& f : frames)
-                if (!f.file.empty()) {
-                    top = f;
-                    break;
-                }
-            stopped_.emit(top, reason);
-        });
+        onStopped(session, body.value("reason", "pause"));
     } else if (event == "continued") {
         if (&session == stoppedSession_) setState(State::Running);
     } else if (event == "terminated" || event == "exited") {
         if (session.root && session.adapter == "pwa-node") finish("Vite exited");
         else if (session.root && session.adapter == "pwa-chrome") output_.emit("Debugger: the browser was closed\n");
+    }
+}
+
+void JsDebugger::onStopped(Session& session, const std::string& reason) {
+    std::weak_ptr<JsDebugger*> weak = self_;
+    Session* s = &session;
+    const int thread = stoppedThread_;
+    frames([this, weak, s, thread, reason](std::vector<dap::Frame> frames) {
+        if (!weak.lock()) return;
+        // The first frame in a real file: the user's code (node internals and our watch traps have none).
+        dap::Frame top = frames.empty() ? dap::Frame{} : frames.front();
+        for (const auto& f : frames)
+            if (!f.file.empty()) {
+                top = f;
+                break;
+            }
+
+        // A live breakpoint that names no values: read the locals and carry on, never shown as paused.
+        if (reason == "breakpoint" && !top.file.empty())
+            if (auto file = breakpoints_.find(top.file); file != breakpoints_.end())
+                if (auto bp = file->second.find(top.line);
+                    bp != file->second.end() && bp->second.kind == BreakKind::Live && bp->second.show.empty()) {
+                    const fs::path path = top.file;
+                    const int line = top.line;
+                    auto resume = [s, thread] { s->client->request("continue", {{"threadId", thread}}); };
+                    // The innermost scope that has any: a function using its module's variables
+                    // (let count = 0 at the top of the file) shows those. Never the globals.
+                    scopes(top.id, [this, weak, path, line, resume](std::vector<dap::Scope> scopes) {
+                        if (!weak.lock()) return;
+                        std::erase_if(scopes, [](const dap::Scope& scope) { return scope.name == "Global"; });
+                        auto next = std::make_shared<std::function<void(size_t)>>();
+                        *next = [this, weak, path, line, resume, scopes, next](size_t index) {
+                            if (index >= scopes.size()) {
+                                liveHit_.emit(path, line, {}, {});
+                                const auto carryOn = resume;
+                                *next = nullptr; // breaks the cycle through the capture (and frees this lambda)
+                                return carryOn();
+                            }
+                            variables(scopes[index].reference, [this, weak, path, line, resume, next, index](std::vector<dap::Variable> vars) {
+                                if (!weak.lock()) return;
+                                std::vector<std::string> names, values;
+                                for (const auto& v : vars) {
+                                    if (v.name == "this") continue;
+                                    names.push_back(v.name);
+                                    values.push_back(v.value);
+                                }
+                                if (names.empty()) return (*next)(index + 1);
+                                liveHit_.emit(path, line, names, values);
+                                *next = nullptr;
+                                resume();
+                            });
+                        };
+                        (*next)(0);
+                    });
+                    return;
+                }
+
+        auto report = [this, weak, top](const std::string& description) {
+            if (!weak.lock()) return;
+            setState(State::Stopped);
+            armPendingWatches(top.id);
+            stopped_.emit(top, description);
+        };
+        if (!trapsPlaced_ || frames.empty()) return report(reason);
+        // Was it a watched value changing? The trap left a note.
+        evaluate(jsWatchLastChange(), frames.front().id, "repl", [this, reason, report](std::optional<dap::Variable> v, std::string) {
+            std::string description = reason;
+            if (v)
+                if (auto change = parseWatchChange(v->value)) {
+                    description = "a watched value changed";
+                    for (const auto& [expression, watch] : watches_)
+                        if (watch.id == change->id) description = expression + " changed";
+                    description += " from " + change->before + " to " + change->after;
+                }
+            report(description);
+        });
+    });
+}
+
+void JsDebugger::addValueWatch(const std::string& expression) {
+    if (expression.empty() || watches_.count(expression)) return;
+    watches_[expression].id = nextWatchId_++;
+    if (!splitPropertyPath(expression))
+        setWatchState(expression, false, "JavaScript can only watch a property, like player.score or items[0]");
+    else
+        setWatchState(expression, false, "placed the next time the program pauses where it can be reached");
+    if (state_ != State::Stopped) return;
+    // Paused now: place it in the frame the user is looking at (the first in their code).
+    std::weak_ptr<JsDebugger*> weak = self_;
+    frames([this, weak](std::vector<dap::Frame> frames) {
+        if (!weak.lock() || state_ != State::Stopped) return;
+        for (const auto& f : frames)
+            if (!f.file.empty()) return armPendingWatches(f.id);
+        if (!frames.empty()) armPendingWatches(frames.front().id);
+    });
+}
+
+void JsDebugger::removeValueWatch(const std::string& expression) {
+    auto it = watches_.find(expression);
+    if (it == watches_.end()) return;
+    // Put the plain property back. js-debug evaluates in the global scope while running too.
+    if (Session* s = it->second.session; s && s->client->connected())
+        s->client->request("evaluate", {{"expression", jsWatchRemove(it->second.id)}, {"context", "repl"}});
+    watches_.erase(it);
+}
+
+void JsDebugger::setWatchState(const std::string& expression, bool armed, const std::string& note) {
+    auto it = watches_.find(expression);
+    if (it == watches_.end()) return;
+    const auto now = std::make_pair(armed, note);
+    if (it->second.reported == now) return;
+    it->second.reported = now;
+    watchState_.emit(expression, armed, note);
+}
+
+void JsDebugger::armPendingWatches(int frameId) {
+    for (auto& [expression, watch] : watches_) {
+        if (watch.session) continue;
+        const auto path = splitPropertyPath(expression);
+        if (!path) continue;
+        std::weak_ptr<JsDebugger*> weak = self_;
+        Session* s = stoppedSession_;
+        evaluate(jsWatchInstall(watch.id, path->first, path->second), frameId, "repl",
+                 [this, weak, s, expression, id = watch.id](std::optional<dap::Variable> v, std::string error) {
+                     if (!weak.lock()) return;
+                     auto it = watches_.find(expression);
+                     if (it == watches_.end() || it->second.id != id || it->second.session) return;
+                     std::string result = v ? v->value : error;
+                     if (result.size() >= 2 && (result.front() == '\'' || result.front() == '"') && result.back() == result.front())
+                         result = result.substr(1, result.size() - 2);
+                     if (result == "ok") {
+                         it->second.session = s;
+                         trapsPlaced_ = true;
+                         setWatchState(expression, true, {});
+                     } else {
+                         setWatchState(expression, false, result + "; tried again whenever the program pauses");
+                     }
+                 });
     }
 }
 
@@ -179,12 +331,16 @@ void JsDebugger::pause() {
     }
 }
 
-void JsDebugger::setBreakpoints(const fs::path& file, const std::set<int>& lines) {
+void JsDebugger::setBreakpoints(const fs::path& file, const FileBreakpoints& lines) {
     if (!dap::debuggableSource(file)) return;
     breakpoints_[file] = lines;
+    std::erase_if(liveIds_, [&](const auto& entry) {
+        if (entry.first.first != file) return false;
+        auto bp = lines.find(entry.first.second);
+        return bp == lines.end() || bp->second.kind != BreakKind::Live;
+    });
     for (auto& s : sessions_)
-        if (s->configured && s->client->connected() && dap::sessionWantsBreakpoints(s->adapter, file))
-            s->client->request("setBreakpoints", dap::setBreakpointsArguments(file, lines));
+        if (s->configured && s->client->connected()) sendBreakpoints(*s, file);
 }
 
 void JsDebugger::frames(std::function<void(std::vector<dap::Frame>)> done) {

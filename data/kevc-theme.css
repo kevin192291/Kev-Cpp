@@ -322,3 +322,15 @@ window.kevc-splash {
   font-size: 9pt;
   color: #8fa3b0;
 }
+
+/* A live breakpoint's latest values: after its line in the editor, and in the Breakpoints tab. */
+.kevc-live-values {
+  font-family: monospace;
+  font-size: 9pt;
+  color: #4dd0c4;
+}
+textview .kevc-live-values {
+  background-color: rgba(77, 208, 196, 0.12);
+  border-radius: 4px;
+  padding: 0 6px;
+}

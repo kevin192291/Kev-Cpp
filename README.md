@@ -140,6 +140,19 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   (`p = 0x7ffe… → {x = 3, y = 4}`). Breakpoints and watches are remembered for each project
   (`~/.local/state/kev-cpp/projects.json`). Docked on the right, the Debug panel can be dragged narrow:
   its Locals, Call Stack, Breakpoints and GDB Console tabs then scroll left and right.
+- **Four kinds of breakpoint**, for C/C++ and JavaScript alike. Right-click a line number (or use the
+  Debug menu, the editor's right-click menu or the buttons on the Breakpoints tab):
+  - **Breakpoint**: stops on the line (a click on the line number does the same).
+  - **IF Breakpoint**: stops only when a condition is true, e.g. `i == 41`.
+  - **Live Breakpoint**: never stops. Each time the line runs, the values you name (or every local
+    variable) appear after the line and on the Breakpoints tab, with a count:
+    `i = 41, total = 1523.5   ×42`.
+  - **Break When Value Changes**: stops as soon as a variable changes, and says from what to what
+    (`player.score changed from 15 to 20`). In JavaScript it works on properties (`player.score`,
+    `items[0]`), not plain variables.
+  The Breakpoints tab lists them all with their condition or values, a pencil to change them and a
+  button to remove them. A gdb without Python support (some ARM toolchains) still gets live
+  breakpoints; they pause for a moment each time instead.
 - **Find and replace**: Ctrl+F finds in the current file; Ctrl+R (or the ⇄ button on the find bar)
   adds a Replace row (Replace, Replace All; one Ctrl+Z undoes it). The Search tab's Replace All
   replaces every match in the list across files, after asking; files open with unsaved changes
@@ -208,7 +221,8 @@ Svelte and Vite apps apart (the title bar says which) and which package manager 
 - **Debugging (F5)**: breakpoints in `+page.server.ts`, endpoints, hooks and other server code, and in
   browser code when Chrome, Chromium, Brave or Edge is installed (a separate browser window with its own
   profile opens). Stepping, call stack, locals, watches, hover and a console, through Microsoft's js-debug
-  (the build downloads a pinned, hash-checked release).
+  (the build downloads a pinned, hash-checked release). IF, live and value-change breakpoints work
+  here too (see the Debugger above).
 - **Tests** panel: runs Vitest or Playwright, lists each test's result by file, re-runs failed tests or
   one test, and jumps to where a test failed.
 - **Traces** panel: while Kev-C++ runs a SvelteKit app it collects the app's OpenTelemetry spans
@@ -240,5 +254,6 @@ project instead.
 | Ctrl+P | Search files and text | Ctrl+Shift+F | Find in all files (Search tab) |
 | Ctrl+F | Find in the current file | F2 / Delete | Rename / delete in the Project tab |
 | Ctrl+R | Replace in the current file | Right-click | Go to Definition / Implementation / References |
+| | | Right-click a line number | Breakpoint, IF, Live, Break When Value Changes |
 
 Logs from the language servers are in `~/.cache/kev-cpp/logs/`.

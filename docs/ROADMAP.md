@@ -256,6 +256,10 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
 
 **S3 On-target debugging**
 - **Launch:** remote gdb through `ST-LINK_gdbserver`, OpenOCD or st-util, halting at `main`.
+- **Breakpoint kinds:** IF, live and value-change breakpoints already go through DebugController's gdb
+  code. On the target: live breakpoints are dprintf through gdb's Python; an arm-none-eabi-gdb built
+  without Python gets the stop-read-continue fallback, which is slow over SWD, so say so. Watchpoints
+  use the Cortex-M's few comparators (2–4); report gdb's "too many hardware watchpoints" plainly.
 - **Views:** Registers and Memory.
 - **Faults:** a Cortex-M HardFault decoder that jumps to the faulting line.
 

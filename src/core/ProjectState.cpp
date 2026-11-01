@@ -48,16 +48,17 @@ ProjectState ProjectStateStore::load(const fs::path& root) const {
             fs::path file = name;
             if (file.is_relative()) file = root / file;
             std::error_code ec;
-            if (!lines.is_array() || !fs::is_regular_file(file, ec)) continue;
-            std::set<int> set;
-            for (const auto& line : lines)
-                if (line.is_number_integer() && line.get<int>() > 0) set.insert(line.get<int>());
-            if (!set.empty()) state.breakpoints[file] = std::move(set);
+            if (!fs::is_regular_file(file, ec)) continue;
+            FileBreakpoints found = fileBreakpointsFromJson(lines);
+            if (!found.empty()) state.breakpoints[file] = std::move(found);
         }
     }
     if (const auto watches = it->find("watches"); watches != it->end() && watches->is_array())
         for (const auto& w : *watches)
             if (w.is_string() && !w.get<std::string>().empty()) state.watches.push_back(w.get<std::string>());
+    if (const auto values = it->find("valueWatches"); values != it->end() && values->is_array())
+        for (const auto& w : *values)
+            if (w.is_string() && !w.get<std::string>().empty()) state.valueWatches.push_back(w.get<std::string>());
     state.ui = uiFromJson(it->value("ui", json::object()));
     return state;
 }
@@ -69,17 +70,19 @@ void ProjectStateStore::save(const fs::path& root, const ProjectState& state, si
         if (lines.empty()) continue;
         const fs::path rel = file.lexically_relative(root);
         const bool inside = !rel.empty() && *rel.begin() != "..";
-        breakpoints[inside ? rel.generic_string() : file.string()] = json(lines);
+        breakpoints[inside ? rel.generic_string() : file.string()] = toJson(lines);
     }
     const json ui = uiToJson(state.ui);
-    if (breakpoints.empty() && state.watches.empty() && state.ui.empty()) {
+    if (breakpoints.empty() && state.watches.empty() && state.valueWatches.empty() && state.ui.empty()) {
         if (!data_.contains(key)) return;
         data_.erase(key);
     } else {
         json entry = {{"breakpoints", breakpoints}, {"watches", state.watches}, {"saved", ++counter_}};
+        if (!state.valueWatches.empty()) entry["valueWatches"] = state.valueWatches;
         if (!state.ui.empty()) entry["ui"] = ui;
         if (data_.contains(key) && data_[key].value("breakpoints", json::object()) == breakpoints &&
             data_[key].value("watches", json::array()) == json(state.watches) &&
+            data_[key].value("valueWatches", json::array()) == json(state.valueWatches) &&
             data_[key].value("ui", json::object()) == ui)
             return; // nothing new: don't rewrite the file
         data_[key] = std::move(entry);

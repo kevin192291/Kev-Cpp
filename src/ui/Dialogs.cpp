@@ -93,6 +93,10 @@ void promptText(Gtk::Window& parent, const Glib::ustring& title, const Glib::ust
     deleteLater(window);
     window->present();
     entry->grab_focus();
+    if (selectChars == -2) {
+        entry->select_region(0, -1); // all of it
+        return;
+    }
     if (selectChars >= 0) {
         entry->select_region(0, selectChars);
         return;

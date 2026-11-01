@@ -1,5 +1,7 @@
 #include "process/ManagedProcess.h"
 
+#include "core/ProcessTree.h"
+
 #include <sys/prctl.h>
 #include <unistd.h>
 
@@ -27,6 +29,16 @@ void killLater(pid_t group, std::shared_ptr<bool> exited, int graceMs) {
         graceMs);
 }
 
+// SIGTERM for the group and for anything below the leader that left it (js-debug's watchdog runs
+// in its own session under Vite; while it lived, Vite waited for its debugger to go and never
+// exited). The tree is read first: once the leader exits its children move to init.
+void terminateTree(pid_t leader) {
+    const auto below = proc::descendants(leader);
+    kill(-leader, SIGTERM);
+    for (int pid : below)
+        if (getpgid(pid) != leader) kill(pid, SIGTERM);
+}
+
 } // namespace
 
 ManagedProcess::ManagedProcess() : self_(std::make_shared<ManagedProcess*>(this)) {}
@@ -34,7 +46,7 @@ ManagedProcess::ManagedProcess() : self_(std::make_shared<ManagedProcess*>(this)
 ManagedProcess::~ManagedProcess() {
     self_.reset();
     if (cancellable_) cancellable_->cancel();
-    if (pid_ > 0 && process_) kill(-pid_, SIGTERM);
+    if (pid_ > 0 && process_) terminateTree(pid_);
 }
 
 void ManagedProcess::start(const Options& options) {
@@ -77,7 +89,7 @@ void ManagedProcess::start(const Options& options) {
 
 void ManagedProcess::stop(int graceMs) {
     if (!process_ || pid_ <= 0) return;
-    kill(-pid_, SIGTERM);
+    terminateTree(pid_);
     // Tracks the leader: once it is reaped, the SIGKILL below is skipped.
     auto exited = std::make_shared<bool>(false);
     auto process = process_;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Breakpoints.h"
 #include "debug/GdbSession.h"
 
 #include <filesystem>
@@ -45,8 +46,8 @@ public:
                     std::string inferiorTty);
     ~DebugController();
 
-    // Starts gdb, sets `breakpoints` (file, 1-based line) and runs the program.
-    void start(const std::vector<std::pair<std::filesystem::path, int>>& breakpoints);
+    // Starts gdb, sets the breakpoints and value watches, and runs the program.
+    void start(const BreakpointMap& breakpoints, const std::vector<std::string>& valueWatches);
     State state() const { return state_; }
     bool stopped() const { return state_ == State::Stopped; }
 
@@ -57,7 +58,14 @@ public:
     void pause();    // interrupt a running program
     void terminate();
 
-    void setBreakpoint(const std::filesystem::path& file, int line, bool enabled);
+    // Sets, changes or (nullopt) removes the breakpoint on a line. IF breakpoints are gdb conditions;
+    // live ones are dprintf breakpoints printing through Python (see gdbLivePython), or, with a gdb
+    // that has no Python, breakpoints that stop for a moment: values read, liveHit, continue.
+    void setBreakpoint(const std::filesystem::path& file, int line, const std::optional<Breakpoint>& breakpoint);
+    // Break when the value changes: a gdb watchpoint. One gdb can't place yet (a local of a function
+    // that isn't running) is tried again each time the program pauses, and after it goes out of scope.
+    void addValueWatch(const std::string& expression);
+    void removeValueWatch(const std::string& expression);
     void selectFrame(int level);
     int selectedFrame() const { return selectedFrame_; }
 
@@ -75,6 +83,17 @@ public:
     sigc::signal<void(const StopInfo&)>& signalStopped() { return stopped_; }
     sigc::signal<void(const std::string& outcome)>& signalFinished() { return finished_; }
     sigc::signal<void(const std::string&)>& signalConsole() { return console_; }
+    // A live breakpoint ran (the program has carried on): its expressions and their values (the
+    // frame's locals when it names none).
+    sigc::signal<void(const std::filesystem::path& file, int line, const std::vector<std::string>& names,
+                      const std::vector<std::string>& values)>&
+    signalLiveHit() {
+        return liveHit_;
+    }
+    // A value watch is placed (true), or isn't and why.
+    sigc::signal<void(const std::string& expression, bool armed, const std::string& note)>& signalWatchState() {
+        return watchState_;
+    }
 
 private:
     void setState(State s);
@@ -90,13 +109,37 @@ private:
     GdbSession gdb_;
     State state_ = State::Starting;
     int selectedFrame_ = 0;
-    std::map<std::pair<std::string, int>, std::string> breakpointIds_; // (file, line) -> gdb number
+    using Key = std::pair<std::string, int>; // (file, line)
+    void place(const Key& key);
+    void onConsole(const std::string& text);
+    void onLiveHit(const std::filesystem::path& file, int line, const Breakpoint& breakpoint);
+    void emitLive(const Key& key, const std::vector<std::string>& values);
+    void armWatch(const std::string& expression);
+    void armPendingWatches();
+    void setWatchState(const std::string& expression, bool armed, const std::string& note);
+    struct Placed {
+        std::string number; // gdb's, "" until it answers
+        Breakpoint breakpoint;
+        int liveId = 0; // the dprintf's marker
+    };
+    struct Watch {
+        std::string number; // gdb's, "" while not placed
+        std::optional<std::pair<bool, std::string>> reported; // what watchState last said
+    };
+    bool ready_ = false;  // gdb has said whether it has Python; breakpoints wait for that
+    bool python_ = false; // live breakpoints are dprintf
+    int nextLiveId_ = 1;
+    std::map<Key, Placed> breakpointIds_;
+    std::map<int, Key> liveIds_;
+    std::map<std::string, Watch> watches_; // expression -> its watchpoint
     std::shared_ptr<DebugController*> self_;
 
     sigc::signal<void(State)> stateChanged_;
     sigc::signal<void(const StopInfo&)> stopped_;
     sigc::signal<void(const std::string&)> finished_;
     sigc::signal<void(const std::string&)> console_;
+    sigc::signal<void(const std::filesystem::path&, int, const std::vector<std::string>&, const std::vector<std::string>&)> liveHit_;
+    sigc::signal<void(const std::string&, bool, const std::string&)> watchState_;
 };
 
 } // namespace kevc

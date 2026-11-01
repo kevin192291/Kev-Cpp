@@ -1,11 +1,14 @@
 #pragma once
 
+#include "core/Breakpoints.h"
 #include "editor/DocumentPage.h"
 
 #include <gtkmm.h>
 #include <gtksourceview/gtksource.h>
 
 #include <filesystem>
+#include <map>
+#include <optional>
 #include <vector>
 
 namespace kevc {
@@ -41,10 +44,21 @@ public:
     // Squiggly underlines for language-server diagnostics (replaces the previous set).
     void showDiagnostics(const std::vector<LspDiagnostic>& diagnostics);
 
-    // Breakpoints are gutter marks (1-based lines); they move with the text as lines are edited.
-    void setBreakpoints(const std::vector<int>& lines);
-    std::vector<int> breakpoints() const;
-    void toggleBreakpoint(int line);
+    // Breakpoints are gutter marks (1-based lines), one kind per line; they move with the text as
+    // lines are edited. Each kind has its own mark category and icon; a mark carries its condition
+    // or the values a live breakpoint shows.
+    void setBreakpoints(const FileBreakpoints& breakpoints);
+    FileBreakpoints breakpoints() const;
+    std::optional<Breakpoint> breakpointAt(int line) const;
+    // Adds, replaces or (nullopt) removes the breakpoint on a line.
+    void setBreakpoint(int line, const std::optional<Breakpoint>& breakpoint);
+    void toggleBreakpoint(int line); // a standard breakpoint, or none
+    // A live breakpoint's latest values, shown after its line until cleared (and kept on the
+    // breakpoint's line as the text above it changes).
+    void showLiveValues(int line, const std::string& text);
+    void clearLiveValues();
+    // What a right-click on a line number shows (the breakpoint kinds), after moving the cursor there.
+    void setGutterMenu(const Glib::RefPtr<Gio::MenuModel>& menu);
     // The debugger's current line (1-based), or 0 to clear it.
     void setExecutionLine(int line);
     std::string lineText(int line) const; // 1-based, without the newline
@@ -67,8 +81,8 @@ public:
     sigc::signal<void(bool)>& signalModifiedChanged() { return modifiedChanged_; }
     sigc::signal<void(int)>& signalMatchCountChanged() { return matchCountChanged_; }
     sigc::signal<void()>& signalSaved() { return saved_; }
-    // A breakpoint was added (true) or removed (false) by clicking the gutter or toggleBreakpoint().
-    sigc::signal<void(int line, bool on)>& signalBreakpointToggled() { return breakpointToggled_; }
+    // A breakpoint was added, changed or (nullopt) removed: the gutter, toggleBreakpoint() or setBreakpoint().
+    sigc::signal<void(int line, std::optional<Breakpoint>)>& signalBreakpointChanged() { return breakpointChanged_; }
 
 private:
     static void onModifiedChanged(GtkTextBuffer* buffer, gpointer self);
@@ -98,7 +112,14 @@ private:
     sigc::signal<void(bool)> modifiedChanged_;
     sigc::signal<void(int)> matchCountChanged_;
     sigc::signal<void()> saved_;
-    sigc::signal<void(int, bool)> breakpointToggled_;
+    sigc::signal<void(int, std::optional<Breakpoint>)> breakpointChanged_;
+    void removeBreakpointMarks(int line); // and their live values
+    void placeLiveLabels();
+    void showGutterMenu(int line); // 0-based
+    GtkPopover* gutterPopover_ = nullptr;
+    std::map<GtkTextMark*, Gtk::Label*> liveLabels_; // on live breakpoints' marks
+    std::vector<Gtk::Label*> spareLiveLabels_;        // hidden, for reuse (see retireLiveLabel)
+    void retireLiveLabel(Gtk::Label* label);
     static void onLineMarkActivated(GtkSourceView*, const GtkTextIter* iter, guint button, GdkModifierType,
                                     gint, gpointer self);
     static void onLineNumberActivated(GtkSourceGutterRenderer* renderer, GtkTextIter* iter, GdkRectangle*,

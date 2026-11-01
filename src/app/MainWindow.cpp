@@ -123,10 +123,14 @@ MainWindow::MainWindow(Application& app)
     rightPaned_.set_resize_start_child(true);
     rightPaned_.set_resize_end_child(false);
     rightPaned_.set_shrink_end_child(false);
+    // The editor and bottom panels never go below what they need: GTK would draw them at that
+    // width anyway, cut off on the left (the right dock's first width did that). The docks give way.
+    rightPaned_.set_shrink_start_child(false);
 
     hpaned_.set_start_child(buildLeftDock());
     hpaned_.set_end_child(rightPaned_);
     hpaned_.set_resize_start_child(false);
+    hpaned_.set_shrink_end_child(false);
     hpaned_.set_position(290);
     hpaned_.set_vexpand(true);
 
@@ -231,17 +235,14 @@ MainWindow::MainWindow(Application& app)
         refreshDebugViews();
     });
     debugPanel_.signalBreakpointActivated().connect([this](const fs::path& file, int line) { openFile(file, line); });
-    debugPanel_.signalBreakpointRemoved().connect([this](const fs::path& file, int line) {
-        for (EditorTab* tab : editors())
-            if (tab->path() == file) {
-                tab->toggleBreakpoint(line); // updates everything through signalBreakpointToggled
-                return;
-            }
-        breakpoints_[file].erase(line);
-        if (debugger_) debugger_->setBreakpoint(file, line, false);
-        updateBreakpointsPanel();
-        saveProjectState();
+    debugPanel_.signalBreakpointRemoved().connect([this](const fs::path& file, int line) { setBreakpointAt(file, line, std::nullopt); });
+    debugPanel_.signalBreakpointEdit().connect([this](const fs::path& file, int line) {
+        auto f = breakpoints_.find(file);
+        if (f == breakpoints_.end() || !f->second.count(line)) return;
+        if (f->second[line].kind == BreakKind::Live) promptLive(file, line);
+        else promptConditional(file, line);
     });
+    debugPanel_.signalValueWatchRemoved().connect([this](const std::string& expression) { removeValueWatch(expression); });
     debugPanel_.signalConsoleCommand().connect([this](const std::string& command) {
         if (jsDebugger_) {
             // Evaluated in the paused frame, like the browser's console.
@@ -257,7 +258,7 @@ MainWindow::MainWindow(Application& app)
     });
     watches_.signalChanged().connect([this] {
         saveProjectState();
-        if (jsDebugger_ && jsDebugger_->stopped()) refreshJsViews(0);
+        if (jsDebugger_ && jsDebugger_->stopped()) refreshJsViews(-1);
         else if (debugger_ && debugger_->stopped()) refreshDebugViews();
         else watches_.showPlaceholders();
     });
@@ -329,6 +330,11 @@ MainWindow::MainWindow(Application& app)
 
 MainWindow::~MainWindow() {
     locationsPopover_.unparent();
+}
+
+void MainWindow::closeWithoutQuestions() {
+    closeConfirmed_ = true;
+    close();
 }
 
 void MainWindow::setStatus(const Glib::ustring& message) {
@@ -453,6 +459,17 @@ void MainWindow::buildActions() {
         else setStatus("Not debugging");
     });
     add_action("toggle-breakpoint", [this] { toggleBreakpointAtCursor(); });
+    add_action("if-breakpoint", [this] {
+        fs::path file;
+        int line = 0;
+        if (cursorLine(file, line)) promptConditional(file, line);
+    });
+    add_action("live-breakpoint", [this] {
+        fs::path file;
+        int line = 0;
+        if (cursorLine(file, line)) promptLive(file, line);
+    });
+    add_action("value-watch", [this] { promptValueWatch(); });
     add_action("add-watch", [this] { addWatch(); });
     // Tools
     add_action("dev-server", [this] { toggleDevServer(); });
@@ -511,7 +528,9 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
         {{"_Debug", "win.debug"}, {"_Continue", "win.debug-continue"}, {"_Pause", "win.debug-pause"},
          {"_Stop", "win.debug-stop"}},
         {{"Step _Over", "win.step-over"}, {"Step _Into", "win.step-into"}, {"Step O_ut", "win.step-out"}},
-        {{"Toggle _Breakpoint", "win.toggle-breakpoint"}, {"Add _Watch…", "win.add-watch"}},
+        {{"Toggle _Breakpoint", "win.toggle-breakpoint"}, {"I_F Breakpoint…", "win.if-breakpoint"},
+         {"_Live Breakpoint…", "win.live-breakpoint"}, {"Break When Value C_hanges…", "win.value-watch"}},
+        {{"Add _Watch…", "win.add-watch"}},
     });
     bar->append_submenu("_Tools", toolsMenu_);
     submenu("_Help", {
@@ -902,10 +921,22 @@ Gtk::Widget& MainWindow::buildEditorArea() {
         section->append("Go to T_ype Definition", "win.goto-type-definition");
         section->append("Find All _References", "win.find-references");
         menu->append_section(section);
+        // Right-clicking a line number shows this menu too, for that line.
+        auto breakpoints = Gio::Menu::create();
+        breakpoints->append("Toggle _Breakpoint", "win.toggle-breakpoint");
+        breakpoints->append("I_F Breakpoint…", "win.if-breakpoint");
+        breakpoints->append("_Live Breakpoint…", "win.live-breakpoint");
+        breakpoints->append("Break When Value C_hanges…", "win.value-watch");
+        menu->append_section(breakpoints);
         return menu;
     };
     editorMenu_ = lookups(false);
     cppEditorMenu_ = lookups(true);
+    gutterMenu_ = Gio::Menu::create();
+    gutterMenu_->append("Toggle _Breakpoint", "win.toggle-breakpoint");
+    gutterMenu_->append("I_F Breakpoint…", "win.if-breakpoint");
+    gutterMenu_->append("_Live Breakpoint…", "win.live-breakpoint");
+    gutterMenu_->append("Break When Value C_hanges…", "win.value-watch");
     return editorArea_;
 }
 
@@ -1055,6 +1086,8 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     if (devServer_ && devServer_->root() != session->root()) devServer_.reset();
     updateServerPage();
     breakpoints_.clear();
+    valueWatches_.clear();
+    clearLiveValues();
     updateBreakpointsPanel();
     watcher_.reset();
     collector_.reset();
@@ -1129,6 +1162,8 @@ void MainWindow::closeProject() {
         devServer_.reset(); // stops the server
         updateServerPage();
         breakpoints_.clear();
+        valueWatches_.clear();
+        clearLiveValues();
         updateBreakpointsPanel();
         watches_.setExpressions({});
         watcher_.reset();
@@ -1164,6 +1199,8 @@ void MainWindow::setPlainFolder(const fs::path& root) {
     if (devServer_ && devServer_->root() != root) devServer_.reset();
     updateServerPage();
     breakpoints_.clear();
+    valueWatches_.clear();
+    clearLiveValues();
     updateBreakpointsPanel();
     watcher_.reset();
     collector_.reset();
@@ -1496,7 +1533,7 @@ void MainWindow::relocated(const fs::path& from, const fs::path& to) {
         doc->moveTo(moved);
         if (tab) lsp_->attach(tab);
     }
-    std::map<fs::path, std::set<int>> breakpoints;
+    BreakpointMap breakpoints;
     for (auto& [file, lines] : breakpoints_) {
         const fs::path moved = fileops::relocated(file, from, to);
         breakpoints[moved.empty() ? file : moved] = lines;
@@ -2766,8 +2803,18 @@ void MainWindow::startJsDebugging() {
         showFrame(StackFrame{0, top.name, top.file, top.line});
         setStatus("Paused (" + reason + ") in " + (top.name.empty() ? std::string("code") : top.name) +
                   (top.file.empty() ? std::string() : ", " + top.file.filename().string() + ":" + std::to_string(top.line)));
+        noteWatchTriggered(reason);
         showBottomPage(debugPanel_);
-        refreshJsViews(0);
+        refreshJsViews(-1); // a watch's trap is the top frame: show the code that changed the value
+    });
+    jsDebugger_->signalLiveHit().connect(sigc::mem_fun(*this, &MainWindow::onLiveHit));
+    jsDebugger_->signalWatchState().connect([this](const std::string& expression, bool armed, const std::string& note) {
+        for (auto& w : valueWatches_)
+            if (w.expression == expression) {
+                w.armed = armed;
+                w.state = armed ? "watching" : note;
+            }
+        updateBreakpointsPanel();
     });
     jsDebugger_->signalStateChanged().connect([this](JsDebugger::State state) {
         updateToolbar();
@@ -2776,6 +2823,7 @@ void MainWindow::startJsDebugging() {
         clearExecutionLine();
         lsp_->setHoverEnabled(true);
         debugPanel_.showMessage("Running…  (Debug → Pause to break in)");
+        setStatus("Running " + folder_.filename().string() + " under the debugger…");
     });
     jsDebugger_->signalOutput().connect([this](const std::string& text) {
         auto buffer = serverLog_.get_buffer();
@@ -2804,6 +2852,7 @@ void MainWindow::startJsDebugging() {
         jsFrames_.clear();
         frames_.clear();
         jsServerUrl_.clear();
+        resetValueWatchStates();
         debugPanel_.showMessage(outcome + ". Press F5 to debug again.");
         watches_.showPlaceholders();
         setStatus(outcome);
@@ -2821,7 +2870,8 @@ void MainWindow::startJsDebugging() {
     serverStatus_.set_text("Starting Vite under the debugger…");
     showBottomPage(serverPage_);
     setStatus(std::string("Starting the debugger") + (options.chrome ? "" : " (server code only: no Chrome or Chromium found)") + "…");
-    jsDebugger_->start(breakpoints_);
+    clearLiveValues();
+    jsDebugger_->start(breakpoints_, valueWatchExpressions());
     updateToolbar();
 }
 
@@ -2839,9 +2889,17 @@ void MainWindow::refreshJsViews(int frameIndex) {
         frames_.clear();
         for (size_t i = 0; i < frames.size(); ++i)
             frames_.push_back(StackFrame{static_cast<int>(i), frames[i].name, frames[i].file, frames[i].line});
-        debugPanel_.setFrames(frames_, frameIndex);
+        // -1: the first frame in a file (the user's code, not node's internals or a watch's trap).
+        int index = std::max(frameIndex, 0);
+        if (frameIndex < 0)
+            for (size_t i = 0; i < frames.size(); ++i)
+                if (!frames[i].file.empty()) {
+                    index = static_cast<int>(i);
+                    break;
+                }
+        debugPanel_.setFrames(frames_, index);
         if (frames.empty()) return;
-        const int frameId = frames[std::min<size_t>(static_cast<size_t>(frameIndex), frames.size() - 1)].id;
+        const int frameId = frames[std::min<size_t>(static_cast<size_t>(index), frames.size() - 1)].id;
 
         // Locals: the innermost scope's variables directly; the other scopes (Closure, Module, Global)
         // as rows that expand.
@@ -2893,6 +2951,15 @@ void MainWindow::launchDebugger() {
     debugger_->signalStopped().connect(sigc::mem_fun(*this, &MainWindow::onDebugStopped));
     debugger_->signalFinished().connect(sigc::mem_fun(*this, &MainWindow::onDebugFinished));
     debugger_->signalConsole().connect([this](const std::string& text) { debugPanel_.appendConsole(text); });
+    debugger_->signalLiveHit().connect(sigc::mem_fun(*this, &MainWindow::onLiveHit));
+    debugger_->signalWatchState().connect([this](const std::string& expression, bool armed, const std::string& note) {
+        for (auto& w : valueWatches_)
+            if (w.expression == expression) {
+                w.armed = armed;
+                w.state = armed ? "watching" : note;
+            }
+        updateBreakpointsPanel();
+    });
     debugger_->signalStateChanged().connect([this](DebugController::State state) {
         updateToolbar(); // Continue/Pause and the step buttons
         if (state != DebugController::State::Running) return;
@@ -2903,15 +2970,17 @@ void MainWindow::launchDebugger() {
         setStatus("Running " + session_->project().name + " under the debugger…");
     });
 
-    std::vector<std::pair<fs::path, int>> bps;
+    bool anyBreakpoint = !valueWatches_.empty();
     for (const auto& [file, lines] : breakpoints_)
-        for (int line : lines) bps.emplace_back(file, line);
+        for (const auto& [line, bp] : lines)
+            if (bp.kind != BreakKind::Live) anyBreakpoint = true;
     debugPanel_.clearConsole();
     debugPanel_.showMessage("Starting gdb…");
     showBottomPage(runConsole_);
     setStatus("Debugging " + exe->filename().string() +
-              (bps.empty() ? " (no breakpoints set: it will run to the end)" : ""));
-    debugger_->start(bps);
+              (anyBreakpoint ? "" : " (no breakpoints set: it will run to the end)"));
+    clearLiveValues();
+    debugger_->start(breakpoints_, valueWatchExpressions());
     updateToolbar();
 }
 
@@ -2932,6 +3001,7 @@ void MainWindow::onDebugStopped(const StopInfo& info) {
     lsp_->setHoverEnabled(false);
     showFrame(info.frame);
     setStatus(info.description);
+    noteWatchTriggered(info.description);
     showBottomPage(debugPanel_);
     refreshDebugViews();
 }
@@ -2955,6 +3025,7 @@ void MainWindow::onDebugFinished(const std::string& outcome) {
     clearExecutionLine();
     lsp_->setHoverEnabled(true);
     frames_.clear();
+    resetValueWatchStates();
     debugPanel_.showMessage(outcome + ". Press F5 to debug again.");
     watches_.showPlaceholders();
     // gdb reports the exit before the terminal has drawn the program's last output (VTE reads a pty
@@ -3078,31 +3149,209 @@ void MainWindow::toggleBreakpointAtCursor() {
     tab->toggleBreakpoint(gtk_text_iter_get_line(&cursor) + 1);
 }
 
-void MainWindow::onBreakpointToggled(EditorTab* tab, int line, bool on) {
-    if (on) breakpoints_[tab->path()].insert(line);
-    else breakpoints_[tab->path()].erase(line);
-    if (debugger_) debugger_->setBreakpoint(tab->path(), line, on);
-    if (jsDebugger_) jsDebugger_->setBreakpoints(tab->path(), breakpoints_[tab->path()]);
+void MainWindow::setBreakpointAt(const fs::path& file, int line, const std::optional<Breakpoint>& breakpoint) {
+    for (EditorTab* tab : editors())
+        if (tab->path() == file) {
+            tab->setBreakpoint(line, breakpoint); // comes back through signalBreakpointChanged
+            return;
+        }
+    onBreakpointChanged(file, line, breakpoint);
+}
+
+void MainWindow::onBreakpointChanged(const fs::path& file, int line, const std::optional<Breakpoint>& breakpoint) {
+    auto& lines = breakpoints_[file];
+    if (breakpoint) lines[line] = *breakpoint;
+    else lines.erase(line);
+    if (lines.empty()) breakpoints_.erase(file);
+    if (!breakpoint || breakpoint->kind != BreakKind::Live) {
+        liveHits_.erase({file, line});
+        liveDirty_.erase({file, line});
+    }
+    if (debugger_) debugger_->setBreakpoint(file, line, breakpoint);
+    if (jsDebugger_) {
+        auto it = breakpoints_.find(file);
+        jsDebugger_->setBreakpoints(file, it == breakpoints_.end() ? FileBreakpoints{} : it->second);
+    }
     updateBreakpointsPanel();
     saveProjectState();
-    setStatus(std::string(on ? "Breakpoint set at " : "Breakpoint removed from ") + tab->path().filename().string() +
-              ":" + std::to_string(line));
+    const std::string where = file.filename().string() + ":" + std::to_string(line);
+    if (!breakpoint) setStatus("Breakpoint removed from " + where);
+    else if (breakpoint->kind == BreakKind::Conditional) setStatus("IF breakpoint at " + where + ": stops when " + breakpoint->condition);
+    else if (breakpoint->kind == BreakKind::Live)
+        setStatus("Live breakpoint at " + where + ": shows " +
+                  (breakpoint->show.empty() ? std::string("its local variables") : joinExpressions(breakpoint->show)) +
+                  " each time it runs, without stopping");
+    else setStatus("Breakpoint set at " + where);
+}
+
+bool MainWindow::cursorLine(fs::path& file, int& line) {
+    EditorTab* tab = currentEditor();
+    if (!tab) {
+        setStatus("Open a file and put the cursor on the line first");
+        return false;
+    }
+    GtkTextIter cursor;
+    GtkTextBuffer* text = GTK_TEXT_BUFFER(tab->buffer());
+    gtk_text_buffer_get_iter_at_mark(text, &cursor, gtk_text_buffer_get_insert(text));
+    file = tab->path();
+    line = gtk_text_iter_get_line(&cursor) + 1;
+    return true;
+}
+
+std::string MainWindow::expressionAtCursor() {
+    EditorTab* tab = currentEditor();
+    if (!tab) return {};
+    GtkTextBuffer* text = GTK_TEXT_BUFFER(tab->buffer());
+    GtkTextIter s, e;
+    if (gtk_text_buffer_get_selection_bounds(text, &s, &e)) {
+        char* selected = gtk_text_buffer_get_text(text, &s, &e, FALSE);
+        std::string out = selected;
+        g_free(selected);
+        if (out.find('\n') == std::string::npos) return out;
+    }
+    GtkTextIter cursor;
+    gtk_text_buffer_get_iter_at_mark(text, &cursor, gtk_text_buffer_get_insert(text));
+    GtkTextIter lineStart = cursor, lineEnd = cursor;
+    gtk_text_iter_set_line_offset(&lineStart, 0);
+    if (!gtk_text_iter_ends_line(&lineEnd)) gtk_text_iter_forward_to_line_end(&lineEnd);
+    char* lineText = gtk_text_buffer_get_text(text, &lineStart, &lineEnd, FALSE);
+    std::string out = mi::expressionAt(lineText, gtk_text_iter_get_line_offset(&cursor));
+    g_free(lineText);
+    return out;
+}
+
+void MainWindow::promptConditional(const fs::path& file, int line) {
+    std::string initial;
+    if (auto f = breakpoints_.find(file); f != breakpoints_.end())
+        if (auto bp = f->second.find(line); bp != f->second.end()) initial = bp->second.condition;
+    promptText(*this, "IF Breakpoint",
+               "Stop at " + file.filename().string() + ":" + std::to_string(line) +
+                   " only when this is true\n(e.g. i == 41, or name == \"Ann\" in JavaScript):",
+               initial, [this, file, line](const Glib::ustring& text) -> Glib::ustring {
+                   if (text.empty()) return "Enter a condition, e.g. i == 41";
+                   setBreakpointAt(file, line, Breakpoint{BreakKind::Conditional, text, {}});
+                   return {};
+               }, -2); // all of it: typing replaces it
+}
+
+void MainWindow::promptLive(const fs::path& file, int line) {
+    std::string initial;
+    if (auto f = breakpoints_.find(file); f != breakpoints_.end())
+        if (auto bp = f->second.find(line); bp != f->second.end()) initial = joinExpressions(bp->second.show);
+    promptText(*this, "Live Breakpoint",
+               "Each time " + file.filename().string() + ":" + std::to_string(line) +
+                   " runs, show these values next to it without stopping\n(separate them with commas; "
+                   "leave empty for all the local variables):",
+               initial, [this, file, line](const Glib::ustring& text) -> Glib::ustring {
+                   setBreakpointAt(file, line, Breakpoint{BreakKind::Live, {}, splitExpressions(text.raw())});
+                   return {};
+               }, -2);
+}
+
+void MainWindow::promptValueWatch() {
+    promptText(*this, "Break When Value Changes",
+               "Stop as soon as this changes\n(a variable such as total, or in JavaScript a property such as player.score):",
+               Glib::ustring(expressionAtCursor()), [this](const Glib::ustring& text) -> Glib::ustring {
+                   std::string expression = text.raw();
+                   expression.erase(0, expression.find_first_not_of(" \t"));
+                   expression.erase(expression.find_last_not_of(" \t") + 1);
+                   if (expression.empty()) return "Enter what to watch, e.g. total";
+                   for (const auto& w : valueWatches_)
+                       if (w.expression == expression) return {};
+                   valueWatches_.push_back({expression, "placed when debugging starts", false});
+                   if (debugger_) {
+                       valueWatches_.back().state = "placing…";
+                       debugger_->addValueWatch(expression);
+                   }
+                   if (jsDebugger_) jsDebugger_->addValueWatch(expression);
+                   updateBreakpointsPanel();
+                   saveProjectState();
+                   showBottomPage(debugPanel_);
+                   debugPanel_.set_current_page(2); // Breakpoints
+                   setStatus("The debugger will stop when " + expression + " changes");
+                   return {};
+               }, -2);
+}
+
+void MainWindow::removeValueWatch(const std::string& expression) {
+    std::erase_if(valueWatches_, [&](const ValueWatchItem& w) { return w.expression == expression; });
+    if (debugger_) debugger_->removeValueWatch(expression);
+    if (jsDebugger_) jsDebugger_->removeValueWatch(expression);
+    updateBreakpointsPanel();
+    saveProjectState();
+}
+
+std::vector<std::string> MainWindow::valueWatchExpressions() const {
+    std::vector<std::string> out;
+    for (const auto& w : valueWatches_) out.push_back(w.expression);
+    return out;
+}
+
+void MainWindow::resetValueWatchStates() {
+    for (auto& w : valueWatches_) {
+        w.armed = false;
+        w.state = "placed when debugging starts";
+    }
+    updateBreakpointsPanel();
+}
+
+void MainWindow::noteWatchTriggered(const std::string& description) {
+    // "total changed from 1.5 to 4.5 at main.cpp:12": show it on the watch's row.
+    for (auto& w : valueWatches_)
+        if (description.rfind(w.expression + " changed", 0) == 0) {
+            w.state = description.substr(w.expression.size() + 1);
+            updateBreakpointsPanel();
+            return;
+        }
+}
+
+void MainWindow::onLiveHit(const fs::path& file, int line, const std::vector<std::string>& names,
+                           const std::vector<std::string>& values) {
+    auto& hit = liveHits_[{file, line}];
+    ++hit.hits;
+    if (!names.empty()) hit.text = liveSummary(names, values);
+    else if (values.empty()) hit.text = "(no local variables)";
+    else hit.text = joinExpressions(values);
+    liveDirty_.insert({file, line});
+    // A loop can run its line thousands of times a second: redraw a few times a second at most.
+    if (!liveFlush_.connected()) liveFlush_ = Glib::signal_timeout().connect(sigc::mem_fun(*this, &MainWindow::flushLiveValues), 150);
+}
+
+bool MainWindow::flushLiveValues() {
+    for (const auto& key : liveDirty_) {
+        const auto it = liveHits_.find(key);
+        if (it == liveHits_.end()) continue;
+        const std::string text = it->second.text + "   \u00d7" + std::to_string(it->second.hits);
+        debugPanel_.setLiveValues(key.first, key.second, text);
+        for (EditorTab* tab : editors())
+            if (tab->path() == key.first) tab->showLiveValues(key.second, text);
+    }
+    liveDirty_.clear();
+    return false; // once; the next hit starts it again
+}
+
+void MainWindow::clearLiveValues() {
+    liveFlush_.disconnect();
+    liveHits_.clear();
+    liveDirty_.clear();
+    debugPanel_.clearLiveValues();
+    for (EditorTab* tab : editors()) tab->clearLiveValues();
 }
 
 void MainWindow::syncBreakpoints(EditorTab* tab) {
     // Marks follow edits, so the editor knows where breakpoints are now.
-    const auto lines = tab->breakpoints();
-    auto& stored = breakpoints_[tab->path()];
-    const std::set<int> now(lines.begin(), lines.end());
-    if (now == stored) return;
-    stored = now;
+    const FileBreakpoints now = tab->breakpoints();
+    auto it = breakpoints_.find(tab->path());
+    if (it == breakpoints_.end() ? now.empty() : it->second == now) return;
+    if (now.empty()) breakpoints_.erase(tab->path());
+    else breakpoints_[tab->path()] = now;
     updateBreakpointsPanel();
 }
 
 void MainWindow::saveProjectState() {
     if (folder_.empty()) return;
     for (EditorTab* tab : editors()) syncBreakpoints(tab); // marks move with edits
-    ProjectState state{breakpoints_, watches_.expressions(), {}};
+    ProjectState state{breakpoints_, watches_.expressions(), valueWatchExpressions(), {}};
     // A project without a .kevc (a web folder) keeps its look here instead.
     if (session_ && session_->projectFile().empty()) state.ui = session_->project().ui;
     std::error_code ec;
@@ -3113,6 +3362,8 @@ void MainWindow::restoreProjectState() {
     std::error_code ec;
     const ProjectState state = folder_.empty() ? ProjectState{} : projectState_.load(fs::weakly_canonical(folder_, ec));
     breakpoints_ = state.breakpoints;
+    valueWatches_.clear();
+    for (const auto& expression : state.valueWatches) valueWatches_.push_back({expression, "placed when debugging starts", false});
     updateBreakpointsPanel();
     watches_.setExpressions(state.watches);
     if (session_ && session_->projectFile().empty()) session_->project().ui = state.ui;
@@ -3166,10 +3417,10 @@ void MainWindow::saveProjectUi() {
 }
 
 void MainWindow::updateBreakpointsPanel() {
-    std::vector<std::pair<fs::path, int>> items;
+    std::vector<BreakpointItem> items;
     for (const auto& [file, lines] : breakpoints_)
-        for (int line : lines) items.emplace_back(file, line);
-    debugPanel_.setBreakpoints(items);
+        for (const auto& [line, bp] : lines) items.push_back({file, line, bp});
+    debugPanel_.setBreakpoints(items, valueWatches_);
 }
 
 void MainWindow::addWatch() {
@@ -3188,7 +3439,7 @@ void MainWindow::addWatch() {
                    watches_.addExpression(text);
                    leftDock_.set_current_page(leftDock_.page_num(watches_));
                    return {};
-               });
+               }, -2);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -3204,9 +3455,11 @@ void MainWindow::setupIntelliSense(EditorTab* tab) {
     });
 
     // Breakpoints set before the file was (re)opened.
-    if (auto it = breakpoints_.find(tab->path()); it != breakpoints_.end())
-        tab->setBreakpoints(std::vector<int>(it->second.begin(), it->second.end()));
-    tab->signalBreakpointToggled().connect([this, tab](int line, bool on) { onBreakpointToggled(tab, line, on); });
+    if (auto it = breakpoints_.find(tab->path()); it != breakpoints_.end()) tab->setBreakpoints(it->second);
+    for (const auto& [key, hit] : liveHits_)
+        if (key.first == tab->path()) tab->showLiveValues(key.second, hit.text + "   \u00d7" + std::to_string(hit.hits));
+    tab->signalBreakpointChanged().connect(
+        [this, tab](int line, std::optional<Breakpoint> bp) { onBreakpointChanged(tab->path(), line, bp); });
 
     // Values under the mouse while paused; added first so they appear above anything else.
     GtkSourceHoverProvider* debugHoverProvider = newDebugHoverProvider(
@@ -3260,6 +3513,7 @@ void MainWindow::setupIntelliSense(EditorTab* tab) {
     // Right-click: the Go to… items above GTK's Cut/Copy/Paste.
     gtk_text_view_set_extra_menu(GTK_TEXT_VIEW(tab->view()),
                                  G_MENU_MODEL((lsp::serverFor(tab->path()) == lsp::Server::Clangd ? cppEditorMenu_ : editorMenu_)->gobj()));
+    tab->setGutterMenu(gutterMenu_);
 }
 
 void MainWindow::lookUpAtCursor(Lookup what) {
