@@ -67,7 +67,10 @@ void DesignerPage::writeCode(const UiDocument& doc, const std::string& language,
         showMessage(Glib::ustring("Couldn't write the code: ") + e.what(), true);
         return;
     }
-    codeWritten_.emit(cpp ? "gtkmm-4.0" : "gtk4");
+    std::vector<fs::path> files;
+    for (const auto& f : code.generated) files.push_back(dir / f.name);
+    for (const auto& f : code.user) files.push_back(dir / f.name);
+    codeWritten_.emit(cpp ? "gtkmm-4.0" : "gtk4", files);
     std::string message;
     if (!written.empty()) message = "Wrote " + join(written);
     if (!created.empty()) message += (message.empty() ? "Created " : "; created ") + join(created) + " for your code";

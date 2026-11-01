@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <fstream>
 #include <sstream>
 
 namespace kevc {
@@ -96,6 +97,41 @@ std::string makeTargetKind(TargetType t) {
 
 // ---------------------------------------------------------------------------------------------
 // CMake
+
+std::vector<std::filesystem::path> cmake_gen::unlistedSources(const std::filesystem::path& root,
+                                                              const std::vector<std::filesystem::path>& files) {
+    namespace fs = std::filesystem;
+    // Every CMakeLists.txt of the project, not those of build folders, dependencies or .git.
+    std::vector<std::pair<fs::path, std::string>> lists; // folder, text
+    std::error_code ec;
+    for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end; it != end;
+         it.increment(ec)) {
+        const std::string name = it->path().filename().string();
+        if (it->is_directory(ec)) {
+            if (name.empty() || name[0] == '.' || name.rfind("build", 0) == 0 || name == "node_modules" ||
+                name == "_deps")
+                it.disable_recursion_pending();
+            continue;
+        }
+        if (name != "CMakeLists.txt") continue;
+        std::ifstream in(it->path(), std::ios::binary);
+        std::ostringstream text;
+        text << in.rdbuf();
+        lists.emplace_back(it->path().parent_path(), text.str());
+    }
+    std::vector<fs::path> out;
+    for (const auto& file : files) {
+        const std::string ext = file.extension().string();
+        if (ext != ".c" && ext != ".cc" && ext != ".cpp" && ext != ".cxx") continue;
+        const bool named = std::any_of(lists.begin(), lists.end(), [&](const auto& list) {
+            const std::string rel = file.lexically_relative(list.first).generic_string();
+            return list.second.find(rel) != std::string::npos ||
+                   list.second.find(file.filename().string()) != std::string::npos;
+        });
+        if (!named) out.push_back(file);
+    }
+    return out;
+}
 
 std::string cmake_gen::block(const Project& p) {
     std::ostringstream out;

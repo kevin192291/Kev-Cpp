@@ -102,11 +102,12 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
 - **Projects**: File → New Project creates C++ (console, static or shared library), C console or
   TypeScript web projects. Each has a `<name>.kevc` project file, which also keeps how the project
   looks (toolbars and panels shown, Debug or Release), so it opens the same for everyone.
-- **Existing CMake projects**: opening one asks how to build it. **Build As It Is** builds, runs and
+- **Existing CMake projects**: opening one asks how to build it. **Use Its Own CMakeLists.txt** builds, runs and
   debugs it with its own CMakeLists.txt, which Kev-C++ never edits (it only adds a `.kevc`;
   Project → Program to Run and Debug picks among its executables). **Manage Sources** also keeps its
   source list in a marked block (below). Kev-C++ itself opens this way, so it can be built and
-  debugged in Kev-C++ (`Kev-Cpp.kevc`).
+  debugged in Kev-C++ (`Kev-Cpp.kevc`). Its windows are moving to `.ui` files that Kev-C++'s own
+  designer edits; the splash (`src/ui/SplashWindow.ui`) is the first.
 - **Managed build files**: Kev-C++ owns one marked block in `CMakeLists.txt` / `Makefile` and keeps it
   in sync. New, deleted and renamed source files are added and removed automatically. Everything
   outside the block is yours and is never touched.

@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -137,6 +138,9 @@ TEST(UiCodegen, GtkmmBaseClassWithMembersAndHandlers) {
     const std::string userH = fileText(code, "main_window.h", true), userCpp = fileText(code, "main_window.cpp", true);
     EXPECT_TRUE(contains(userH, "class MainWindow : public MainWindowUi {"));
     EXPECT_TRUE(contains(userH, "static MainWindow* create() { return MainWindowUi::create<MainWindow>(); }"));
+    // Arguments of create() go on to the window's constructor.
+    EXPECT_TRUE(contains(h, "static T* create(Args&&... args)"));
+    EXPECT_TRUE(contains(h, "std::forward<Args>(args)..."));
     EXPECT_TRUE(contains(userH, "    // Signal handlers (Kev-C++ adds new ones here)\n    bool on_main_window_close_request() override;"));
     EXPECT_TRUE(contains(userCpp, "void MainWindow::on_save() {\n}"));
 
@@ -278,7 +282,18 @@ TEST(UiCodegen, GeneratedGtkmmCodeBuilds) {
     TempDir dir("gtkmm");
     for (const auto& f : code.generated) dir.write(f.name, f.text);
     for (const auto& f : code.user) dir.write(f.name, f.text);
-    dir.write("main.cpp", "#include \"main_window.h\"\nint main(int argc, char**) { if (argc > 99) MainWindow::create(); }\n");
+    // main.cpp also has a window class of its own whose constructor takes more than the builder
+    // (as Kev-C++'s own windows do): create() hands the extra arguments on.
+    dir.write("main.cpp", "#include \"main_window.h\"\n#include <string>\n"
+                          "class Titled : public MainWindowUi {\n"
+                          "public:\n"
+                          "    Titled(BaseObjectType* o, const Glib::RefPtr<Gtk::Builder>& b, const std::string& t, int n)\n"
+                          "        : MainWindowUi(o, b) { set_title(t + std::to_string(n)); }\n"
+                          "};\n"
+                          "int main(int argc, char**) {\n"
+                          "    if (argc > 99) MainWindow::create();\n"
+                          "    if (argc > 99) MainWindowUi::create<Titled>(std::string(\"Notes \"), 2);\n"
+                          "}\n");
     const std::string cmd = "cd '" + dir.path().string() + "' && g++ -std=c++17 -Wall -Wextra -Werror main.cpp main_window.cpp "
                             "main_window.ui.cpp -o app $(pkg-config --cflags --libs gtkmm-4.0) 2>&1";
     EXPECT_EQ(std::system((cmd + " >build.log").c_str()), 0) << std::ifstream(dir.path() / "build.log").rdbuf();
@@ -301,4 +316,26 @@ TEST(UiCodegen, GeneratedCCodeBuildsWithAndWithoutHandlers) {
     for (const auto& f : code.user) dir.write(f.name, f.text);
     EXPECT_EQ(std::system((compile + "main.c main_window-ui.c main_window.c" + libs).c_str()), 0)
         << std::ifstream(dir.path() / "build.log").rdbuf();
+}
+
+// Kev-C++'s own designs (src/**/*.ui with generated gtkmm code beside them): the code embeds the
+// design as it is now. It goes stale only if a .ui is changed outside Kev-C++'s designer, which
+// rewrites the code on every save; open the .ui in Kev-C++ and save it to bring the code up to date.
+TEST(UiCodegen, KevCppsOwnDesignsMatchTheirCode) {
+    int checked = 0;
+    for (const auto& entry : fs::recursive_directory_iterator(fs::path(KEVC_SOURCE_DIR) / "src")) {
+        if (entry.path().extension() != ".ui") continue;
+        const fs::path code = entry.path().parent_path() / (entry.path().stem().string() + ".ui.cpp");
+        ASSERT_TRUE(fs::exists(code)) << code << " is missing: open " << entry.path().filename()
+                                      << " in Kev-C++ and use Code → Write gtkmm Code";
+        std::ifstream uiIn(entry.path()), codeIn(code);
+        std::stringstream ui, text;
+        ui << uiIn.rdbuf();
+        text << codeIn.rdbuf();
+        const std::string embedded = "R\"__kevc_ui__(" + embeddedUi(UiDocument::parse(ui.str())) + ")__kevc_ui__\"";
+        EXPECT_TRUE(contains(text.str(), embedded))
+            << code.filename() << " is older than " << entry.path().filename() << ": open the .ui in Kev-C++ and save it";
+        ++checked;
+    }
+    EXPECT_GE(checked, 1); // the splash, at least
 }

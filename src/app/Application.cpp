@@ -144,7 +144,7 @@ void Application::on_activate() {
     window_->present();
     // The splash, once per start (settings /startup/splash: false turns it off).
     if (starting && settings_.get<bool>("/startup/splash", true)) {
-        auto* splash = new SplashWindow(*window_, buildVersion().text); // deletes itself
+        auto* splash = SplashWindow::create(*window_, buildVersion().text); // deletes itself
         splash->present();
     }
 }

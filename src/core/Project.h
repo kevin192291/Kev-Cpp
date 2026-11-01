@@ -47,7 +47,7 @@ struct Project {
 
     // When false the IDE adopted an existing CMakeLists.txt whose target it must not redefine.
     bool ownsTarget = true;
-    // When false the project's CMakeLists.txt is entirely its own ("Build As It Is"): Kev-C++ writes
+    // When false the project's CMakeLists.txt is entirely its own ("Use Its Own CMakeLists.txt"): Kev-C++ writes
     // no managed block and doesn't track sources; it builds with CMake and runs `targetName`.
     bool buildFileManaged = true;
     std::string targetName; // CMake target / Makefile TARGET

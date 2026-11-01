@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkWindow" id="SplashWindow">
+    <property name="title">Kev-C++ Pro</property>
+    <property name="modal">true</property>
+    <property name="decorated">false</property>
+    <property name="resizable">false</property>
+    <property name="default-width">640</property>
+    <property name="default-height">384</property>
+    <style>
+      <class name="kevc-splash"/>
+    </style>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="margin-start">32</property>
+        <property name="margin-end">18</property>
+        <property name="margin-top">28</property>
+        <property name="margin-bottom">12</property>
+        <child>
+          <object class="GtkBox">
+            <property name="spacing">28</property>
+            <property name="vexpand">true</property>
+            <property name="valign">center</property>
+            <child>
+              <object class="GtkPicture" id="logo_">
+                <property name="paintable">resource:///org/kevcpp/KevCpp/icons/hicolor/512x512/apps/org.kevcpp.KevCpp.png</property>
+                <property name="width-request">176</property>
+                <property name="height-request">176</property>
+                <property name="can-shrink">true</property>
+                <property name="content-fit">contain</property>
+                <property name="valign">center</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">6</property>
+                <property name="valign">center</property>
+                <child>
+                  <object class="GtkLabel" id="title_">
+                    <property name="label">Kev-C++ Pro</property>
+                    <property name="xalign">0</property>
+                    <style>
+                      <class name="kevc-splash-title"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="subtitle_">
+                    <property name="label">C, C++ and web development for Linux</property>
+                    <property name="xalign">0</property>
+                    <style>
+                      <class name="kevc-splash-subtitle"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <child>
+              <object class="GtkLabel" id="status_">
+                <property name="label">Starting…</property>
+                <property name="xalign">0</property>
+                <property name="hexpand">true</property>
+                <style>
+                  <class name="kevc-splash-small"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="version_">
+                <property name="label">Version</property>
+                <property name="xalign">1</property>
+                <style>
+                  <class name="kevc-splash-small"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

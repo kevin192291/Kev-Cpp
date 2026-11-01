@@ -14,6 +14,11 @@ namespace cmake_gen {
 std::string block(const Project& p);
 // A brand-new CMakeLists.txt: user preamble, managed block, and a user section after it.
 std::string initialFile(const Project& p);
+// For a project that keeps its own CMakeLists.txt (Kev-C++ doesn't edit it): which of `files`
+// (C/C++ sources such as the designer's generated code) no CMakeLists.txt under `root` names, by
+// its path from that file's folder or by its file name. Other files (headers) are never listed.
+std::vector<std::filesystem::path> unlistedSources(const std::filesystem::path& root,
+                                                   const std::vector<std::filesystem::path>& files);
 } // namespace cmake_gen
 
 // Makefile generation for C projects.

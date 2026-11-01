@@ -5,6 +5,7 @@
 #include "designer/DesignerPage.h"
 #include "editor/EditorTab.h"
 #include "core/FileOps.h"
+#include "core/BuildFiles.h"
 #include "core/Mi.h"
 #include "core/ProjectKinds.h"
 #include "debug/DapViews.h"
@@ -1050,12 +1051,12 @@ void MainWindow::openFolder(const fs::path& root) {
                 const std::string kevcName = root.filename().string() + ".kevc";
                 askChoice(*this, "How should Kev-C++ build this CMake project?",
                           "It wasn't created by Kev-C++.\n\n"
-                          "Build As It Is: Kev-C++ builds, runs and debugs it with its own CMakeLists.txt, which "
-                          "it never edits; it only adds " + kevcName + ". Best for projects with several targets "
-                          "or their own way of listing sources.\n\n"
+                          "Use Its Own CMakeLists.txt: Kev-C++ builds, runs and debugs it with the CMakeLists.txt it "
+                          "already has, and never edits that file; it only adds " + kevcName + ". Best for projects "
+                          "with several targets or their own way of listing sources (Kev-C++ itself is one).\n\n"
                           "Manage Sources: Kev-C++ also keeps the source list for you, in a marked block it adds "
                           "at the end of CMakeLists.txt (nothing else in the file is changed).",
-                          {"Cancel", "Open as Plain Folder", "Manage Sources", "Build As It Is"}, 0, 3,
+                          {"Cancel", "Open as Plain Folder", "Manage Sources", "Use Its Own CMakeLists.txt"}, 0, 3,
                           [this, root](int choice) {
                               if (choice == 1) setPlainFolder(root);
                               if (choice != 2 && choice != 3) return;
@@ -1322,7 +1323,29 @@ DesignerPage* MainWindow::openDesigner(const fs::path& file) {
     }
     page->signalStatus().connect([this](const Glib::ustring& text) { setStatus(text); });
     page->signalOpenFile().connect([this](const fs::path& file, int line, int column) { openFile(file, line, column); });
-    page->signalCodeWritten().connect([this](const std::string& module) { addSystemPackage(module); });
+    page->signalCodeWritten().connect([this](const std::string& module, const std::vector<fs::path>& files) {
+        if (!session_) return;
+        if (session_->project().buildFileManaged) {
+            addSystemPackage(module); // the source list follows the folder by itself
+            return;
+        }
+        // A project with its own CMakeLists.txt (Kev-C++ itself): Kev-C++ doesn't edit it, so say
+        // what to add there. A dialog the first time, the status line after that.
+        const auto unlisted = cmake_gen::unlistedSources(session_->root(), files);
+        if (unlisted.empty()) return;
+        std::string names;
+        bool fresh = false;
+        for (const auto& file : unlisted) {
+            names += "\n    " + file.lexically_relative(session_->root()).generic_string();
+            fresh = warnedUnlisted_.insert(file).second || fresh;
+        }
+        setStatus("Add " + unlisted.front().filename().string() +
+                  " to CMakeLists.txt: this project keeps its own, which Kev-C++ doesn't edit");
+        if (fresh)
+            showInfo(*this, "Add the new code to CMakeLists.txt",
+                     "This project keeps its own CMakeLists.txt, which Kev-C++ doesn't edit. Add these files to the "
+                     "sources there so they're built:" + names);
+    });
     addDocumentPage(*page);
     page->focusPage();
     return page;
@@ -1369,7 +1392,8 @@ EditorTab* MainWindow::openFile(const fs::path& file, int line, int column) {
 
 // The designer wrote gtkmm or C code: the project has to build against the library it uses.
 void MainWindow::addSystemPackage(const std::string& module) {
-    if (!session_ || session_->project().kind == ProjectKind::WebTs) return;
+    // Packages only reach a CMakeLists.txt Kev-C++ manages.
+    if (!session_ || session_->project().kind == ProjectKind::WebTs || !session_->project().buildFileManaged) return;
     auto& packages = session_->project().packages;
     if (std::any_of(packages.begin(), packages.end(), [&](const Package& p) { return p.name == module; })) return;
     packages.push_back(Package{Package::Source::System, module, {}, {}, {}, {}});

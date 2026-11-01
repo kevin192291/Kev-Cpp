@@ -216,7 +216,16 @@ verified by driving the real app (see "GUI testing").
   (swapped) to a lambda calling the virtual handler, so any signal works without a gtkmm signal
   table. C stand-ins are `__attribute__((weak))`. TypeInfo (`designer::gtkTypes()`) asks GType for
   signal signatures and property kinds, and checks gtkmm's headers via pkg-config; the project templates use
-  `ui::basicGtkTypes()`. `MainWindow::addSystemPackage` adds gtkmm-4.0/gtk4 when code is written.
+  `ui::basicGtkTypes()`. `MainWindow::addSystemPackage` adds gtkmm-4.0/gtk4 when code is written,
+  in projects whose CMakeLists.txt Kev-C++ manages; in one that keeps its own, it says (a dialog the
+  first time) which generated .cpp files no CMakeLists.txt names yet (`cmake_gen::unlistedSources`).
+  The generated `create(args…)` passes extra arguments on to the derived class's constructor.
+- **Kev-C++'s own windows (G4)**: each gets a `.ui` beside its class (`src/ui/SplashWindow.ui`),
+  handled exactly like a user's gtkmm design: the designer writes `SplashWindow.ui.h/.ui.cpp` on save
+  (base class `SplashWindowUi`, global namespace; ids end in `_` so members follow our convention),
+  the class derives from it and adds behaviour, `create(…)` builds it. Generated files are committed
+  and listed in CMakeLists.txt by hand; `UiCodegen.KevCppsOwnDesignsMatchTheirCode` fails when a .ui
+  changed outside the designer. Done: the splash. Next: the dialogs, panels, then the main window.
 - **Project tab file operations**: ProjectTree only emits rename/delete/new/move signals (context
   menu, F2/Delete, drag and drop); MainWindow does them with `core/FileOps` checks, so open documents
   follow (`DocumentPage::moveTo`; editors are detached from and re-attached to the language servers)
@@ -263,7 +272,7 @@ verified by driving the real app (see "GUI testing").
 - **npm Packages dialog**: package.json is edited as text (npm::setDependency/removeDependency), so
   formatting and key order stay; .npmrc keeps every line but registry ones. Newest versions and
   lookups for Add use `npm view … --json` with the dialog's registry flags, 4 at a time.
-- **Build As It Is** (Project::buildFileManaged = false): no managed block, no source sync; the
+- **Use Its Own CMakeLists.txt** (Project::buildFileManaged = false): no managed block, no source sync; the
   project's CMakeLists.txt builds as usual and runnableOutput() looks for `targetName` anywhere under
   the build folder. cmakeExecutables() lists add_executable() targets for the chooser. The repository
   has its own Kev-Cpp.kevc this way.
@@ -305,6 +314,8 @@ verified by driving the real app (see "GUI testing").
   `GTK_THEME` in tests: it overrides the app's choice.
 - Stop test instances by their command line (the test project path), never by name (`pkill kev-cpp`,
   `pgrep -x gdb`): the user may have their own Kev-C++ or gdb running.
+- Kev-C++-in-Kev-C++ tests (G4): use a copy of the repository, never the real one (the designer
+  writes files and F9 builds there). docs/ROADMAP.md's G4 section has the recipe.
 - JavaScript debugging tests: delete `$XDG_CACHE_HOME/kev-cpp/debug-browser-profile` before a run.
   Chromium restores the tabs of a session it didn't close, and a restored page whose Vite still runs
   hits the same breakpoints (live counts double).
@@ -314,13 +325,14 @@ verified by driving the real app (see "GUI testing").
 All seven planned milestones are done (projects, build/run, options & packages, IntelliSense,
 debugger, dev server) plus docking panels. Not done yet: the bundled TypeScript dev server (projects
 without Vite) can't resolve npm packages; floating panel window positions aren't remembered (GTK 4 can't
-position windows; the user doesn't mind); Kev-C++'s own windows are built in code, not .ui files, so
-the GTK designer can't edit them yet.
+position windows; the user doesn't mind); most of Kev-C++'s own windows are still built in code, so
+the GTK designer can't edit them yet (G4 is moving them to .ui files; the splash is done).
 
 Roadmap: docs/ROADMAP.md. Done: M0 (foundations), W1–W5 (web/SvelteKit, including server and
 browser debugging, checked end to end) G1–G3 (GTK designer: model, preview, properties; palette, drag and
-drop, signals; gtkmm/C code, GTK 4 app templates). Next: S1 (STM32). Each milestone gets its own plan
-first.
+drop, signals; gtkmm/C code, GTK 4 app templates). Now: G4 (Kev-C++'s own windows in its designer;
+the user's goal is to develop Kev-C++ entirely in Kev-C++). Then S1 (STM32). Each milestone gets its
+own plan first.
 
 ## Conventions
 

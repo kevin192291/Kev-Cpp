@@ -1,6 +1,10 @@
 #include "core/BuildFiles.h"
 
 #include <gtest/gtest.h>
+
+#include <filesystem>
+#include <fstream>
+#include <unistd.h>
 #include <nlohmann/json.hpp>
 
 using namespace kevc;
@@ -166,4 +170,22 @@ TEST(CompileCommands, OnlyCFilesWithAllFlags) {
     EXPECT_EQ(db[0]["arguments"], nlohmann::json({"gcc", "-std=c17", "-Iinclude", "-Wall", "-O0", "-g",
                                                   "-I/usr/include/foo", "-c", "src/main.c", "-o",
                                                   "build/debug/obj/src/main.o"}));
+}
+
+// A project with its own CMakeLists.txt: the designer's new files that none of them names.
+TEST(CMakeGen, UnlistedSourcesInAProjectsOwnCMakeLists) {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / ("kevc-unlisted-" + std::to_string(::getpid()));
+    fs::remove_all(root);
+    fs::create_directories(root / "src/ui");
+    fs::create_directories(root / "tests");
+    fs::create_directories(root / "build");
+    std::ofstream(root / "CMakeLists.txt") << "add_executable(app\n  src/main.cpp\n  src/ui/Splash.ui.cpp\n)\n";
+    std::ofstream(root / "tests/CMakeLists.txt") << "add_executable(t ToolTest.cpp)\n";
+    std::ofstream(root / "build/CMakeLists.txt") << "Prefs.ui.cpp\n"; // a build folder doesn't count
+    const auto unlisted = cmake_gen::unlistedSources(
+        root, {root / "src/ui/Splash.ui.cpp", root / "src/ui/Splash.ui.h", root / "src/ui/Prefs.ui.cpp",
+               root / "tests/ToolTest.cpp", root / "src/ui/Prefs.cpp"});
+    EXPECT_EQ(unlisted, (std::vector<fs::path>{root / "src/ui/Prefs.ui.cpp", root / "src/ui/Prefs.cpp"}));
+    fs::remove_all(root);
 }

@@ -162,7 +162,8 @@ These facts shape the STM32 track.
 
 ## Milestones (each builds, runs and ships on its own)
 
-**Status (2026-10-31):** M0, W1–W5 and G1–G3 are done. Next up is S1.
+**Status (2026-11-01):** M0, W1–W5 and G1–G3 are done. G4 (Kev-C++'s own windows in its designer)
+is under way; S1 follows it.
 
 **Also done along the way** (not milestones):
 - **Versions and updates:** a build's version is its commit's UTC date and time plus its hash. Every
@@ -299,6 +300,61 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
   empty stand-ins make a project link before its handlers are written (instead of a
   GtkBuilderCScope). Generated files are rewritten on save once they exist; the user's files are
   created if missing. The tests compile and link the generated code against the real gtkmm and GTK.
+
+**G4 Kev-C++ in Kev-C++** (started 2026-11-01)
+- **Goal:** Kev-C++ is developed in Kev-C++, its windows included. Open the Kev-C++ folder, open a
+  window's `.ui` file, change it on the Design page, save, press F9, and F10 runs the changed Kev-C++.
+  Nothing about it needs a text editor or another tool.
+- **How:** each window or panel gets a `.ui` file beside its class (`src/ui/SplashWindow.ui` next to
+  `SplashWindow.cpp`), handled exactly as in a user's gtkmm project: the designer writes
+  `SplashWindow.ui.h/.ui.cpp` on every save (a base class `SplashWindowUi`, the design embedded as a
+  string, so nothing is installed or looked up at run time) and the existing class derives from it.
+  The class keeps what a design can't hold: data, lists filled at run time, timers, event
+  controllers. The generated files are committed, and a test fails if one is out of date.
+- **Steps:**
+  1. **The loop works** (done 2026-11-01): the generated `create()` passes constructor arguments
+     on; the designer copes with a project that keeps its own CMakeLists.txt (no pkg-config package
+     added; it says when a generated file isn't in CMakeLists.txt yet); the splash became
+     `SplashWindow.ui`. Checked by doing it in a copy of the repository: Kev-C++ opened in Kev-C++,
+     Code → Write gtkmm Code, the file added to CMakeLists.txt in the editor, F9; then the subtitle
+     changed on the Design page, saved, F11, and the new Kev-C++'s splash showed it. Gap found: the
+     preview shows a window as a box, so `window.kevc-splash` CSS (the splash's gradient) doesn't
+     apply there (step 5).
+  2. **Dialogs:** New Project, Project Options, the npm Packages dialog, the small question and
+     message dialogs, Toolchain info, About and Check for Updates.
+  3. **Panels:** a base class for a top-level widget that isn't a window (a Box or Notebook with an
+     id), for the panels inside the main window: Search, Debug (Locals, Call Stack, Breakpoints,
+     Console), Watches, Compiler, Tests, Traces, Environment, Dependencies, Routes, Symbols and the
+     Welcome tab. MainWindow holds some of these by value today; they become pointers.
+  4. **The main window:** its frame (menu row, toolbar rows, the three docks, status bar) and its
+     menus as `<menu>`s in the design. What changes while it runs (which toolbar groups and panels
+     show, the docks' contents) stays in code, which fills named places in the design.
+  5. **Designer gaps** these turn up, fixed as found. Expected: Kev-C++'s own look in the preview of
+     its own designs (Slate rather than GTK's default), widgets GtkBuilder can't make (Kev-C++'s
+     C++-only classes) shown as named placeholders, editing `<menu>`s, CSS classes in the properties.
+- **Picking it up again** (paused 2026-11-01 after step 1; the user resumes in a few days with step 2):
+  - **Moving one window, the recipe the splash followed:** write `src/ui/<Class>.ui` with the window's
+    layout (top-level id = the class name, so the designer leaves the existing `<Class>.h/.cpp` alone;
+    ids that code needs end in `_`); open it in Kev-C++, Code → Write gtkmm Code; add
+    `src/ui/<Class>.ui.cpp` to CMakeLists.txt; make the class derive from `<Class>Ui` with a
+    constructor `(BaseObjectType*, const Glib::RefPtr<Gtk::Builder>&, …its own arguments)` and a
+    static `create(…)`; delete the layout code; keep data, timers, controllers and lists in code.
+    Callers change from `new X(…)` or a member to `X::create(…)`.
+  - **Order for step 2**, simplest first: Toolchain info and About (in MainWindow), the message and
+    question boxes in `Dialogs.cpp` (promptText, askChoice, showError, showInfo: one shared design),
+    New Project (`Dialogs.cpp`), Check for Updates, Project Options, then the npm Packages dialog
+    (its rows are built at run time; only the frame is designed).
+  - **Testing it:** in a copy of the repository (rsync without `build/` and `.git`) pre-built with
+    `cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug` and `cmake --build build/debug -- -k 0`,
+    opened in Kev-C++ on Xephyr. Then the designer writes the code, F9 builds only what changed, and
+    F10/F11 runs the new Kev-C++ on the same display. The copy has no git history, so its version
+    reads "unknown".
+  - **Known gaps** for step 5: the preview shows windows as boxes, so `window.<class>` CSS doesn't
+    apply there; the generator makes a base class only for windows (panels need step 3's change).
+- **Done when** every Kev-C++ window and panel has a `.ui` file, a change made on the Design page
+  shows in the next F10 run, and the tests pass.
+- **Risks:** converting the main window touches docking, focus and key handling, which are checked
+  only by driving the app, so it goes last and gets the longest GUI test.
 
 ### C/C++ pro
 

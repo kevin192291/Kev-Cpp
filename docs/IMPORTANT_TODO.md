@@ -34,12 +34,12 @@ Done items say where to find them. Last updated 2026-11-01.
 
 ## Partly done
 
-- ◐ **Kev-C++ developed with Kev-C++**: it opens its own folder with "Build As It Is"
+- ◐ **Kev-C++ developed with Kev-C++**: it opens its own folder with "Use Its Own CMakeLists.txt"
   (`Kev-Cpp.kevc`; Kev-C++ never edits its CMakeLists.txt), builds with F9, runs a second Kev-C++
   with F10 and debugs it with F5.
-  **Still to do:** editing Kev-C++'s windows in the visual designer. They're built in C++ code, not
-  `.ui` files, so each window (starting with the dialogs) has to move to a `.ui` file loaded with
-  Gtk::Builder before the designer can open it. That's milestone-sized; plan it first.
+  **In progress: milestone G4** (docs/ROADMAP.md) moves Kev-C++'s windows to `.ui` files so the
+  visual designer edits them. Done: the splash (`src/ui/SplashWindow.ui`): change it on the Design
+  page, save, F9, and F10 runs Kev-C++ with the change. Next: the dialogs, the panels, the main window.
 
 ## Not done
 

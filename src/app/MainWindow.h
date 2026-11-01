@@ -176,7 +176,7 @@ private:
     void installDependencies();
     // Project → Packages in a web project: versions, locking, the package source (NpmPackagesDialog).
     void showNpmPackages();
-    // A Build As It Is project: which of its add_executable() programs Run and Debug start.
+    // A project that uses its own CMakeLists.txt: which of its add_executable() programs Run and Debug start.
     void chooseProgram();
     void npmLogin(const std::string& registry); // `npm login` in the Run tab, where the password is typed
     void runScript(const std::string& name);
@@ -309,6 +309,7 @@ private:
     Gtk::Popover locationsPopover_; // several answers to a Go to…, at the cursor
     Glib::RefPtr<Gio::Menu> editorMenu_, cppEditorMenu_; // added to the editors' right-click menu
     Glib::RefPtr<Gio::Menu> gutterMenu_;                 // a right-click on a line number
+    std::set<std::filesystem::path> warnedUnlisted_;     // designer code already reported as not in CMakeLists.txt
     Gtk::Notebook editors_;
     Gtk::Widget* welcomePage_ = nullptr;
     Gtk::Box* welcomeLists_ = nullptr; // pinned and recent projects, left of the shortcuts

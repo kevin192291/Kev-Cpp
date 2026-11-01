@@ -126,6 +126,7 @@ add_executable(kev-cpp
   src/ui/SearchMarkup.cpp
   src/ui/SearchPanel.cpp
   src/ui/SplashWindow.cpp
+  src/ui/SplashWindow.ui.cpp
   src/ui/TestsPanel.cpp
   src/ui/TracesPanel.cpp
 )

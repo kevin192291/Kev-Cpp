@@ -62,8 +62,11 @@ public:
     sigc::signal<void(const Glib::ustring&)>& signalStatus() { return status_; }
     // A file to open at a line (Go to handler).
     sigc::signal<void(const std::filesystem::path&, int line, int column)>& signalOpenFile() { return openFile_; }
-    // Code was written for the design; the project needs this pkg-config module (gtkmm-4.0, gtk4).
-    sigc::signal<void(const std::string& module)>& signalCodeWritten() { return codeWritten_; }
+    // Code was written for the design: the project needs this pkg-config module (gtkmm-4.0, gtk4)
+    // and these files (the generated ones and the user's).
+    sigc::signal<void(const std::string& module, const std::vector<std::filesystem::path>& files)>& signalCodeWritten() {
+        return codeWritten_;
+    }
 
 private:
     enum class View { Design, Xml };
@@ -194,7 +197,7 @@ private:
     sigc::signal<void()> closeRequested_;
     sigc::signal<void(const Glib::ustring&)> status_;
     sigc::signal<void(const std::filesystem::path&, int, int)> openFile_;
-    sigc::signal<void(const std::string&)> codeWritten_;
+    sigc::signal<void(const std::string&, const std::vector<std::filesystem::path>&)> codeWritten_;
 };
 
 } // namespace kevc

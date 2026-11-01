@@ -558,7 +558,7 @@ void EditorTab::showGutterMenu(int line) {
     g_idle_add_once([](gpointer p) { gtk_popover_popup(GTK_POPOVER(p)); }, gutterPopover_);
 }
 
-void EditorTab::onLineMarkActivated(GtkSourceView* view, const GtkTextIter* iter, guint button, GdkModifierType, gint,
+void EditorTab::onLineMarkActivated(GtkSourceView*, const GtkTextIter* iter, guint button, GdkModifierType, gint,
                                     gpointer self) {
     if (button != GDK_BUTTON_PRIMARY) return;
     static_cast<EditorTab*>(self)->toggleBreakpoint(gtk_text_iter_get_line(iter) + 1);
