@@ -28,7 +28,7 @@ GtkSourceStyleScheme* preferredStyleScheme() {
     return gtk_source_style_scheme_manager_get_scheme(manager, "Adwaita-dark");
 }
 
-EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_(file) {
+EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_(file), cppHeaders_(cppHeaders) {
     std::string contents = Glib::file_get_contents(file.string());
     if (!g_utf8_validate(contents.data(), static_cast<gssize>(contents.size()), nullptr))
         throw std::runtime_error(file.filename().string() + " is not valid UTF-8 text");
@@ -95,15 +95,7 @@ EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_
     set_hexpand(true);
 
     g_signal_connect(buffer_, "modified-changed", G_CALLBACK(&EditorTab::onModifiedChanged), this);
-    try {
-        monitor_ = Gio::File::create_for_path(file.string())->monitor_file();
-        monitor_->signal_changed().connect(
-            [this](const Glib::RefPtr<Gio::File>&, const Glib::RefPtr<Gio::File>&, Gio::FileMonitor::Event event) {
-                onFileChanged(event);
-            });
-    } catch (const Glib::Error&) {
-        // Without a monitor the editor just won't notice outside changes.
-    }
+    watchFile();
     g_signal_connect(search_, "notify::occurrences-count", G_CALLBACK(&EditorTab::onMatchCountChanged), this);
 
     tabTitle_.set_tooltip_text(file.string());
@@ -144,6 +136,29 @@ void EditorTab::save() {
     Glib::file_set_contents(path_.string(), data);
     gtk_text_buffer_set_modified(text, FALSE);
     saved_.emit();
+}
+
+void EditorTab::watchFile() {
+    if (monitor_) monitor_->cancel();
+    monitor_.reset();
+    try {
+        monitor_ = Gio::File::create_for_path(path_.string())->monitor_file();
+        monitor_->signal_changed().connect(
+            [this](const Glib::RefPtr<Gio::File>&, const Glib::RefPtr<Gio::File>&, Gio::FileMonitor::Event event) {
+                onFileChanged(event);
+            });
+    } catch (const Glib::Error&) {
+        // Without a monitor the editor just won't notice outside changes.
+    }
+}
+
+void EditorTab::moveTo(const std::filesystem::path& file) {
+    path_ = file;
+    watchFile();
+    // A new extension can mean a new language (main.c → main.cpp).
+    gtk_source_buffer_set_language(buffer_, languageFor(file, cppHeaders_));
+    tabTitle_.set_tooltip_text(file.string());
+    updateTitle();
 }
 
 void EditorTab::onFileChanged(Gio::FileMonitor::Event event) {
@@ -202,13 +217,44 @@ void EditorTab::gotoLine(int line, int column) {
 
 void EditorTab::scrollToCursor() {
     auto scroll = [this] {
-        gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(view_), gtk_text_buffer_get_insert(GTK_TEXT_BUFFER(buffer_)), 0.2,
-                                     TRUE, 0.0, 0.3);
+        GtkTextView* text = GTK_TEXT_VIEW(view_);
+        GtkTextBuffer* buffer = GTK_TEXT_BUFFER(buffer_);
+        gtk_text_view_scroll_to_mark(text, gtk_text_buffer_get_insert(buffer), 0.2, TRUE, 0.0, 0.3);
+        // That also scrolls sideways to put the cursor at the left edge; when the cursor and the
+        // selection fit without it, scroll back so the line's start (its indentation) shows.
+        GtkTextIter end;
+        gtk_text_buffer_get_iter_at_mark(buffer, &end, gtk_text_buffer_get_selection_bound(buffer));
+        GtkTextIter cursor;
+        gtk_text_buffer_get_iter_at_mark(buffer, &cursor, gtk_text_buffer_get_insert(buffer));
+        if (gtk_text_iter_compare(&cursor, &end) > 0) end = cursor;
+        GdkRectangle where;
+        gtk_text_view_get_iter_location(text, &end, &where);
+        GtkAdjustment* sideways = gtk_scrollable_get_hadjustment(GTK_SCROLLABLE(text));
+        if (sideways && where.x + where.width + 48 < gtk_adjustment_get_page_size(sideways))
+            gtk_adjustment_set_value(sideways, 0);
     };
     scroll();
     // A freshly opened tab only knows estimated line heights; scroll again once layout has run.
     // sigc::track_obj disconnects the idle handler if this tab is destroyed first.
     Glib::signal_idle().connect_once(sigc::track_obj(scroll, *this), Glib::PRIORITY_LOW);
+}
+
+void EditorTab::selectRange(int line, size_t byteColumn, size_t byteLength) {
+    GtkTextBuffer* text = GTK_TEXT_BUFFER(buffer_);
+    line = std::clamp(line, 1, gtk_text_buffer_get_line_count(text));
+    // Bytes to characters, on this line as the buffer has it now (it may differ from the search's copy).
+    const std::string s = lineText(line);
+    auto chars = [&s](size_t bytes) {
+        bytes = std::min(bytes, s.size());
+        while (bytes > 0 && bytes < s.size() && (static_cast<unsigned char>(s[bytes]) & 0xC0) == 0x80) --bytes;
+        return static_cast<int>(g_utf8_strlen(s.data(), static_cast<gssize>(bytes)));
+    };
+    GtkTextIter start, end;
+    gtk_text_buffer_get_iter_at_line_offset(text, &start, line - 1, chars(byteColumn));
+    gtk_text_buffer_get_iter_at_line_offset(text, &end, line - 1, chars(byteColumn + byteLength));
+    gtk_text_buffer_select_range(text, &start, &end);
+    scrollToCursor();
+    focusEditor();
 }
 
 void EditorTab::placeCursor(const GtkTextIter& iter) {

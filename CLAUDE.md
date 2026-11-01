@@ -8,13 +8,16 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 171 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 187 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
 `install.sh` patches the installed launcher's Exec to prepend node's directory when node isn't in a
 standard bin dir (nvm): menu launches get the session PATH, where `node` is Ubuntu's v18, which is too
-old for typescript-language-server 5. A plain `cmake --install` overwrites the launcher without that.
+old for typescript-language-server 5 and Vite 7. A plain `cmake --install` overwrites the launcher
+without that, and file managers, panels or a dev build don't use the launcher at all, so `Application`
+also fixes PATH at startup (`terminalLikePath`): the newest nvm/fnm/Volta/asdf/mise/n node goes first
+when PATH's node is missing or older than 20, and pnpm's and bun's folders are appended.
 
 Tests: GoogleTest for `src/core` (headless, includes real cmake/g++/make/gcc/gdb/tsc/git runs) plus
 `node --test tools/devserver/devserver.test.mjs` (registered in ctest). Everything GTK-dependent is
@@ -37,11 +40,14 @@ verified by driving the real app (see "GUI testing").
   Playwright JSON), `WebReports` (OTLP spans → waterfall, npm outdated/audit), `UiDocument` (GtkBuilder
   `.ui` model that writes untouched text back verbatim, plus the designer's preview copy), `UiEdit`
   (the designer's catalog of container slots; placing, moving, wrapping, removing objects; signals),
-  `UiCodegen` (gtkmm/C code and Blueprint from a design; Go to handler stubs).
+  `UiCodegen` (gtkmm/C code and Blueprint from a design; Go to handler stubs), `FileOps` (the Project
+  tab's rename/move checks, where open files go after a move), `Search` (project file listing, Go to
+  File fuzzy ranking, Find in Files matching, include filters, result previews).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon), `MainWindow`
   (everything wired together: menus, actions, build/run, debugging, IntelliSense, dev server).
-- `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), ProjectTree, SymbolsPanel, and
-  DocumentPage, the interface MainWindow saves and closes editor-area pages through.
+- `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), ProjectTree (with Go to File
+  search, context menu, drag and drop), SymbolsPanel, and DocumentPage, the interface MainWindow saves,
+  closes and moves editor-area pages through.
 - `src/designer/` DesignerPage: the GTK designer's page for `.ui` files (preview, outline, properties,
   signals, XML); DesignerEditing.cpp holds its palette, drag and drop, clipboard and context menu;
   DesignerCode.cpp its Code menu, regeneration on save and Go to handler;
@@ -52,12 +58,16 @@ verified by driving the real app (see "GUI testing").
   Debug panel, Watches), DebugHover (hover provider); for web projects DapClient (one DAP session
   over TCP), JsDebugger (js-debug server + root/child sessions) and DapViews (DapVarNode).
 - `src/process/` ManagedProcess (long-running child: own process group, PR_SET_PDEATHSIG, stdin pipe,
-  line output; Vite, the dev server, js-debug, the OTLP collector) and Capture (run + collect stdout).
+  line output; Vite, the dev server, js-debug, the OTLP collector), Capture (run + collect stdout) and
+  BackgroundJob (one worker thread at a time, results posted to the main loop, cancelled and joined
+  before a new one starts or its owner goes; used by the searches).
 - `src/build/` BuildRunner (sequential subprocesses, line streaming), CompilerPanel.
 - `src/ui/` Dialogs, ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
   bottom/right/floating or closed; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton,
-  icon tab labels), and the web panels EnvPanel, TestsPanel, TracesPanel, DependenciesPanel
-  (`src/editor/RoutesPanel` is the left-dock Routes tab).
+  icon tab labels), QuickSearch (the menu bar's search field), SearchPanel (the left dock's Search
+  tab: Find in Files), SearchMarkup (their shared highlighting), and the web panels
+  EnvPanel, TestsPanel, TracesPanel, DependenciesPanel (`src/editor/RoutesPanel` is the left-dock
+  Routes tab, with a filter field).
 - `src/devserver/DevServer` runs the bundled `tools/devserver/devserver.mjs` or the project's Vite.
   `tools/package.json` pins typescript 5.9.3, typescript-language-server 5.3.0, svelte-language-server
   0.18.5 and typescript-svelte-plugin 0.3.52 (`npm ci` during the build); `tools/fetch-js-debug.cmake`
@@ -121,11 +131,17 @@ verified by driving the real app (see "GUI testing").
 - **Web flavours** (`WebProject::detect`, never saved): `@sveltejs/kit` → SvelteKit, `svelte`+`vite` →
   Svelte, `vite` → Vite, else Plain (bundled server on 5465). Vite runs directly as `node vite.js dev`
   (one process, dies with the IDE) on the first free port from 5173 with `--strictPort --host 127.0.0.1`.
-  `.bin` tools are resolved to their scripts and run with our node (`nodeBin`), not via PATH.
+  `.bin` tools are resolved to their scripts and run with our node (`nodeBin`), not via PATH: npm's
+  `.bin` entries are symlinks, pnpm's are `#!/bin/sh` shims whose `exec node "$basedir/…"` line names the script.
 - **Toolbar groups / panels**: named groups (file, edit, build, debug, project, web) and closable
   panels, Auto/Shown/Hidden per profile in settings (`/toolbars/<id>/<profile>`, `/panels/<id>/<profile>`);
   `applyProfile()` after every open. Defaults live in `ProjectKinds.cpp` (web-only: web toolbar,
-  dev-server/env/tests/traces/deps panels).
+  dev-server/env/tests/traces/deps panels). On top of that, what can't apply is gone, not just off
+  by default (`toolbarGroupApplies`, `panelApplies`, `usesNativeTools`/`usesWebTools`): C/C++ hide the
+  web group, web panels, npm menu items and dev-server Tools items; web hides the project group,
+  Debug/Release, Clean, Packages/Project Options; env/traces need SvelteKit. Such items are also left
+  out of View → Toolbars/Panels. `updateMenus()` refills the View lists and the Project, Execute and
+  Tools menus (web names: Check Types, Production Build) on every applyProfile.
 - **JS debugging**: js-debug's `dapDebugServer.js` on a free port; the root `pwa-node` session launches
   Vite; js-debug's `startDebugging` reverse requests each get a new TCP session; once Vite prints its
   URL a `pwa-chrome` session opens it if a Chromium-based browser is found (`/web/chrome`), else the
@@ -163,13 +179,37 @@ verified by driving the real app (see "GUI testing").
   table. C stand-ins are `__attribute__((weak))`. TypeInfo (`designer::gtkTypes()`) asks GType for
   signal signatures and property kinds, and checks gtkmm's headers via pkg-config; the project templates use
   `ui::basicGtkTypes()`. `MainWindow::addSystemPackage` adds gtkmm-4.0/gtk4 when code is written.
+- **Project tab file operations**: ProjectTree only emits rename/delete/new/move signals (context
+  menu, F2/Delete, drag and drop); MainWindow does them with `core/FileOps` checks, so open documents
+  follow (`DocumentPage::moveTo`; editors are detached from and re-attached to the language servers)
+  and breakpoints move with them. Delete uses the trash (`g_file_trash`), with a permanent-delete
+  fallback. Drags carry the row's GFileInfo, which no other program can read, so rows never leave
+  the tree. GUI tests set `XDG_DATA_HOME` so test deletions don't land in the user's real trash.
+- **Search is visible without knowing it's there** (the user's rule: a first-time user must find it at
+  a glance, no instructions): `QuickSearch` sits in the middle of the menu bar's row (a CenterBox
+  around the PopoverMenuBar, like Visual Studio's and VS Code's) and drops down file-name matches
+  (fuzzy, scattered mid-word letters rejected) plus the first 8 text matches, with a last row to the
+  Search tab. Ctrl+P focuses it. Ctrl+Shift+F is the left dock's Search tab, second after Project (all
+  matches as you type, grouped by file, stops at 2,000; open editors searched with their unsaved
+  text). The Project tab's own field lists file names in place of the tree; the Routes tab filters.
+  The bottom dock's old "Find Results" placeholder is gone: build output there would bury results.
+  All of them list files with `search::listFiles` (the Project tab's hiding rules) on a BackgroundJob.
+  The left dock's tabs keep their names where they fit (selected, then Project, then Search:
+  `fitLeftTabs`, measured on every switch and pane resize). EditorTab's scrollToCursor scrolls back
+  to column 0 when the cursor and selection fit, so jumps don't hide indentation.
+- **QuickSearch's drop-down** is a non-autohide popover (autohide would take the keyboard from the
+  field), as GTK's suggestion entry does. It closes on Escape, a choice, another widget taking focus,
+  or a press on the main window's own surface outside the field: presses in the popover also pass
+  through the window's capture controllers, so the surface check matters. Row activation is deferred
+  to idle because activating empties the list.
 - **git in the Project tab** is read-only: `watchGit()` (on every folder open) asks git for the work tree
   and .git folder, watches .git for index/HEAD rewrites (a commit or add in any terminal), and
   `refreshGitStatus()` also runs after saves, source syncs, window activation and every 5 s while the
   window is active. One `git status` at a time; paths are mapped from the work tree's top to the
   tree's spelling of the project root.
 - **Async safety**: callbacks from gdb/LSP/processes capture a `weak_ptr` token, never raw `this`
-  alone (`sigc::track_obj` only protects sigc slots, not `std::function`).
+  alone (`sigc::track_obj` only protects sigc slots, not `std::function`). BackgroundJob's posts may
+  capture `this`: they're dropped once the job is cancelled, and its owner's destructor cancels it.
 
 ## GUI testing (important)
 
@@ -177,6 +217,10 @@ verified by driving the real app (see "GUI testing").
   start the app with `DISPLAY=:5 GDK_BACKEND=x11 XDG_CONFIG_HOME=<tmp> XDG_CACHE_HOME=<tmp>` so test
   runs don't touch the user's panel layout or caches. Drive it with python-xlib XTest; screenshot with
   `root.get_image`. No window manager in Xephyr: windows open at (0,0), focus follows the pointer.
+- Popovers that don't grab (QuickSearch's list) misbehave without a window manager: focus follows
+  the pointer onto the popup and the main window loses focus. Run `DISPLAY=:5 metacity --replace
+  --sm-disable` inside Xephyr for those tests (always with DISPLAY=:5: never replace the user's WM).
+  With it the window is decorated and offset, so take coordinates from a screenshot.
 - Never trigger file dialogs (Ctrl+O, Browse…) in tests: GTK routes them through the desktop portal,
   so they appear on the user's real screen and block the app. Open projects via the command line.
 - Don't press F10/Open in Browser on web projects in tests (it opens the user's real browser).
@@ -190,8 +234,8 @@ verified by driving the real app (see "GUI testing").
 ## State and known gaps
 
 All seven planned milestones are done (projects, build/run, options & packages, IntelliSense,
-debugger, dev server) plus docking panels. Not done yet: Replace (Ctrl+R) and Find Results are
-placeholders; breakpoints/watches aren't saved between sessions; the dev server can't resolve npm
+debugger, dev server) plus docking panels. Not done yet: Replace (Ctrl+R) is a placeholder (there is
+no replace in Find in Files either); breakpoints/watches aren't saved between sessions; the dev server can't resolve npm
 packages; floating panel window positions aren't remembered (GTK 4 can't position windows).
 
 Roadmap: docs/ROADMAP.md. Done: M0 (foundations), W1–W5 (web/SvelteKit, including server and

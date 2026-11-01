@@ -17,6 +17,7 @@ pkg_check_modules(GTKMM REQUIRED IMPORTED_TARGET gtkmm-4.0)
 pkg_check_modules(GTKSOURCEVIEW REQUIRED IMPORTED_TARGET gtksourceview-5)
 pkg_check_modules(VTE REQUIRED IMPORTED_TARGET vte-2.91-gtk4)
 find_package(nlohmann_json 3.10 REQUIRED)
+find_package(Threads REQUIRED) # Find in Files and the Project tab search run on worker threads
 
 # Pure logic with no GTK dependency, so it can be unit tested headlessly.
 add_library(kevc_core STATIC
@@ -24,6 +25,7 @@ add_library(kevc_core STATIC
   src/core/BuildPlan.cpp
   src/core/Dap.cpp
   src/core/Diagnostics.cpp
+  src/core/FileOps.cpp
   src/core/GitStatus.cpp
   src/core/Icons.cpp
   src/core/Lsp.cpp
@@ -34,6 +36,7 @@ add_library(kevc_core STATIC
   src/core/ProjectKinds.cpp
   src/core/ProjectSession.cpp
   src/core/RecentProjects.cpp
+  src/core/Search.cpp
   src/core/Settings.cpp
   src/core/SvelteKit.cpp
   src/core/TestReport.cpp
@@ -101,6 +104,7 @@ add_executable(kev-cpp
   src/lsp/LspBridges.cpp
   src/lsp/LspClient.cpp
   src/lsp/LspManager.cpp
+  src/process/BackgroundJob.cpp
   src/process/Capture.cpp
   src/process/ManagedProcess.cpp
   src/project/SourceWatcher.cpp
@@ -111,11 +115,15 @@ add_executable(kev-cpp
   src/ui/EnvPanel.cpp
   src/ui/IconWidgets.cpp
   src/ui/ProjectOptionsDialog.cpp
+  src/ui/QuickSearch.cpp
+  src/ui/SearchMarkup.cpp
+  src/ui/SearchPanel.cpp
   src/ui/TestsPanel.cpp
   src/ui/TracesPanel.cpp
 )
 target_link_libraries(kev-cpp PRIVATE
   kevc_core
+  Threads::Threads
   PkgConfig::GTKMM
   PkgConfig::GTKSOURCEVIEW
   PkgConfig::VTE

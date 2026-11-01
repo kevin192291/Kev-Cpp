@@ -20,6 +20,8 @@ public:
 
     // Shows text beside the icon in each state ("Start" / "Stop").
     void setLabels(Glib::ustring label, Glib::ustring runningLabel);
+    // What it says when hovered, in each state (Run means something else in a web project).
+    void setTooltips(Glib::ustring tooltip, Glib::ustring runningTooltip);
     void setRunning(bool running);
     bool running() const { return running_; }
 

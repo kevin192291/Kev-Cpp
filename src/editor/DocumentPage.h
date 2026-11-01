@@ -16,6 +16,8 @@ public:
     virtual bool modified() const = 0;
     // Throws Glib::Error on failure.
     virtual void save() = 0;
+    // The file was renamed or moved (from the Project tab): keep editing it, and save it, there.
+    virtual void moveTo(const std::filesystem::path& file) = 0;
 
     virtual Gtk::Widget& pageWidget() = 0;
     virtual Gtk::Widget& tabLabel() = 0;

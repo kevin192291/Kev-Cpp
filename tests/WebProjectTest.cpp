@@ -111,6 +111,46 @@ TEST_F(WebProjectTest, ViteRunsDirectlyWhenDevIsPlainVite) {
               (std::vector<std::string>{"npm", "run", "dev", "--", "--port", "5174", "--strictPort", "--host", "127.0.0.1"}));
 }
 
+// pnpm's .bin entries are shell scripts (this is the one pnpm 10 writes, trimmed), and its packages
+// live under node_modules/.pnpm with node_modules/<name> symlinked to them. Running the shell script
+// with node was a SyntaxError; nodeBin has to find the script it runs.
+TEST_F(WebProjectTest, PnpmShellShimsResolveToTheirScript) {
+    write("package.json", kKitPackage);
+    write("pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
+    write("node_modules/.pnpm/vite@7.3.1/node_modules/vite/bin/vite.js", "#!/usr/bin/env node\n");
+    fs::create_directory_symlink(".pnpm/vite@7.3.1/node_modules/vite", dir_ / "node_modules/vite");
+    write("node_modules/.bin/vite", R"SH(#!/bin/sh
+basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
+
+case `uname` in
+    *CYGWIN*|*MINGW*|*MSYS*)
+        if command -v cygpath > /dev/null 2>&1; then
+            basedir=`cygpath -w "$basedir"`
+        fi
+    ;;
+esac
+
+if [ -z "$NODE_PATH" ]; then
+  export NODE_PATH="/x/node_modules/.pnpm/node_modules"
+fi
+if [ -x "$basedir/node" ]; then
+  exec "$basedir/node"  "$basedir/../vite/bin/vite.js" "$@"
+else
+  exec node  "$basedir/../vite/bin/vite.js" "$@"
+fi
+)SH");
+    const fs::path script = fs::canonical(dir_ / "node_modules/.pnpm/vite@7.3.1/node_modules/vite/bin/vite.js");
+    EXPECT_EQ(nodeBin(dir_, "vite"), script);
+    const auto argv = viteDevCommand(WebProject::detect(dir_), dir_, "/usr/bin/node", 5174);
+    ASSERT_GE(argv.size(), 3u);
+    EXPECT_EQ(argv[1], script.string());
+
+    // A shell wrapper that doesn't name a script: none (Run then goes through `pnpm run dev`).
+    write("node_modules/.bin/other", "#!/bin/sh\nexec something-else \"$@\"\n");
+    EXPECT_EQ(nodeBin(dir_, "other"), fs::path());
+    EXPECT_EQ(nodeBin(dir_, "missing"), fs::path());
+}
+
 TEST(WebProject, ViteReadyLine) {
     EXPECT_EQ(viteReadyUrl("  \xe2\x9e\x9c  Local:   http://127.0.0.1:5243/"), "http://127.0.0.1:5243/");
     EXPECT_EQ(viteReadyUrl("\x1b[32m  ➜\x1b[39m  \x1b[1mLocal\x1b[22m:   \x1b[36mhttp://localhost:\x1b[1m5173\x1b[22m/\x1b[39m"),

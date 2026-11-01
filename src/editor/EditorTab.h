@@ -24,6 +24,7 @@ public:
     bool modified() const override;
     // Throws Glib::Error on failure.
     void save() override;
+    void moveTo(const std::filesystem::path& file) override;
 
     Gtk::Widget& pageWidget() override { return *this; }
     Gtk::Widget& tabLabel() override { return tabBox_; }
@@ -35,6 +36,8 @@ public:
     void gotoLine(int line, int column = 0); // 1-based line and column
     void activateTextAction(const char* action) override; // "text.undo", "clipboard.copy", ...
     void placeCursor(const GtkTextIter& iter);   // moves, scrolls to and focuses
+    // Selects text on a 1-based line given in bytes (as Find in Files reports it), scrolls to and focuses it.
+    void selectRange(int line, size_t byteColumn, size_t byteLength);
     // Squiggly underlines for language-server diagnostics (replaces the previous set).
     void showDiagnostics(const std::vector<LspDiagnostic>& diagnostics);
 
@@ -63,12 +66,14 @@ private:
     static void onModifiedChanged(GtkTextBuffer* buffer, gpointer self);
     // Reloads the file when it changes on disk, as long as the buffer has no unsaved edits.
     void onFileChanged(Gio::FileMonitor::Event event);
+    void watchFile();
     void reloadFromDisk();
     static void onMatchCountChanged(GObject* search, GParamSpec*, gpointer self);
     void updateTitle();
     void scrollToCursor();
 
     std::filesystem::path path_;
+    bool cppHeaders_ = true;
     GtkSourceBuffer* buffer_ = nullptr;
     GtkSourceView* view_ = nullptr;
     GtkSourceSearchSettings* searchSettings_ = nullptr;

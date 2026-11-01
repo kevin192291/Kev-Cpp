@@ -39,7 +39,8 @@ struct WebProject {
 };
 
 // A node_modules/.bin tool as a script for `node` to run, so it works even when node isn't on the
-// PATH the IDE was started with. Empty if the project hasn't installed it.
+// PATH the IDE was started with: the file an npm symlink points to, or the script a pnpm shell shim
+// runs. Empty if the project hasn't installed it (or its .bin entry is a wrapper of another kind).
 std::filesystem::path nodeBin(const std::filesystem::path& root, const std::string& name);
 
 // Vite's dev server on 127.0.0.1:<port>, failing rather than moving if the port is taken. Runs the

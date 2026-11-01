@@ -45,6 +45,7 @@ public:
     ~DesignerPage() override;
 
     const std::filesystem::path& path() const override { return path_; }
+    void moveTo(const std::filesystem::path& file) override;
     bool modified() const override;
     void save() override;
     Gtk::Widget& pageWidget() override { return *this; }
@@ -129,6 +130,7 @@ private:
     void resetProperty(int uid, const std::string& name);
 
     void onFileChanged(Gio::FileMonitor::Event event);
+    void watchFile();
 
     std::filesystem::path path_;
     ui::UiDocument doc_;

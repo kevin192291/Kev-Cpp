@@ -11,9 +11,11 @@
 namespace kevc {
 
 // Shows a modal window with one text entry. `onAccept` returns an error message to keep the
-// window open, or an empty string to close it.
+// window open, or an empty string to close it. The entry starts with the file stem of `initial`
+// selected, or its first `selectChars` characters.
 void promptText(Gtk::Window& parent, const Glib::ustring& title, const Glib::ustring& label,
-                const Glib::ustring& initial, std::function<Glib::ustring(const Glib::ustring&)> onAccept);
+                const Glib::ustring& initial, std::function<Glib::ustring(const Glib::ustring&)> onAccept,
+                int selectChars = -1);
 
 // Asks a question with several buttons; `onChoice` receives the button index, or -1 if dismissed.
 void askChoice(Gtk::Window& parent, const Glib::ustring& message, const Glib::ustring& detail,

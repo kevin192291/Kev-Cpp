@@ -19,6 +19,8 @@
 #include "ui/DockManager.h"
 #include "ui/DependenciesPanel.h"
 #include "ui/EnvPanel.h"
+#include "ui/QuickSearch.h"
+#include "ui/SearchPanel.h"
 #include "ui/TestsPanel.h"
 #include "ui/TracesPanel.h"
 #include "ui/IconWidgets.h"
@@ -57,6 +59,9 @@ private:
     Glib::RefPtr<Gio::Menu> buildMenuModel();
     Gtk::Widget& buildToolbar();
     Gtk::Widget& buildLeftDock();
+    // The left dock's tabs show their names where they fit (the selected tab first, then Project and
+    // Search); the others show their icon, named in a tooltip, so no tab hides behind scroll arrows.
+    void fitLeftTabs();
     Gtk::Widget& buildEditorArea();
     Gtk::Widget& buildBottomDock();
     Gtk::Widget& buildStatusBar();
@@ -65,6 +70,9 @@ private:
     // Shows the toolbar groups and panels the current profile (what's open) wants; see
     // core/ProjectKinds. Called whenever a project or folder is opened.
     void applyProfile();
+    // The File, View, Project, Execute and Tools menus list only what applies to what's open (see
+    // core/ProjectKinds), and web projects get web names (Check Types, Production Build).
+    void updateMenus();
     void updateToolbarRows();
 
     // Projects
@@ -73,6 +81,9 @@ private:
     void openFolder(const std::filesystem::path& root);
     void setProject(std::unique_ptr<ProjectSession> session);
     void setPlainFolder(const std::filesystem::path& root);
+    // File → Close Project (or Close Folder): asks about unsaved files, stops what the project runs
+    // (build, program, debugger, dev server) and goes back to the Welcome tab with nothing open.
+    void closeProject();
     void onProjectSynced(const ProjectSession::SyncResult& result);
     void updateTitle();
 
@@ -99,6 +110,15 @@ private:
     void runGitStatus();
     void addSystemPackage(const std::string& module);
     void newFile();
+    // The Project tab's context menu and drag and drop. Open editors follow renamed and moved files.
+    void newFileIn(const std::filesystem::path& dir);
+    void newFolderIn(const std::filesystem::path& dir);
+    void renamePath(const std::filesystem::path& path);
+    void deletePath(const std::filesystem::path& path);
+    void movePath(const std::filesystem::path& source, const std::filesystem::path& targetDir);
+    // After `from` became `to`: editors, breakpoints and the routes and git views catch up.
+    void relocated(const std::filesystem::path& from, const std::filesystem::path& to);
+    void filesChanged();
     void saveCurrent();
     bool saveAll();
     void closeEditor(DocumentPage* page);
@@ -108,6 +128,12 @@ private:
     void forwardToEditor(const char* action);
 
     // Search
+    // Find in Files (the Search tab), shown and focused; the menu bar's search field (Ctrl+P).
+    void findInFiles(Glib::ustring text = {});
+    void focusQuickSearch();
+    // Open editors' text where it has unsaved changes, by path: what searches look at for those files.
+    std::map<std::filesystem::path, std::string> unsavedEditorText();
+    Glib::ustring selectedLineText(); // the current editor's selection, if it's on one line
     void showFindBar();
     void findNext(bool forward, bool incremental = false);
     void gotoLine();
@@ -215,6 +241,8 @@ private:
     Gtk::Notebook rightDock_;
     Gtk::Notebook leftDock_;
     ProjectTree projectTree_;
+    SearchPanel searchPanel_;
+    QuickSearch quickSearch_;
     SymbolsPanel symbols_;
     RoutesPanel routesPanel_;
     EnvPanel envPanel_;
@@ -281,6 +309,11 @@ private:
     bool serverWasReady_ = false; // tells a failed start from a server that stopped later
     WebProject web_;              // the open web project's package.json, read when it opens
     Glib::RefPtr<Gio::Menu> scriptsMenu_ = Gio::Menu::create(); // Project → Scripts and the web toolbar
+    // Menus refilled by updateMenus.
+    Glib::RefPtr<Gio::Menu> fileMenu_ = Gio::Menu::create(), viewToolbars_ = Gio::Menu::create(),
+                            viewPanels_ = Gio::Menu::create(),
+                            projectMenu_ = Gio::Menu::create(), executeMenu_ = Gio::Menu::create(),
+                            toolsMenu_ = Gio::Menu::create();
     std::string doneLabel_;       // see runCommands
     bool openBrowserWhenReady_ = false;
     Gtk::Box serverPage_{Gtk::Orientation::VERTICAL};

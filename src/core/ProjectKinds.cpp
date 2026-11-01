@@ -66,6 +66,26 @@ std::string profileFor(const Project* project, bool folderOpen) {
     return folderOpen ? "folder" : "none";
 }
 
+bool usesNativeTools(const std::string& profile) {
+    return profile != "web";
+}
+
+bool usesWebTools(const std::string& profile) {
+    return profile != "cpp" && profile != "c";
+}
+
+bool toolbarGroupApplies(const std::string& group, const std::string& profile) {
+    if (group == "web") return usesWebTools(profile);
+    if (group == "project") return usesNativeTools(profile); // Project Options: compiler and linker
+    return true;
+}
+
+bool panelApplies(const std::string& panel, const std::string& profile, bool svelteKit) {
+    if (panel == "env" || panel == "traces") return usesWebTools(profile) && (profile != "web" || svelteKit);
+    if (panel == "dev-server" || panel == "tests" || panel == "deps") return usesWebTools(profile);
+    return true;
+}
+
 bool toolbarGroupShown(const Settings& settings, const std::string& group, const std::string& profile) {
     return resolve(settings, key("toolbars", group, profile), shownByDefault(kToolbarDefaults, group, profile));
 }

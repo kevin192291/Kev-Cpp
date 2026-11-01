@@ -74,13 +74,28 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
 
 ## Features
 
+- **Search**: the field in the middle of the menu bar (**Ctrl+P**) finds anything in the open project.
+  Type and a list drops down with the files whose names match (letters in order: `mwc` finds
+  `MainWindow.cpp`) and the first places the text appears; click one, or use Up/Down and Enter. Its
+  last row, or **Ctrl+Shift+F**, shows every place in the **Search** tab beside the Project tab, grouped
+  by file, with switches for match case, whole words and regular expressions and a "files to include"
+  field (`*.cpp, src/, !tests/`). Files open in an editor are searched as you see them, unsaved
+  changes included. The Project tab has a field of its own that lists matching file names in place of
+  the tree, the Routes tab one that filters its routes, and the Ctrl+F bar a button that searches
+  every file for what's in it.
+- **Files in the Project tab**: right-click a file or folder to open, rename (F2) or delete it
+  (Delete; it goes to the trash), make a new file or folder in it, or copy its path. Drag a file or
+  folder onto another folder to move it there (drop it on a file to use that file's folder, or on the
+  empty space below the list for the project folder); a folder you hold it over opens. Files open in
+  an editor follow a rename or move, unsaved changes included, and C/C++ build files are updated.
 - **git status in the Project tab**: a file with changes that aren't committed has an amber dot
   after its name (a green plus if it's new, a red ! for a merge conflict), and so does each folder
   holding one. They update when you save, and when you commit or stage in any terminal. Kev-C++ only
   shows this; you commit and push with git yourself.
 - **Welcome tab**: the projects and folders you opened lately, to the left of the main shortcuts.
   Click one to open it, and click its pin to keep it in the Pinned list at the top. The tab comes
-  back when you close the last file.
+  back when you close the last file, and with File → Close Project (Close Folder for a plain folder),
+  which asks about unsaved files and stops the project's build, program, debugger and dev server.
 - **Projects**: File → New Project creates C++ (console, static or shared library), C console or
   TypeScript web projects. Each has a `<name>.kevc` project file.
 - **Managed build files**: Kev-C++ owns one marked block in `CMakeLists.txt` / `Makefile` and keeps it
@@ -112,7 +127,11 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   with `tsc --noEmit`.
 - **Toolbars and panels to suit the project**: View → Toolbars shows or hides each group of toolbar
   buttons, and View → Panels (or Close Panel on a tab's ⋮ menu) each panel, separately for each kind of
-  project (C++, C, web…). The web toolbar and web panels only show for web projects by default.
+  project (C++, C, web…). What a project can't use isn't shown at all: a C or C++ project has no web
+  toolbar, web panels (Dev Server, Environment, Tests, Traces, Dependencies) or npm menu items; a web
+  project has no Debug/Release choice, Clean, Project Options or Packages, and its build buttons and
+  Execute menu say what they do there (Check Types, Run the dev server, Production Build). Environment
+  and Traces only show for SvelteKit apps, Routes too.
 - **GTK designer**: GtkBuilder `.ui` files (GTK 4) open in a design view with a live preview of the
   window. Click a widget to select it; the outline lists every object and the property list shows the
   selected one's properties by class, with the values written in the file in bold. Edits can be undone
@@ -151,7 +170,8 @@ Svelte and Vite apps apart (the title bar says which) and which package manager 
   (typescript-svelte-plugin). `.svelte` files are highlighted.
 - **Routes** tab: every route under `src/routes` with its files, what each exports (load and the keys it
   returns, form actions, HTTP verbs), where a page's `data` comes from through its layouts, and remote
-  functions. ↗ opens a route in the browser (asking for its parameters); + creates a route.
+  functions. ↗ opens a route in the browser (asking for its parameters); + creates a route. The field
+  at the top keeps the routes whose URL, files or exports hold every word you type (`blog load`).
 - **Environment** panel: every `$env` variable, public or private, where it's defined (`.env`,
   `.env.local`, …) and used, with warnings for a private variable in code that reaches the browser, a
   static one no `.env` defines, and the wrong module for its prefix.
@@ -185,5 +205,7 @@ Chromium-based browser for debugging), `/web/vitePort` (the first port to try, 5
 | Ctrl+F2 | Stop build or program | Shift+F5 | Stop debugging |
 | Alt+P | Project Options | Ctrl+F5 | Toggle breakpoint |
 | Ctrl+Space | Completion | Ctrl+F12 | Go to definition |
+| Ctrl+P | Search files and text | Ctrl+Shift+F | Find in all files (Search tab) |
+| Ctrl+F | Find in the current file | F2 / Delete | Rename / delete in the Project tab |
 
 Logs from the language servers are in `~/.cache/kev-cpp/logs/`.

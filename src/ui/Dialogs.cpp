@@ -49,7 +49,8 @@ Gtk::Box& buttonRow(Gtk::Button& cancel, Gtk::Button& ok) {
 } // namespace
 
 void promptText(Gtk::Window& parent, const Glib::ustring& title, const Glib::ustring& label,
-                const Glib::ustring& initial, std::function<Glib::ustring(const Glib::ustring&)> onAccept) {
+                const Glib::ustring& initial, std::function<Glib::ustring(const Glib::ustring&)> onAccept,
+                int selectChars) {
     auto* window = new Gtk::Window();
     window->set_title(title);
     window->set_transient_for(parent);
@@ -92,6 +93,10 @@ void promptText(Gtk::Window& parent, const Glib::ustring& title, const Glib::ust
     deleteLater(window);
     window->present();
     entry->grab_focus();
+    if (selectChars >= 0) {
+        entry->select_region(0, selectChars);
+        return;
+    }
     // Select the file stem so typing replaces "untitled" but keeps the extension.
     const auto dot = initial.rfind('.');
     const auto slash = initial.rfind('/');

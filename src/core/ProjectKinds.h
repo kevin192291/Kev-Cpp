@@ -24,6 +24,16 @@ const KindTraits& traitsOf(ProjectKind kind);
 // folder), or the project kind's profile ("cpp", "c", "web").
 std::string profileFor(const Project* project, bool folderOpen);
 
+// What only some projects use. C and C++ projects have no use for the web things (dev server,
+// npm, tests, traces), web projects none for the compiler's (Debug/Release, Clean, compiler options,
+// packages); Environment and Traces are about SvelteKit. Whatever doesn't apply to what's open is
+// hidden (toolbar groups and buttons, panels, menu items) and left out of View → Toolbars and
+// Panels. With nothing or a plain folder open, everything applies.
+bool usesNativeTools(const std::string& profile); // C/C++ only: not "web"
+bool usesWebTools(const std::string& profile);    // web only: not "cpp" or "c"
+bool toolbarGroupApplies(const std::string& group, const std::string& profile);
+bool panelApplies(const std::string& panel, const std::string& profile, bool svelteKit);
+
 // Toolbar groups and panels are Auto (the profile's default), Shown or Hidden, set per profile in
 // settings under /toolbars/<group>/<profile> and /panels/<id>/<profile>.
 bool toolbarGroupShown(const Settings& settings, const std::string& group, const std::string& profile);

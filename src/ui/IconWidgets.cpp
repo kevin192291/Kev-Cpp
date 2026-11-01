@@ -43,6 +43,12 @@ void TaskButton::setRunning(bool running) {
     update();
 }
 
+void TaskButton::setTooltips(Glib::ustring tooltip, Glib::ustring runningTooltip) {
+    tooltip_ = std::move(tooltip);
+    runningTooltip_ = std::move(runningTooltip);
+    update();
+}
+
 void TaskButton::update() {
     image_.set_from_icon_name(running_ ? runningIcon_ : icon_);
     set_tooltip_text(running_ ? runningTooltip_ : tooltip_);

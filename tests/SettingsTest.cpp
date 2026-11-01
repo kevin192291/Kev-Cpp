@@ -109,3 +109,34 @@ TEST(ProjectKinds, ToolbarAndPanelVisibilityPerProfile) {
     EXPECT_TRUE(panelShown(s, "dev-server", "cpp"));
     EXPECT_FALSE(panelShown(s, "dev-server", "c"));
 }
+
+TEST(ProjectKinds, WhatAppliesToWhichProjects) {
+    // C and C++: no web toolbar or panels.
+    for (const char* native : {"cpp", "c"}) {
+        EXPECT_FALSE(toolbarGroupApplies("web", native));
+        EXPECT_TRUE(toolbarGroupApplies("project", native));
+        for (const char* panel : {"dev-server", "env", "tests", "traces", "deps"})
+            EXPECT_FALSE(panelApplies(panel, native, false)) << panel;
+        EXPECT_TRUE(usesNativeTools(native));
+        EXPECT_FALSE(usesWebTools(native));
+    }
+    // Web: no compiler options; Environment and Traces only for SvelteKit.
+    EXPECT_FALSE(toolbarGroupApplies("project", "web"));
+    EXPECT_TRUE(toolbarGroupApplies("web", "web"));
+    EXPECT_FALSE(usesNativeTools("web"));
+    EXPECT_TRUE(panelApplies("tests", "web", false));
+    EXPECT_FALSE(panelApplies("env", "web", false));
+    EXPECT_TRUE(panelApplies("env", "web", true));
+    EXPECT_FALSE(panelApplies("traces", "web", false));
+    // Shared panels and groups, and anything with nothing or a folder open.
+    for (const char* profile : {"cpp", "c", "web", "none", "folder"}) {
+        EXPECT_TRUE(panelApplies("compiler", profile, false));
+        EXPECT_TRUE(panelApplies("terminal", profile, false));
+        EXPECT_TRUE(toolbarGroupApplies("debug", profile));
+    }
+    for (const char* profile : {"none", "folder"}) {
+        EXPECT_TRUE(toolbarGroupApplies("web", profile));
+        EXPECT_TRUE(toolbarGroupApplies("project", profile));
+        EXPECT_TRUE(panelApplies("env", profile, false));
+    }
+}

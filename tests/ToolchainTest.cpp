@@ -72,3 +72,49 @@ TEST_F(ToolchainTest, PathOfFallsBackToBareName) {
     auto tc = kevc::Toolchain::detect("", false);
     EXPECT_EQ(tc.pathOf("g++"), fs::path("g++"));
 }
+
+TEST(Toolchain, NodeMajorFromVersionLine) {
+    EXPECT_EQ(kevc::nodeMajor("v18.19.1"), 18);
+    EXPECT_EQ(kevc::nodeMajor("v24.22.1\n"), 24);
+    EXPECT_EQ(kevc::nodeMajor(""), 0);
+    EXPECT_EQ(kevc::nodeMajor("node: not found"), 0);
+}
+
+// A menu or file manager starts the IDE with the session's PATH: Ubuntu's node 18 there, nvm's
+// node 24 only in terminals. The IDE should use nvm's.
+TEST_F(ToolchainTest, TerminalLikePathFindsAVersionManagersNode) {
+    const fs::path home = dir_ / "home";
+    for (const char* v : {"v18.20.0", "v24.22.1", "v20.19.0", "v22.12.0"}) {
+        fs::create_directories(home / ".nvm/versions/node" / v / "bin");
+        makeExe(home / ".nvm/versions/node" / v / "bin/node");
+    }
+    const std::string session = "/usr/local/bin:/usr/bin:/bin";
+    const std::string nvm24 = (home / ".nvm/versions/node/v24.22.1/bin").string();
+
+    // Node 18 on the PATH (or none at all): the newest nvm node goes first.
+    EXPECT_EQ(kevc::terminalLikePath(session, home, 18), nvm24 + ":" + session);
+    EXPECT_EQ(kevc::terminalLikePath(session, home, 0), nvm24 + ":" + session);
+    // A new enough node on the PATH (a terminal launch with nvm active): left alone.
+    EXPECT_EQ(kevc::terminalLikePath(session, home, 22), session);
+    // $NVM_DIR elsewhere, and fnm's layout.
+    EXPECT_EQ(kevc::terminalLikePath(session, dir_ / "nobody", 18, home / ".nvm"), nvm24 + ":" + session);
+    const fs::path fnm = dir_ / "fnmhome/.local/share/fnm/node-versions/v22.3.0/installation/bin";
+    fs::create_directories(fnm);
+    makeExe(fnm / "node");
+    EXPECT_EQ(kevc::terminalLikePath(session, dir_ / "fnmhome", 18), fnm.string() + ":" + session);
+    // Nothing newer anywhere: unchanged.
+    EXPECT_EQ(kevc::terminalLikePath(session, dir_ / "nobody", 18), session);
+}
+
+TEST_F(ToolchainTest, TerminalLikePathAddsPnpmAndBunFolders) {
+    const fs::path home = dir_ / "home2";
+    fs::create_directories(home / ".local/share/pnpm");
+    fs::create_directories(home / ".bun/bin");
+    const std::string pnpm = (home / ".local/share/pnpm").string(), bun = (home / ".bun/bin").string();
+    EXPECT_EQ(kevc::terminalLikePath("/usr/bin", home, 22), "/usr/bin:" + pnpm + ":" + bun);
+    // Already there: not twice. $PNPM_HOME elsewhere: that one.
+    EXPECT_EQ(kevc::terminalLikePath("/usr/bin:" + pnpm, home, 22), "/usr/bin:" + pnpm + ":" + bun);
+    fs::create_directories(dir_ / "pnpm-home");
+    EXPECT_EQ(kevc::terminalLikePath("/usr/bin", home, 22, {}, dir_ / "pnpm-home"),
+              "/usr/bin:" + (dir_ / "pnpm-home").string() + ":" + bun);
+}

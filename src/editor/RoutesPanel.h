@@ -8,11 +8,13 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace kevc {
 
 // The Routes tab for SvelteKit projects: every route under src/routes with its files, what each
-// exports (load, actions, HTTP verbs), where a page's `data` comes from, and remote functions.
+// exports (load, actions, HTTP verbs), where a page's `data` comes from, and remote functions. The
+// field on top keeps the routes whose URL, files or exports hold every word typed.
 class RoutesPanel : public Gtk::Box {
 public:
     RoutesPanel();
@@ -32,7 +34,15 @@ private:
     };
     Gtk::ListBoxRow& addRow(Gtk::Widget& content, int depth, std::optional<Target> target);
     Gtk::Widget& line(const char* icon, const Glib::ustring& markup);
+    // Rows added after this belong to a group (a route and its files) that the filter shows or hides
+    // as one, by `text`.
+    void beginGroup(std::string text);
+    void onFilterChanged();
 
+    Gtk::SearchEntry filter_;
+    std::vector<std::string> groupText_;
+    std::map<Gtk::ListBoxRow*, size_t> rowGroup_;
+    Glib::ustring emptyMessage_; // shown when there are no routes at all
     Gtk::ScrolledWindow scroller_;
     Gtk::ListBox list_;
     Gtk::Label message_;

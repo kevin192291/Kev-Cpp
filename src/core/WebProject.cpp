@@ -96,9 +96,28 @@ std::vector<std::string> WebProject::runScriptCommand(const std::string& script,
 
 fs::path nodeBin(const fs::path& root, const std::string& name) {
     std::error_code ec;
-    // .bin entries are symlinks to the package's script (which has a node shebang).
-    const fs::path target = fs::canonical(root / "node_modules" / ".bin" / name, ec);
-    return ec ? fs::path{} : target;
+    const fs::path entry = root / "node_modules" / ".bin" / name;
+    const fs::path target = fs::canonical(entry, ec);
+    if (ec) return {};
+    // npm, yarn and bun make .bin entries symlinks to the package's script (which has a node shebang).
+    // pnpm writes a shell script instead that ends in `exec node "$basedir/../vite/bin/vite.js" "$@"`
+    // ($basedir being .bin): node can't run that, so run the script it names.
+    std::ifstream in(target, std::ios::binary);
+    std::string head(4096, '\0');
+    in.read(head.data(), static_cast<std::streamsize>(head.size()));
+    head.resize(static_cast<size_t>(in.gcount()));
+    if (!head.starts_with("#!/bin/sh") && !head.starts_with("#!/usr/bin/env sh") && !head.starts_with("#!/bin/bash"))
+        return target;
+    const std::string marker = "\"$basedir/";
+    for (size_t at = head.find(marker); at != std::string::npos; at = head.find(marker, at + 1)) {
+        const size_t start = at + marker.size(), end = head.find('"', start);
+        if (end == std::string::npos) break;
+        const std::string rel = head.substr(start, end - start);
+        if (rel == "node" || rel.empty()) continue; // `"$basedir/node"`: a node next to the shim, not the script
+        const fs::path script = fs::canonical(entry.parent_path() / rel, ec);
+        if (!ec && fs::is_regular_file(script, ec)) return script;
+    }
+    return {}; // a wrapper we can't see through: callers fall back to the package manager
 }
 
 std::vector<std::string> viteDevCommand(const WebProject& web, const fs::path& root, const std::string& node,

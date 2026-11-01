@@ -6,6 +6,7 @@ add_executable(kevc_tests
   BuildPlanTest.cpp
   DapTest.cpp
   DiagnosticsTest.cpp
+  FileOpsTest.cpp
   GitStatusTest.cpp
   IconsTest.cpp
   LspTest.cpp
@@ -14,6 +15,7 @@ add_executable(kevc_tests
   PackagesTest.cpp
   ProjectSessionTest.cpp
   RecentProjectsTest.cpp
+  SearchTest.cpp
   SettingsTest.cpp
   SvelteKitTest.cpp
   ToolLocatorTest.cpp

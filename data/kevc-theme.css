@@ -253,3 +253,52 @@ scrollbar slider:hover {
   min-height: 24px;
   padding: 2px;
 }
+
+/* Project tab drag and drop: the row a file would land on (a folder, or a file in that folder), and
+   the empty space below the rows, which means the project folder itself. */
+.kevc-tree-row:drop(active) {
+  background-color: alpha(@kevc_accent, 0.75);
+  border-radius: 3px;
+  box-shadow: none;
+}
+.kevc-project-list:drop(active) {
+  box-shadow: inset 0 0 0 1px @kevc_accent;
+}
+
+/* Find in Files: the Aa / ab / .* switches beside the search field. */
+.kevc-search-option {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 4px;
+  color: @kevc_dim;
+}
+.kevc-search-option:checked {
+  background-color: @kevc_accent;
+  color: @kevc_fg;
+}
+
+/* The left dock's tabs: only the selected one has its name (MainWindow::compactLeftTabs). */
+notebook.kevc-compact-tabs > header > tabs > tab {
+  padding: 4px 8px;
+  min-width: 0;
+}
+
+/* The search field in the middle of the menu bar's row (QuickSearch) and the results under it. */
+.kevc-menubar-row {
+  background-color: @kevc_chrome;
+}
+.kevc-quick-search > entry {
+  min-height: 24px;
+  margin: 2px 0;
+  border: 1px solid @kevc_hover;
+  border-radius: 5px;
+}
+.kevc-quick-search > entry:focus-within {
+  border-color: @kevc_accent;
+}
+.kevc-quick-results > contents {
+  padding: 4px 0;
+}
+.kevc-quick-results list {
+  background-color: transparent;
+}

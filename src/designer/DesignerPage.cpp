@@ -331,8 +331,14 @@ DesignerPage::DesignerPage(const fs::path& file) : Gtk::Box(Gtk::Orientation::VE
     }
     updateTitle();
 
+    watchFile();
+}
+
+void DesignerPage::watchFile() {
+    if (monitor_) monitor_->cancel();
+    monitor_.reset();
     try {
-        monitor_ = Gio::File::create_for_path(file.string())->monitor_file();
+        monitor_ = Gio::File::create_for_path(path_.string())->monitor_file();
         monitor_->signal_changed().connect(
             [this](const Glib::RefPtr<Gio::File>&, const Glib::RefPtr<Gio::File>&, Gio::FileMonitor::Event event) {
                 onFileChanged(event);
@@ -340,6 +346,13 @@ DesignerPage::DesignerPage(const fs::path& file) : Gtk::Box(Gtk::Orientation::VE
     } catch (const Glib::Error&) {
         // Without a monitor the page just won't notice outside changes.
     }
+}
+
+void DesignerPage::moveTo(const fs::path& file) {
+    path_ = file;
+    watchFile();
+    tabTitle_.set_tooltip_text(file.string());
+    updateTitle();
 }
 
 DesignerPage::~DesignerPage() {

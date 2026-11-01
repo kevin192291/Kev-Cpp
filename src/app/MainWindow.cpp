@@ -4,6 +4,7 @@
 #include "app/BuildInfo.h"
 #include "designer/DesignerPage.h"
 #include "editor/EditorTab.h"
+#include "core/FileOps.h"
 #include "core/Mi.h"
 #include "core/ProjectKinds.h"
 #include "debug/DapViews.h"
@@ -27,16 +28,6 @@ namespace fs = std::filesystem;
 namespace kevc {
 
 namespace {
-
-Gtk::Widget& placeholder(const Glib::ustring& text) {
-    auto* label = Gtk::make_managed<Gtk::Label>(text);
-    label->add_css_class("dim-label");
-    label->set_wrap(true);
-    label->set_margin(12);
-    auto* scroller = Gtk::make_managed<Gtk::ScrolledWindow>();
-    scroller->set_child(*label);
-    return *scroller;
-}
 
 // The bundled Node tools (typescript-language-server): $KEVC_TOOLS_DIR, the install location next to
 // the binary, or the source tree for development builds.
@@ -62,12 +53,11 @@ constexpr std::array<std::pair<const char*, const char*>, 6> kToolbarGroups{{
 }};
 
 // Tool panels (View → Panels): DockManager ids and menu labels.
-constexpr std::array<std::pair<const char*, const char*>, 11> kPanels{{
+constexpr std::array<std::pair<const char*, const char*>, 10> kPanels{{
     {"compiler", "_Compiler"},
     {"compile-log", "Compile _Log"},
     {"run", "_Run"},
     {"debug", "_Debug"},
-    {"find", "_Find Results"},
     {"terminal", "_Terminal"},
     {"dev-server", "Dev _Server"},
     {"env", "_Environment (SvelteKit)"},
@@ -112,7 +102,12 @@ MainWindow::MainWindow(Application& app)
     buildActions();
 
     auto* menubar = Gtk::make_managed<Gtk::PopoverMenuBar>(buildMenuModel());
-    root_.append(*menubar);
+    // The search field sits in the middle of the menu bar's row, where people look for one first.
+    auto* menuRow = Gtk::make_managed<Gtk::CenterBox>();
+    menuRow->add_css_class("kevc-menubar-row");
+    menuRow->set_start_widget(*menubar);
+    menuRow->set_center_widget(quickSearch_);
+    root_.append(*menuRow);
     root_.append(buildToolbar());
 
     vpaned_.set_start_child(buildEditorArea());
@@ -131,7 +126,7 @@ MainWindow::MainWindow(Application& app)
     hpaned_.set_start_child(buildLeftDock());
     hpaned_.set_end_child(rightPaned_);
     hpaned_.set_resize_start_child(false);
-    hpaned_.set_position(290); // room for the three tabs with their icons
+    hpaned_.set_position(290);
     hpaned_.set_vexpand(true);
 
     root_.append(hpaned_);
@@ -139,6 +134,30 @@ MainWindow::MainWindow(Application& app)
     set_child(root_);
 
     projectTree_.signalFileActivated().connect([this](const fs::path& file) { openDocument(file); });
+    projectTree_.signalNewFile().connect([this](const fs::path& dir) { newFileIn(dir); });
+    projectTree_.signalNewFolder().connect([this](const fs::path& dir) { newFolderIn(dir); });
+    projectTree_.signalRename().connect([this](const fs::path& path) { renamePath(path); });
+    projectTree_.signalDelete().connect([this](const fs::path& path) { deletePath(path); });
+    projectTree_.signalMove().connect([this](const fs::path& source, const fs::path& dir) { movePath(source, dir); });
+    projectTree_.signalSearchDone().connect([this] {
+        if (auto* page = currentDocument()) page->focusPage();
+    });
+    searchPanel_.signalOpen().connect([this](const fs::path& file, int line, size_t column, size_t length) {
+        if (EditorTab* tab = openFile(file)) tab->selectRange(line, column, length);
+    });
+    searchPanel_.signalDone().connect([this] {
+        if (auto* page = currentDocument()) page->focusPage();
+    });
+    searchPanel_.setUnsavedText([this] { return unsavedEditorText(); });
+    quickSearch_.setUnsavedText([this] { return unsavedEditorText(); });
+    quickSearch_.signalOpenFile().connect([this](const fs::path& file) { openDocument(file); });
+    quickSearch_.signalOpenMatch().connect([this](const fs::path& file, int line, size_t column, size_t length) {
+        if (EditorTab* tab = openFile(file)) tab->selectRange(line, column, length);
+    });
+    quickSearch_.signalShowAll().connect([this](const Glib::ustring& text) { findInFiles(text); });
+    quickSearch_.signalDone().connect([this] {
+        if (auto* page = currentDocument()) page->focusPage();
+    });
     routesPanel_.signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
     routesPanel_.signalOpenInBrowser().connect([this](const std::string& url) { openRoute(url); });
     routesPanel_.signalNewRoute().connect([this] { newRoute(); });
@@ -318,6 +337,7 @@ void MainWindow::buildActions() {
     // File
     add_action("new-project", [this] { newProject(); });
     add_action("open-project", [this] { chooseFolder(); });
+    add_action("close-project", [this] { closeProject(); });
     add_action("new-file", [this] { newFile(); });
     add_action("save", [this] { saveCurrent(); });
     add_action("save-all", [this] { saveAll(); });
@@ -333,6 +353,8 @@ void MainWindow::buildActions() {
     add_action("select-all", [this] { forwardToEditor("selection.select-all"); });
     // Search
     add_action("find", [this] { showFindBar(); });
+    add_action("find-in-files", [this] { findInFiles(); });
+    add_action("quick-search", [this] { focusQuickSearch(); });
     addStubAction("replace", "Replace");
     add_action("goto-line", [this] { gotoLine(); });
     add_action("goto-definition", [this] {
@@ -444,12 +466,7 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
         bar->append_submenu(title, menu);
     };
 
-    submenu("_File", {
-        {{"New _Project…", "win.new-project"}, {"_New Source File…", "win.new-file"}},
-        {{"_Open Project or Folder…", "win.open-project"}},
-        {{"_Save", "win.save"}, {"Save _All", "win.save-all"}, {"_Close", "win.close-tab"}},
-        {{"_Quit", "app.quit"}},
-    });
+    bar->append_submenu("_File", fileMenu_); // filled by updateMenus: Close Project only with one open
     submenu("_Edit", {
         {{"_Undo", "win.undo"}, {"_Redo", "win.redo"}},
         {{"Cu_t", "win.cut"}, {"_Copy", "win.copy"}, {"_Paste", "win.paste"}},
@@ -457,6 +474,7 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
     });
     submenu("_Search", {
         {{"_Find…", "win.find"}, {"_Replace…", "win.replace"}},
+        {{"Search Files and _Text…", "win.quick-search"}, {"Find in F_iles…", "win.find-in-files"}},
         {{"_Go to Line…", "win.goto-line"}, {"Go to _Definition (Ctrl+Click)", "win.goto-definition"}},
     });
     {
@@ -466,51 +484,25 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
         docks->append("_Bottom Panel", "win.toggle-bottom-dock");
         docks->append("_Right Panel", "win.toggle-right-dock");
         view->append_section(docks);
-        auto toolbars = Gio::Menu::create();
-        for (const auto& [id, label] : kToolbarGroups) toolbars->append(label, std::string("win.toolbar-") + id);
-        auto panels = Gio::Menu::create();
-        for (const auto& [id, label] : kPanels) panels->append(label, std::string("win.panel-") + id);
         auto lists = Gio::Menu::create();
-        lists->append_submenu("_Toolbars", toolbars);
-        lists->append_submenu("P_anels", panels);
+        lists->append_submenu("_Toolbars", viewToolbars_);
+        lists->append_submenu("P_anels", viewPanels_);
         view->append_section(lists);
         auto reset = Gio::Menu::create();
         reset->append("Reset Panel _Layout", "win.reset-panels");
         view->append_section(reset);
         bar->append_submenu("_View", view);
     }
-    {
-        auto project = Gio::Menu::create();
-        auto files = Gio::Menu::create();
-        files->append("_New File in Project…", "win.project-add-file");
-        project->append_section(files);
-        auto web = Gio::Menu::create();
-        web->append("_Install Dependencies (npm install)", "win.web-install");
-        web->append("Run _Tests", "win.web-tests");
-        web->append_submenu("_Scripts", scriptsMenu_);
-        project->append_section(web);
-        auto options = Gio::Menu::create();
-        options->append("_Packages…", "win.packages");
-        options->append("Project _Options…", "win.project-options");
-        project->append_section(options);
-        bar->append_submenu("P_roject", project);
-    }
-    submenu("E_xecute", {
-        {{"_Compile", "win.compile"}, {"_Run", "win.run"}, {"Compile & R_un", "win.compile-run"}},
-        {{"Rebuild _All", "win.rebuild"}, {"C_lean", "win.clean"}},
-        {{"_Stop Build or Program", "win.stop"}},
-    });
+    // Filled by updateMenus, for what's open.
+    bar->append_submenu("P_roject", projectMenu_);
+    bar->append_submenu("E_xecute", executeMenu_);
     submenu("_Debug", {
         {{"_Debug", "win.debug"}, {"_Continue", "win.debug-continue"}, {"_Pause", "win.debug-pause"},
          {"_Stop", "win.debug-stop"}},
         {{"Step _Over", "win.step-over"}, {"Step _Into", "win.step-into"}, {"Step O_ut", "win.step-out"}},
         {{"Toggle _Breakpoint", "win.toggle-breakpoint"}, {"Add _Watch…", "win.add-watch"}},
     });
-    submenu("_Tools", {
-        {{"Start/Stop TypeScript _Dev Server (port 5465)", "win.dev-server"},
-         {"_Open Dev Server in Browser", "win.dev-server-open"}},
-        {{"_Toolchain Info", "win.toolchain-info"}},
-    });
+    bar->append_submenu("_Tools", toolsMenu_);
     submenu("_Help", {
         {{"Check for _Updates…", "win.check-updates"}},
         {{"_About Kev-C++", "win.about"}},
@@ -580,6 +572,7 @@ Gtk::Widget& MainWindow::buildToolbar() {
     button("kevc-undo", "win.undo", "Undo (Ctrl+Z)");
     button("kevc-redo", "win.redo", "Redo (Ctrl+Shift+Z)");
     button("kevc-find", "win.find", "Find (Ctrl+F)");
+    button("kevc-find-in-files", "win.find-in-files", "Find in Files (Ctrl+Shift+F)");
     group("build");
     task(Task::Compile, "kevc-compile", "win.compile", "Compile (F9)", "Stop compiling (Ctrl+F2)");
     task(Task::Run, "kevc-run", "win.run", "Run (F10)", "Stop the program (Ctrl+F2)");
@@ -651,16 +644,93 @@ void MainWindow::updateToolbarRows() {
 
 void MainWindow::applyProfile() {
     profile_ = profileFor(session_ ? &session_->project() : nullptr, !folder_.empty());
+    const bool kit = web_.flavor == WebFlavor::SvelteKit;
     const Settings& settings = app_.settings();
     for (auto& g : toolbarGroups_) {
-        const bool shown = toolbarGroupShown(settings, g.id, profile_);
+        const bool shown = toolbarGroupApplies(g.id, profile_) && toolbarGroupShown(settings, g.id, profile_);
         g.box->set_visible(shown);
         if (auto it = toolbarActions_.find(g.id); it != toolbarActions_.end())
             it->second->set_state(Glib::Variant<bool>::create(shown));
     }
+    // Buttons for the compiler only (a web project has no Debug/Release build and nothing to clean),
+    // and what the build buttons mean in a web project.
+    const bool native = usesNativeTools(profile_), web = profile_ == "web";
+    if (configDrop_) configDrop_->set_visible(native);
+    if (!taskButtons_.empty()) {
+        taskButtons_.at(Task::Clean)->set_visible(native);
+        if (web) {
+            taskButtons_.at(Task::Compile)->setTooltips("Check types (F9)", "Stop checking (Ctrl+F2)");
+            taskButtons_.at(Task::Run)->setTooltips("Run: start the dev server and open the browser (F10)",
+                                                    "Stop the dev server (Ctrl+F2)");
+            taskButtons_.at(Task::CompileRun)->setTooltips("Check types, then run (F11)", "Stop (Ctrl+F2)");
+            taskButtons_.at(Task::Rebuild)->setTooltips("Production build (F12)", "Stop building (Ctrl+F2)");
+        } else {
+            taskButtons_.at(Task::Compile)->setTooltips("Compile (F9)", "Stop compiling (Ctrl+F2)");
+            taskButtons_.at(Task::Run)->setTooltips("Run (F10)", "Stop the program (Ctrl+F2)");
+            taskButtons_.at(Task::CompileRun)->setTooltips("Compile & Run (F11)", "Stop (Ctrl+F2)");
+            taskButtons_.at(Task::Rebuild)->setTooltips("Rebuild All (F12)", "Stop rebuilding (Ctrl+F2)");
+        }
+    }
     updateToolbarRows();
     if (docks_)
-        for (const auto& [id, title] : docks_->panels()) docks_->setClosed(id, !panelShown(settings, id, profile_));
+        for (const auto& [id, title] : docks_->panels())
+            docks_->setClosed(id, !(panelApplies(id, profile_, kit) && panelShown(settings, id, profile_)));
+    updateMenus();
+}
+
+void MainWindow::updateMenus() {
+    const bool kit = web_.flavor == WebFlavor::SvelteKit, web = profile_ == "web";
+    auto section = [](std::initializer_list<std::pair<Glib::ustring, const char*>> items) {
+        auto menu = Gio::Menu::create();
+        for (const auto& [label, action] : items) menu->append(label, action);
+        return menu;
+    };
+    fileMenu_->remove_all();
+    fileMenu_->append_section(section({{"New _Project…", "win.new-project"}, {"_New Source File…", "win.new-file"}}));
+    auto open = section({{"_Open Project or Folder…", "win.open-project"}});
+    if (session_) open->append("Close P_roject", "win.close-project");
+    else if (!folder_.empty()) open->append("Close _Folder", "win.close-project");
+    fileMenu_->append_section(open);
+    fileMenu_->append_section(section({{"_Save", "win.save"}, {"Save _All", "win.save-all"}, {"_Close", "win.close-tab"}}));
+    fileMenu_->append_section(section({{"_Quit", "app.quit"}}));
+
+    viewToolbars_->remove_all();
+    for (const auto& [id, label] : kToolbarGroups)
+        if (toolbarGroupApplies(id, profile_)) viewToolbars_->append(label, std::string("win.toolbar-") + id);
+    viewPanels_->remove_all();
+    for (const auto& [id, label] : kPanels)
+        if (panelApplies(id, profile_, kit)) viewPanels_->append(label, std::string("win.panel-") + id);
+
+    projectMenu_->remove_all();
+    projectMenu_->append_section(section({{"_New File in Project…", "win.project-add-file"}}));
+    if (usesWebTools(profile_)) {
+        const std::string manager = web ? web_.packageManagerName() : std::string("npm");
+        auto packages = section({{"_Install Dependencies (" + manager + " install)", "win.web-install"},
+                                 {"Run _Tests", "win.web-tests"}});
+        packages->append_submenu("_Scripts", scriptsMenu_);
+        projectMenu_->append_section(packages);
+    }
+    if (usesNativeTools(profile_))
+        projectMenu_->append_section(section({{"_Packages…", "win.packages"}, {"Project _Options…", "win.project-options"}}));
+
+    executeMenu_->remove_all();
+    if (web) {
+        executeMenu_->append_section(section({{"_Check Types", "win.compile"},
+                                              {"_Run (Dev Server and Browser)", "win.run"},
+                                              {"Check & R_un", "win.compile-run"}}));
+        executeMenu_->append_section(section({{"_Production Build", "win.rebuild"}}));
+    } else {
+        executeMenu_->append_section(
+            section({{"_Compile", "win.compile"}, {"_Run", "win.run"}, {"Compile & R_un", "win.compile-run"}}));
+        executeMenu_->append_section(section({{"Rebuild _All", "win.rebuild"}, {"C_lean", "win.clean"}}));
+    }
+    executeMenu_->append_section(section({{"_Stop Build or Program", "win.stop"}}));
+
+    toolsMenu_->remove_all();
+    if (usesWebTools(profile_))
+        toolsMenu_->append_section(
+            section({{"Start/Stop the _Dev Server", "win.dev-server"}, {"_Open Dev Server in Browser", "win.dev-server-open"}}));
+    toolsMenu_->append_section(section({{"_Toolchain Info", "win.toolchain-info"}}));
 }
 
 Gtk::Widget& MainWindow::buildLeftDock() {
@@ -668,10 +738,56 @@ Gtk::Widget& MainWindow::buildLeftDock() {
     leftDock_.set_scrollable(true);
     leftDock_.add_css_class("kevc-compact-tabs");
     leftDock_.append_page(projectTree_, *makeIconLabel("kevc-project", "Project"));
+    // Next to the Project tab and its file search: finding things is all in one corner.
+    leftDock_.append_page(searchPanel_, *makeIconLabel("kevc-find-in-files", "Search"));
     leftDock_.append_page(symbols_, *makeIconLabel("kevc-class", "Classes"));
     leftDock_.append_page(watches_, *makeIconLabel("kevc-watch", "Debug"));
     leftDock_.set_size_request(180, -1);
+    // After the switch (the current page isn't updated yet while switch-page runs).
+    leftDock_.signal_switch_page().connect(
+        [this](Gtk::Widget*, guint) { Glib::signal_idle().connect_once(sigc::track_obj([this] { fitLeftTabs(); }, *this)); });
+    hpaned_.property_position().signal_changed().connect([this] { fitLeftTabs(); });
+    // Again once the tabs have their real sizes.
+    leftDock_.signal_map().connect([this] { Glib::signal_idle().connect_once(sigc::track_obj([this] { fitLeftTabs(); }, *this)); });
     return leftDock_;
+}
+
+void MainWindow::fitLeftTabs() {
+    struct Tab {
+        Gtk::Widget* box;
+        Gtk::Label* label;
+        int text; // the label's width
+    };
+    std::vector<Tab> tabs;
+    int chrome = 22; // a tab's padding and border around its icon and label, measured below when shown
+    for (int i = 0; i < leftDock_.get_n_pages(); ++i) {
+        Gtk::Widget* box = leftDock_.get_tab_label(*leftDock_.get_nth_page(i));
+        auto* label = box && box->get_first_child() ? dynamic_cast<Gtk::Label*>(box->get_first_child()->get_next_sibling()) : nullptr;
+        if (!label) return;
+        int width = 0, height = 0;
+        label->create_pango_layout(label->get_text())->get_pixel_size(width, height);
+        tabs.push_back({box, label, width});
+        if (box->get_parent() && box->get_parent()->get_width() > box->get_width() && box->get_width() > 0)
+            chrome = box->get_parent()->get_width() - box->get_width();
+    }
+    constexpr int kIcon = 16, kSpacing = 5; // makeIconLabel's
+    const int available = hpaned_.get_position() - 8;
+    int used = static_cast<int>(tabs.size()) * (kIcon + chrome);
+    std::vector<bool> named(tabs.size(), false);
+    std::vector<int> order{leftDock_.get_current_page()};
+    for (int i = 0; i < static_cast<int>(tabs.size()); ++i)
+        if (i != order.front()) order.push_back(i); // then left to right: Project, Search, ...
+    for (int i : order) {
+        if (i < 0 || i >= static_cast<int>(tabs.size())) continue;
+        const int more = kSpacing + tabs[i].text;
+        if (used + more > available) continue;
+        used += more;
+        named[i] = true;
+    }
+    for (size_t i = 0; i < tabs.size(); ++i) {
+        tabs[i].label->set_visible(named[i]);
+        tabs[i].box->set_tooltip_text(named[i] ? Glib::ustring() : tabs[i].label->get_text());
+    }
 }
 
 Gtk::Widget& MainWindow::buildEditorArea() {
@@ -690,6 +806,15 @@ Gtk::Widget& MainWindow::buildEditorArea() {
     findBox->append(*prev);
     findBox->append(*next);
     findBox->append(findCase_);
+    auto* everywhere = Gtk::make_managed<Gtk::Button>();
+    {
+        auto* image = Gtk::make_managed<Gtk::Image>();
+        image->set_from_icon_name("kevc-find-in-files");
+        everywhere->set_child(*image);
+    }
+    everywhere->set_tooltip_text("Find this in all files (Ctrl+Shift+F)");
+    everywhere->signal_clicked().connect([this] { findInFiles(findEntry_.get_text()); });
+    findBox->append(*everywhere);
     findBox->append(findCount_);
     findBar_.set_child(*findBox);
     findBar_.connect_entry(findEntry_);
@@ -739,7 +864,6 @@ Gtk::Widget& MainWindow::buildBottomDock() {
     docks_->add("compile-log", "Compile Log", *logScroller, "kevc-compile");
     docks_->add("run", "Run", runConsole_, "kevc-run");
     docks_->add("debug", "Debug", debugPanel_, "kevc-debug");
-    docks_->add("find", "Find Results", placeholder("Search results appear here."), "kevc-find-in-files");
     docks_->add("terminal", "Terminal", shell_, "kevc-terminal");
     docks_->add("dev-server", "Dev Server", buildServerPage(), "kevc-globe");
     docks_->add("env", "Environment", envPanel_, "kevc-const-variable");
@@ -887,6 +1011,8 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
         }
     }
     projectTree_.setRoot(folder_);
+    searchPanel_.setRoot(folder_);
+    quickSearch_.setRoot(folder_);
     shell_.startShell(folder_);
     updateTitle();
     applyProfile();
@@ -913,6 +1039,46 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     setStatus("Opened " + session_->project().name + " (" + traitsOf(session_->project().kind).label + ")");
 }
 
+void MainWindow::closeProject() {
+    if (folder_.empty()) return;
+    closeAllEditors([this] {
+        const std::string name = session_ ? session_->project().name : folder_.filename().string();
+        const bool project = session_ != nullptr;
+        // Everything the project was running stops with it.
+        if (build_.running()) build_.cancel();
+        if (runConsole_.childRunning()) runConsole_.stopChild();
+        if (debugger_) debugger_->terminate();
+        if (jsDebugger_) jsDebugger_->stop();
+        devServer_.reset(); // stops the server
+        updateServerPage();
+        breakpoints_.clear();
+        updateBreakpointsPanel();
+        watcher_.reset();
+        collector_.reset();
+        traces_.clear();
+        tracesPanel_.setTraces(traces_);
+        compilerPanel_.clear(); // its errors point into the project
+        compileLog_.get_buffer()->set_text("");
+
+        session_.reset();
+        folder_.clear();
+        lspRootForLooseFiles_.clear();
+        refreshWebProject();
+        refreshKit(); // the Routes tab goes
+        lsp_->setWorkspace({}, nullptr);
+        projectTree_.setRoot({});
+        searchPanel_.setRoot({});
+        quickSearch_.setRoot({});
+        watchGit(); // with no folder: forgets the repository and its icons
+        // The Terminal tab keeps its shell: something may be running in it.
+        updateTitle();
+        applyProfile();
+        updateToolbar();
+        showWelcome();
+        setStatus("Closed " + std::string(project ? "project " : "folder ") + name);
+    });
+}
+
 void MainWindow::setPlainFolder(const fs::path& root) {
     if (debugger_) debugger_->terminate();
     if (jsDebugger_) jsDebugger_->stop();
@@ -930,6 +1096,8 @@ void MainWindow::setPlainFolder(const fs::path& root) {
     refreshKit();
     lsp_->setWorkspace(folder_, nullptr);
     projectTree_.setRoot(folder_);
+    searchPanel_.setRoot(folder_);
+    quickSearch_.setRoot(folder_);
     shell_.startShell(folder_);
     updateTitle();
     applyProfile();
@@ -1119,6 +1287,150 @@ void MainWindow::newFile() {
                });
 }
 
+void MainWindow::newFileIn(const fs::path& dir) {
+    const std::string where = dir == folder_ ? folder_.filename().string() : dir.lexically_relative(folder_).generic_string();
+    const std::string suggestion = session_ ? traitsOf(session_->project().kind).newFileName : "untitled.txt";
+    promptText(*this, "New File", "File name (in " + where + "):", fs::path(suggestion).filename().string(),
+               [this, dir](const Glib::ustring& text) -> Glib::ustring {
+                   const std::string name = text;
+                   if (auto error = fileops::checkName(dir, name); !error.empty()) return error;
+                   const fs::path target = dir / name;
+                   {
+                       std::ofstream out(target);
+                       if (!out) return "Could not create " + name + ".";
+                       const std::string ext = target.extension().string();
+                       if (ext == ".h" || ext == ".hpp" || ext == ".hh" || ext == ".hxx") out << "#pragma once\n\n";
+                   }
+                   openDocument(target); // the SourceWatcher adds it to the build file shortly after
+                   filesChanged();
+                   return {};
+               });
+}
+
+void MainWindow::newFolderIn(const fs::path& dir) {
+    const std::string where = dir == folder_ ? folder_.filename().string() : dir.lexically_relative(folder_).generic_string();
+    promptText(*this, "New Folder", "Folder name (in " + where + "):", "", [this, dir](const Glib::ustring& text) -> Glib::ustring {
+        const std::string name = text;
+        if (auto error = fileops::checkName(dir, name); !error.empty()) return error;
+        std::error_code ec;
+        fs::create_directory(dir / name, ec);
+        if (ec) return "Could not create " + name + ": " + ec.message();
+        setStatus("Created folder " + name);
+        return {};
+    });
+}
+
+void MainWindow::renamePath(const fs::path& path) {
+    std::error_code ec;
+    const bool folder = fs::is_directory(path, ec);
+    const std::string name = path.filename().string();
+    promptText(*this, folder ? "Rename Folder" : "Rename File", "New name for " + name + ":", name,
+               [this, path](const Glib::ustring& text) -> Glib::ustring {
+                   const std::string newName = text;
+                   if (auto error = fileops::checkName(path.parent_path(), newName, path); !error.empty()) return error;
+                   if (newName == path.filename().string()) return {}; // unchanged
+                   std::error_code ec;
+                   const fs::path from = fs::weakly_canonical(path, ec);
+                   const fs::path to = path.parent_path() / newName;
+                   if (auto error = fileops::move(path, to); !error.empty()) return "Could not rename: " + error;
+                   relocated(from, fs::weakly_canonical(to, ec));
+                   setStatus("Renamed " + path.filename().string() + " to " + newName);
+                   return {};
+               },
+               fileops::stemLength(name, folder)); // typing replaces "main" and keeps ".cpp"
+}
+
+void MainWindow::deletePath(const fs::path& path) {
+    std::error_code ec;
+    const bool folder = fs::is_directory(path, ec);
+    const fs::path canonical = fs::weakly_canonical(path, ec);
+    std::string unsaved;
+    for (DocumentPage* doc : documents())
+        if (fileops::isInside(doc->path(), canonical) && doc->modified())
+            unsaved += (unsaved.empty() ? "" : ", ") + doc->path().filename().string();
+    std::string detail = folder ? "The folder and everything in it go to the trash." : "It goes to the trash, where you can restore it.";
+    if (!unsaved.empty()) detail += " Unsaved changes to " + unsaved + " will be lost.";
+    const std::string name = path.filename().string();
+    askChoice(*this, "Delete " + std::string(folder ? "the folder " : "") + "\u201c" + name + "\u201d?", detail,
+              {"Cancel", "Move to Trash"}, 0, 1, [this, path, canonical, name](int choice) {
+                  if (choice != 1) return;
+                  // Close its editors first, so nothing saves it back while it's going.
+                  auto closeEditors = [this, canonical] {
+                      for (DocumentPage* doc : documents())
+                          if (fileops::isInside(doc->path(), canonical)) removeEditor(doc);
+                      std::erase_if(breakpoints_, [&](const auto& entry) { return fileops::isInside(entry.first, canonical); });
+                      updateBreakpointsPanel();
+                  };
+                  try {
+                      Gio::File::create_for_path(path.string())->trash();
+                      closeEditors();
+                      setStatus("Moved " + name + " to the trash");
+                      filesChanged();
+                  } catch (const Glib::Error& e) {
+                      // No trash here (some mounted or removable file systems): offer to delete it for good.
+                      askChoice(*this, "\u201c" + name + "\u201d can't go to the trash.",
+                                std::string(e.what()) + "\n\nDelete it permanently? This can't be undone.",
+                                {"Cancel", "Delete Permanently"}, 0, 0, [this, path, name, closeEditors](int again) {
+                                    if (again != 1) return;
+                                    std::error_code ec;
+                                    fs::remove_all(path, ec);
+                                    if (ec) {
+                                        showError(*this, "Could not delete " + name, ec.message());
+                                        return;
+                                    }
+                                    closeEditors();
+                                    setStatus("Deleted " + name);
+                                    filesChanged();
+                                });
+                  }
+              });
+}
+
+void MainWindow::movePath(const fs::path& source, const fs::path& targetDir) {
+    if (fileops::sameFolder(source, targetDir)) return;
+    const std::string name = source.filename().string();
+    if (auto error = fileops::checkMove(source, targetDir); !error.empty()) {
+        showError(*this, "Can't move " + name, error);
+        return;
+    }
+    std::error_code ec;
+    const fs::path from = fs::weakly_canonical(source, ec);
+    const fs::path to = targetDir / source.filename();
+    if (auto error = fileops::move(source, to); !error.empty()) {
+        showError(*this, "Could not move " + name, error);
+        return;
+    }
+    relocated(from, fs::weakly_canonical(to, ec));
+    const fs::path rel = targetDir.lexically_relative(folder_);
+    setStatus("Moved " + name + " to " + (rel.empty() || rel == "." ? folder_.filename().string() : rel.generic_string()));
+}
+
+void MainWindow::relocated(const fs::path& from, const fs::path& to) {
+    for (DocumentPage* doc : documents()) {
+        const fs::path moved = fileops::relocated(doc->path(), from, to);
+        if (moved.empty()) continue;
+        // The language servers know files by path: close the old one, open the new.
+        auto* tab = dynamic_cast<EditorTab*>(doc);
+        if (tab) lsp_->detach(tab);
+        doc->moveTo(moved);
+        if (tab) lsp_->attach(tab);
+    }
+    std::map<fs::path, std::set<int>> breakpoints;
+    for (auto& [file, lines] : breakpoints_) {
+        const fs::path moved = fileops::relocated(file, from, to);
+        breakpoints[moved.empty() ? file : moved] = lines;
+    }
+    breakpoints_ = std::move(breakpoints);
+    updateBreakpointsPanel();
+    filesChanged();
+}
+
+void MainWindow::filesChanged() {
+    // C and C++ build files follow by themselves (SourceWatcher); these views are refreshed here.
+    scheduleKitRefresh();
+    refreshGitStatus();
+}
+
 void MainWindow::saveCurrent() {
     DocumentPage* page = currentDocument();
     if (!page) return;
@@ -1204,6 +1516,8 @@ void MainWindow::showWelcome() {
     auto* shortcuts = Gtk::make_managed<Gtk::Label>("Welcome to Kev-C++\n\n"
                                                     "Ctrl+Shift+N  new project\n"
                                                     "Ctrl+O        open a project or folder\n"
+                                                    "Ctrl+P        search files and text\n"
+                                                    "Ctrl+Shift+F  find in all files\n"
                                                     "F9 / F10 / F11  compile / run / compile & run\n"
                                                     "F5            debug   (F6 step over, F7 step into, F8 continue)");
     shortcuts->add_css_class("dim-label");
@@ -1417,17 +1731,47 @@ void MainWindow::forwardToEditor(const char* action) {
 // ---------------------------------------------------------------------------------------------
 // Search
 
-void MainWindow::showFindBar() {
+Glib::ustring MainWindow::selectedLineText() {
     EditorTab* tab = currentEditor();
-    if (!tab) return;
+    if (!tab) return {};
     GtkTextBuffer* text = GTK_TEXT_BUFFER(tab->buffer());
     GtkTextIter start, end;
-    if (gtk_text_buffer_get_selection_bounds(text, &start, &end) &&
-        gtk_text_iter_get_line(&start) == gtk_text_iter_get_line(&end)) {
-        char* selected = gtk_text_buffer_get_text(text, &start, &end, FALSE);
-        findEntry_.set_text(selected);
-        g_free(selected);
+    if (!gtk_text_buffer_get_selection_bounds(text, &start, &end) ||
+        gtk_text_iter_get_line(&start) != gtk_text_iter_get_line(&end))
+        return {};
+    char* selected = gtk_text_buffer_get_text(text, &start, &end, FALSE);
+    Glib::ustring out = selected;
+    g_free(selected);
+    return out;
+}
+
+void MainWindow::findInFiles(Glib::ustring text) {
+    if (text.empty()) text = selectedLineText();
+    leftDock_.set_visible(true);
+    leftDock_.set_current_page(leftDock_.page_num(searchPanel_));
+    searchPanel_.focusSearch(text);
+}
+
+void MainWindow::focusQuickSearch() {
+    quickSearch_.focusSearch();
+}
+
+std::map<fs::path, std::string> MainWindow::unsavedEditorText() {
+    std::map<fs::path, std::string> unsaved;
+    for (EditorTab* tab : editors()) {
+        if (!tab->modified()) continue;
+        GtkTextIter start, end;
+        gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(tab->buffer()), &start, &end);
+        char* text = gtk_text_buffer_get_text(GTK_TEXT_BUFFER(tab->buffer()), &start, &end, TRUE);
+        unsaved[tab->path()] = text;
+        g_free(text);
     }
+    return unsaved;
+}
+
+void MainWindow::showFindBar() {
+    if (!currentEditor()) return;
+    if (const Glib::ustring selected = selectedLineText(); !selected.empty()) findEntry_.set_text(selected);
     findBar_.set_search_mode(true);
     findEntry_.grab_focus();
 }
@@ -1968,9 +2312,10 @@ void MainWindow::refreshKit() {
         return;
     }
     if (page < 0) {
-        // Show it when a SvelteKit project opens: with four tabs it would otherwise sit off-screen.
+        // Show it when a SvelteKit project opens, so it's noticed.
         leftDock_.append_page(routesPanel_, *makeIconLabel("kevc-svelte-file", "Routes"));
         leftDock_.set_current_page(leftDock_.page_num(routesPanel_));
+        fitLeftTabs();
     }
     routesPanel_.setApp(kit::scan(folder_), folder_);
     envPanel_.setReport(kit::envReport(folder_), folder_);

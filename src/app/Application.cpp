@@ -67,6 +67,15 @@ void Application::on_startup() {
     Gtk::IconTheme::get_for_display(Gdk::Display::get_default())->add_resource_path("/org/kevcpp/KevCpp/icons/hicolor");
     Gtk::Window::set_default_icon_name("org.kevcpp.KevCpp");
     settings_.load();
+    // Started from a menu or a file manager, PATH lacks what a terminal has (nvm's node, pnpm): use
+    // what the terminal would, for the IDE and everything it runs (Vite, pnpm, the language servers).
+    {
+        const std::string path = Glib::getenv("PATH");
+        const auto node = findInPath("node", path);
+        const std::string better = terminalLikePath(path, Glib::get_home_dir(), node ? nodeMajor(toolVersion(*node)) : 0,
+                                                    Glib::getenv("NVM_DIR"), Glib::getenv("PNPM_HOME"));
+        if (better != path) Glib::setenv("PATH", better, true);
+    }
     toolchain_ = Toolchain::detect();
     setupAccelerators();
     add_action("quit", [this] { quit(); });
@@ -164,6 +173,8 @@ void Application::setupAccelerators() {
         {"win.save-all", {"<Control><Shift>s"}},
         {"win.close-tab", {"<Control>w"}},
         {"win.find", {"<Control>f"}},
+        {"win.find-in-files", {"<Control><Shift>f"}},
+        {"win.quick-search", {"<Control>p"}},
         {"win.replace", {"<Control>r"}},
         {"win.goto-line", {"<Control>g"}},
         {"win.goto-definition", {"<Control>F12"}},

@@ -1,6 +1,7 @@
 #include "editor/RoutesPanel.h"
 
 #include "core/Icons.h"
+#include "core/Search.h"
 
 namespace fs = std::filesystem;
 
@@ -27,11 +28,12 @@ RoutesPanel::RoutesPanel() : Gtk::Box(Gtk::Orientation::VERTICAL) {
     add->set_icon_name("list-add-symbolic");
     add->set_tooltip_text("New Route… (a +page.svelte and +page.ts)");
     add->signal_clicked().connect([this] { newRoute_.emit(); });
-    auto* title = Gtk::make_managed<Gtk::Label>("src/routes");
-    title->add_css_class("dim-label");
-    title->set_hexpand(true);
-    title->set_xalign(0.0f);
-    bar->append(*title);
+    filter_.set_placeholder_text("Filter routes and files");
+    filter_.set_tooltip_text("Shows the routes whose URL, files or exports hold every word typed here");
+    filter_.set_hexpand(true);
+    filter_.signal_search_changed().connect(sigc::mem_fun(*this, &RoutesPanel::onFilterChanged));
+    filter_.signal_stop_search().connect([this] { filter_.set_text(""); });
+    bar->append(filter_);
     bar->append(*add);
     append(*bar);
 
@@ -40,7 +42,13 @@ RoutesPanel::RoutesPanel() : Gtk::Box(Gtk::Orientation::VERTICAL) {
     list_.signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
         if (auto it = targets_.find(row); it != targets_.end()) open_.emit(it->second.file, it->second.line);
     });
+    list_.set_filter_func([this](Gtk::ListBoxRow* row) {
+        const std::string query = filter_.get_text();
+        auto it = rowGroup_.find(row);
+        return query.empty() || it == rowGroup_.end() || search::containsAllWords(groupText_[it->second], query);
+    });
     message_.add_css_class("dim-label");
+    message_.set_valign(Gtk::Align::START); // under the filter, not halfway down the panel
     message_.set_wrap(true);
     message_.set_margin(12);
     scroller_.set_child(list_);
@@ -50,9 +58,25 @@ RoutesPanel::RoutesPanel() : Gtk::Box(Gtk::Orientation::VERTICAL) {
 
 void RoutesPanel::showMessage(const Glib::ustring& text) {
     targets_.clear();
+    rowGroup_.clear();
+    groupText_.clear();
     while (auto* row = list_.get_row_at_index(0)) list_.remove(*row);
+    emptyMessage_ = text;
     message_.set_text(text);
     list_.set_placeholder(message_);
+    onFilterChanged();
+}
+
+void RoutesPanel::beginGroup(std::string text) {
+    groupText_.push_back(std::move(text));
+}
+
+void RoutesPanel::onFilterChanged() {
+    const std::string query = filter_.get_text();
+    // The placeholder shows whenever no row is visible: say why.
+    message_.set_text(query.empty() || groupText_.empty() ? emptyMessage_
+                                                          : Glib::ustring("No routes match \u201c" + query + "\u201d."));
+    list_.invalidate_filter();
 }
 
 Gtk::Widget& RoutesPanel::line(const char* icon, const Glib::ustring& markup) {
@@ -82,13 +106,24 @@ Gtk::ListBoxRow& RoutesPanel::addRow(Gtk::Widget& content, int depth, std::optio
     row->set_child(content);
     list_.append(*row);
     if (target) targets_[row] = *target;
+    if (!groupText_.empty()) rowGroup_[row] = groupText_.size() - 1;
     return *row;
 }
 
 void RoutesPanel::setApp(const kit::App& app, const fs::path& root) {
     showMessage("No routes yet: add one with +, or create src/routes/+page.svelte.");
+    // showMessage counted no groups yet; once rows exist, an empty list means the filter hid them.
     const fs::path routes = root / "src" / "routes";
     for (const auto& route : app.routes) {
+        // What the filter looks in: the URL, the id, each file's path and exports.
+        std::string text = route.url + " " + route.id;
+        for (const auto& f : route.files) {
+            text += " " + f.path.lexically_relative(routes).generic_string();
+            for (const auto& e : f.exports) text += " " + e.name;
+            for (const auto& a : f.actions) text += " " + a;
+        }
+        beginGroup(std::move(text));
+
         // The route itself: its URL (and its id when groups make them differ).
         Glib::ustring markup = "<b>" + esc(route.url) + "</b>";
         if (route.id != route.url) markup += "  <span alpha=\"60%\">" + esc(route.id) + "</span>";
@@ -149,14 +184,21 @@ void RoutesPanel::setApp(const kit::App& app, const fs::path& root) {
     }
 
     if (!app.remote.empty()) {
+        // The heading shows while any remote function does.
+        std::string all = "remote";
+        for (const auto& fn : app.remote)
+            all += " " + fn.name + " " + fn.kind + " " + fn.file.lexically_relative(root / "src").generic_string();
+        beginGroup(std::move(all));
         addRow(line(nullptr, "<b>Remote functions</b>"), 0, std::nullopt);
         for (const auto& fn : app.remote) {
             const std::string where = fn.file.lexically_relative(root / "src").generic_string();
+            beginGroup("remote " + fn.name + " " + fn.kind + " " + where);
             addRow(line(icons::forFile(fn.file).c_str(),
                         esc(fn.name) + "  <span alpha=\"60%\">" + esc(fn.kind + " · " + where) + "</span>"),
                    1, Target{fn.file, fn.line});
         }
     }
+    onFilterChanged();
 }
 
 } // namespace kevc

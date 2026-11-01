@@ -1,6 +1,8 @@
 #include "core/Toolchain.h"
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
@@ -28,7 +30,7 @@ constexpr std::array kTools{
     ToolSpec{"ninja", false, "faster CMake builds (falls back to make)"},
 };
 
-std::string firstLineOfVersion(const std::filesystem::path& exe) {
+std::string firstLineOfVersionImpl(const std::filesystem::path& exe) {
     std::string cmd = "'" + exe.string() + "' --version 2>/dev/null";
     FILE* pipe = popen(cmd.c_str(), "r");
     if (!pipe) return {};
@@ -41,6 +43,66 @@ std::string firstLineOfVersion(const std::filesystem::path& exe) {
 }
 
 } // namespace
+
+std::string toolVersion(const std::filesystem::path& exe) {
+    return firstLineOfVersionImpl(exe);
+}
+
+int nodeMajor(const std::string& versionLine) {
+    size_t i = 0;
+    while (i < versionLine.size() && !std::isdigit(static_cast<unsigned char>(versionLine[i]))) ++i;
+    int major = 0;
+    for (; i < versionLine.size() && std::isdigit(static_cast<unsigned char>(versionLine[i])); ++i)
+        major = std::min(major * 10 + (versionLine[i] - '0'), 100000);
+    return major;
+}
+
+std::string terminalLikePath(const std::string& pathList, const std::filesystem::path& home, int pathNodeMajor,
+                             const std::filesystem::path& nvmDir, const std::filesystem::path& pnpmHome,
+                             int minNodeMajor) {
+    namespace fs = std::filesystem;
+    std::string out = pathList;
+    if (pathNodeMajor < minNodeMajor) {
+        // Where each manager keeps its versions: <dir>/<version>/<binary inside it>.
+        const std::pair<fs::path, const char*> layouts[] = {
+            {nvmDir.empty() ? home / ".nvm" / "versions/node" : nvmDir / "versions/node", "bin/node"},
+            {home / ".local/share/fnm/node-versions", "installation/bin/node"},
+            {home / ".fnm/node-versions", "installation/bin/node"},
+            {home / ".volta/tools/image/node", "bin/node"},
+            {home / ".asdf/installs/nodejs", "bin/node"},
+            {home / ".local/share/mise/installs/node", "bin/node"},
+            {"/usr/local/n/versions/node", "bin/node"},
+        };
+        fs::path best;
+        std::vector<int> bestVersion;
+        for (const auto& [versions, binary] : layouts) {
+            std::error_code ec;
+            for (const auto& entry : fs::directory_iterator(versions, ec)) {
+                const fs::path node = entry.path() / binary;
+                if (!fs::is_regular_file(node, ec) || access(node.c_str(), X_OK) != 0) continue;
+                std::vector<int> version; // "v24.22.1" -> 24, 22, 1
+                int part = -1;
+                for (char c : entry.path().filename().string() + ".") {
+                    if (std::isdigit(static_cast<unsigned char>(c))) part = std::max(part, 0) * 10 + (c - '0');
+                    else if (part >= 0) version.push_back(std::min(part, 100000)), part = -1;
+                }
+                if (version.empty() || version.front() < minNodeMajor || version.front() <= pathNodeMajor) continue;
+                if (version > bestVersion) best = node, bestVersion = version;
+            }
+        }
+        if (!best.empty()) out = prependToPath(out, best.parent_path().string());
+    }
+    // Package managers' own folders (pnpm and bun install themselves there), last so they shadow nothing.
+    for (const fs::path& dir : {pnpmHome.empty() ? home / ".local/share/pnpm" : pnpmHome, home / ".bun/bin"}) {
+        std::error_code ec;
+        if (!fs::is_directory(dir, ec)) continue;
+        std::stringstream ss(out);
+        bool present = false;
+        for (std::string entry; std::getline(ss, entry, ':');) present = present || entry == dir.string();
+        if (!present) out = out.empty() ? dir.string() : out + ":" + dir.string();
+    }
+    return out;
+}
 
 std::string prependToPath(const std::string& pathList, const std::string& dir) {
     if (dir.empty()) return pathList;
@@ -76,7 +138,7 @@ Toolchain Toolchain::detect(const std::string& pathList, bool queryVersions) {
     Toolchain tc;
     for (const auto& spec : kTools) {
         ToolInfo info{spec.name, spec.required, spec.purpose, findInPath(spec.name, pathList), {}};
-        if (info.found() && queryVersions) info.version = firstLineOfVersion(*info.path);
+        if (info.found() && queryVersions) info.version = firstLineOfVersionImpl(*info.path);
         tc.tools_.push_back(std::move(info));
     }
     return tc;
