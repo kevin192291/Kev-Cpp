@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Format.h"
 #include "core/Lsp.h"
 #include "core/Project.h"
 #include "core/Toolchain.h"
@@ -64,6 +65,13 @@ public:
     // Empty for other servers.
     void sourceDefinition(EditorTab* tab, const GtkTextIter& at, std::function<void(std::vector<LspLocation>)> done);
     void documentSymbols(EditorTab* tab, std::function<void(const json& symbols)> done);
+    // Edit → Auto Format: the server's edits for the document, or only for `range` when the server
+    // formats ranges (`ranged` says whether it did). With `standInFolder`, clangd formats a stand-in
+    // copy of the text there instead (see format::standInName), so that folder's .clang-format applies.
+    // No server, or one that refuses: no edits and the reason in `error`.
+    void format(EditorTab* tab, std::optional<std::pair<GtkTextIter, GtkTextIter>> range,
+                const std::filesystem::path& standInFolder,
+                std::function<void(std::vector<format::TextEdit> edits, bool ranged, std::string error)> done);
 
     std::vector<std::string> triggerCharacters(EditorTab* tab) const;
     // While the debugger is paused, hovering shows values instead of type information.
@@ -113,6 +121,7 @@ private:
     std::optional<Project> project_;
     bool hadCompileDatabase_ = false;
     bool hoverEnabled_ = true;
+    int standIns_ = 0; // names Auto Format's stand-in documents
     std::map<EditorTab*, std::unique_ptr<Document>> docs_;
     std::map<lsp::Server, std::unique_ptr<LspClient>> clients_;
     std::map<lsp::Server, bool> unavailable_; // reported once per workspace

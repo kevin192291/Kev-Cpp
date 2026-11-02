@@ -50,4 +50,9 @@ struct Closing {
 };
 Closing closingBrace(std::string_view before, std::string_view lineBefore);
 
+// The same layout as a .clang-format, for Edit → Auto Format in projects that have none of their own.
+// Lines up to 120 columns; the bodies of ifs, loops and case labels on lines of their own, short
+// member functions inside a class on one line. Includes keep their order.
+std::string clangFormatStyle();
+
 } // namespace kevc::cppstyle

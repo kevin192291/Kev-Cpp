@@ -13,4 +13,10 @@ namespace kevc {
 void captureOutput(const std::vector<std::string>& argv, const std::filesystem::path& cwd,
                    std::function<void(std::string output, int status)> done, std::weak_ptr<int> alive);
 
+// The same with `input` written to its stdin, and its stderr kept too (where tools like prettier say why
+// they refused).
+void captureOutput(const std::vector<std::string>& argv, const std::filesystem::path& cwd, const std::string& input,
+                   std::function<void(std::string output, std::string errors, int status)> done,
+                   std::weak_ptr<int> alive);
+
 } // namespace kevc

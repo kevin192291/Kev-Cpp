@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Breakpoints.h"
+#include "core/Format.h"
 #include "editor/DocumentPage.h"
 
 #include <gtkmm.h>
@@ -76,6 +77,9 @@ public:
     // New text for the whole buffer as one undo step (Find in Files' Replace All in an open file),
     // keeping the cursor's line and the breakpoints.
     void replaceText(const std::string& contents);
+    // Edits whose ranges are in the current text (Auto Format's), as one undo step. Marks outside the
+    // edited ranges, breakpoints among them, stay where they are.
+    void applyEdits(const std::vector<format::TextEdit>& edits);
 
     sigc::signal<void()>& signalCloseRequested() override { return closeRequested_; }
     sigc::signal<void(bool)>& signalModifiedChanged() { return modifiedChanged_; }

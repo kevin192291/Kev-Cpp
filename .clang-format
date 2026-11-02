@@ -1,0 +1,20 @@
+# Kev-C++'s own layout: what Edit -> Auto Format (Ctrl+I) gives these sources. Much of the older code
+# was laid out by hand and differs in places (about 1,200 of 33,000 lines), so format what you write
+# (select it, then Ctrl+I) rather than whole files.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 120
+AccessModifierOffset: -4
+PointerAlignment: Left
+SortIncludes: Never
+AlignTrailingComments:
+  Kind: Leave
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortLambdasOnASingleLine: All
+AllowShortBlocksOnASingleLine: Never
+AlwaysBreakTemplateDeclarations: Yes
+PenaltyBreakAssignment: 100

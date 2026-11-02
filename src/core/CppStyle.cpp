@@ -211,4 +211,54 @@ Closing closingBrace(std::string_view before, std::string_view lineBefore) {
     return out;
 }
 
+std::string clangFormatStyle() {
+    // Braces on lines of their own for classes, functions, namespaces and control statements, but not
+    // for lambdas, initialisers, `case 1: {` or extern "C", as braceOnOwnLine does; namespaces indent
+    // their contents and access specifiers sit at the class's indentation, as newLineIndent and
+    // accessSpecifierIndent do. Pointers go the way most of the file has them.
+    // ColumnLimit 0 (keep the author's line breaks) would suit better, but clang-format 18 garbles a
+    // lambda followed by more arguments under it: `f(a, [] {\n x();\n }, b);` comes out as
+    // `x(); }, b);`. With a limit it formats them as it should.
+    return "# Kev-C++'s C/C++ layout (Edit -> Auto Format uses it where a project has no .clang-format)\n"
+           "BasedOnStyle: LLVM\n"
+           "IndentWidth: 4\n"
+           "TabWidth: 4\n"
+           "UseTab: Never\n"
+           "ColumnLimit: 120\n"
+           "BreakBeforeBraces: Custom\n"
+           "BraceWrapping:\n"
+           "  AfterCaseLabel: false\n"
+           "  AfterClass: true\n"
+           "  AfterControlStatement: Always\n"
+           "  AfterEnum: true\n"
+           "  AfterFunction: true\n"
+           "  AfterNamespace: true\n"
+           "  AfterStruct: true\n"
+           "  AfterUnion: true\n"
+           "  AfterExternBlock: false\n"
+           "  BeforeCatch: true\n"
+           "  BeforeElse: true\n"
+           "  BeforeLambdaBody: false\n"
+           "  BeforeWhile: false\n"
+           "  SplitEmptyFunction: false\n"
+           "  SplitEmptyRecord: false\n"
+           "  SplitEmptyNamespace: false\n"
+           "AccessModifierOffset: -4\n"
+           "EmptyLineBeforeAccessModifier: Leave\n"
+           "NamespaceIndentation: All\n"
+           "FixNamespaceComments: false\n"
+           "IndentCaseLabels: false\n"
+           "DerivePointerAlignment: true\n"
+           "PointerAlignment: Left\n"
+           "SortIncludes: Never\n"
+           "AlwaysBreakTemplateDeclarations: Yes\n"
+           "AllowShortFunctionsOnASingleLine: Inline\n"
+           "AllowShortLambdasOnASingleLine: All\n"
+           "AllowShortBlocksOnASingleLine: Never\n"
+           "AllowShortIfStatementsOnASingleLine: Never\n"
+           "AllowShortLoopsOnASingleLine: false\n"
+           "AllowShortCaseLabelsOnASingleLine: false\n"
+           "AllowShortEnumsOnASingleLine: false\n";
+}
+
 } // namespace kevc::cppstyle

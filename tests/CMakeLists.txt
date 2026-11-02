@@ -9,6 +9,7 @@ add_executable(kevc_tests
   DapTest.cpp
   DiagnosticsTest.cpp
   FileOpsTest.cpp
+  FormatTest.cpp
   GitStatusTest.cpp
   IconsTest.cpp
   LspTest.cpp

@@ -278,6 +278,21 @@ void EditorTab::setTextKeepingPlace(const std::string& contents, bool undoable) 
     gtk_text_buffer_place_cursor(text, &restored);
 }
 
+void EditorTab::applyEdits(const std::vector<format::TextEdit>& edits) {
+    GtkTextBuffer* text = GTK_TEXT_BUFFER(buffer_);
+    gtk_text_buffer_begin_user_action(text);
+    // Last first: the ranges before each edit are still where they were.
+    for (const auto& e : format::lastFirst(edits)) {
+        GtkTextIter start = LspManager::iterAt(text, e.startLine, e.startUtf16);
+        GtkTextIter end = LspManager::iterAt(text, e.endLine, e.endUtf16);
+        if (gtk_text_iter_compare(&start, &end) > 0) end = start;
+        gtk_text_buffer_delete(text, &start, &end); // leaves `start` where the text was
+        gtk_text_buffer_insert(text, &start, e.newText.data(), static_cast<int>(e.newText.size()));
+    }
+    gtk_text_buffer_end_user_action(text);
+    gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(view_), gtk_text_buffer_get_insert(text));
+}
+
 void EditorTab::focusEditor() {
     gtk_widget_grab_focus(GTK_WIDGET(view_));
 }

@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 222 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 234 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -47,13 +47,15 @@ verified by driving the real app (see "GUI testing").
   File fuzzy ranking, Find in Files matching and replacing, include filters, result previews),
   `ProjectState` (breakpoints, watches and a web folder's look, per project, in
   `$XDG_STATE_HOME/kev-cpp/projects.json`), `NpmPackages` (version rules in words, text-preserving
-  package.json edits, .npmrc registries), `CppStyle` (the C/C++ layout kept while typing).
+  package.json edits, .npmrc registries), `CppStyle` (the C/C++ layout kept while typing, and the same as
+  a .clang-format), `Format` (Auto Format: which tool formats a file, LSP TextEdits, the small edits
+  between old and new text, the nearest .clang-format, the project's prettier).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon, the splash), `MainWindow`
   (everything wired together: menus, actions, build/run, debugging, IntelliSense, dev server).
 - `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), CppIndenter (the
-  GtkSourceIndenter for C/C++ files, using core/CppStyle), ProjectTree (with Go to File search,
-  context menu, drag and drop), SymbolsPanel, and DocumentPage, the interface MainWindow saves,
-  closes and moves editor-area pages through.
+  GtkSourceIndenter for C/C++ files, using core/CppStyle), CodeFormatter (Edit → Auto Format),
+  ProjectTree (with Go to File search, context menu, drag and drop), SymbolsPanel, and DocumentPage,
+  the interface MainWindow saves, closes and moves editor-area pages through.
 - `src/designer/` DesignerPage: the GTK designer's page for `.ui` files (preview, outline, properties,
   signals, XML); DesignerEditing.cpp holds its palette, drag and drop, clipboard and context menu;
   DesignerCode.cpp its Code menu, regeneration on save and Go to handler;
@@ -65,7 +67,7 @@ verified by driving the real app (see "GUI testing").
   over TCP), JsDebugger (js-debug server + root/child sessions) and DapViews (DapVarNode).
 - `src/process/` ManagedProcess (long-running child: own process group, PR_SET_PDEATHSIG, stdin pipe,
   line output; Vite, the dev server, js-debug, the OTLP collector; stopping it signals the group and
-  every descendant that left it), Capture (run + collect stdout) and
+  every descendant that left it), Capture (run + collect stdout; a form that feeds stdin, for prettier) and
   BackgroundJob (one worker thread at a time, results posted to the main loop, cancelled and joined
   before a new one starts or its owner goes; used by the searches).
 - `src/build/` BuildRunner (sequential subprocesses, line streaming), CompilerPanel.
@@ -261,6 +263,25 @@ verified by driving the real app (see "GUI testing").
   press, lets the input method insert the key, then calls indent() just after it (only if the IM
   inserted exactly that character). Triggers: Return, '{', '}', ':'. Decisions are in core/CppStyle
   (Allman braces, access specifiers at the class's indentation, ';' after a class body).
+- **Auto Format** (Ctrl+I; Edit menu, editor right-click menu): the file, or the selected lines.
+  C/C++ = clangd's textDocument/(range)formatting. A project's .clang-format applies; without one,
+  clangd's --fallback-style only takes built-in names (none matches CppStyle), so clangd formats a
+  stand-in copy opened under `$XDG_CACHE_HOME/kev-cpp/format/` beside a .clang-format holding
+  `cppstyle::clangFormatStyle()` (ColumnLimit 120, not 0: without a limit clang-format 18 garbles a
+  multi-line lambda that has more arguments after it, `x(); }, b);`, even in WebKit style). The
+  stand-in's extension, `.kevc-format`, is one clangd can't compile (clang-format reads it as C++), so
+  it's never parsed: a parsed copy's symbols stay in clangd's index after didClose and would show up
+  in Find All References. It's also closed straight after the request (clangd formats the opened
+  text). FormatTest runs clangd to check both. Web files: the project's prettier (`--stdin-filepath`,
+  so its config and ignores apply; `--range-start/-end` for a selection) when it's installed, else
+  typescript-language-server / svelte-language-server. Whatever comes back becomes the new text, and
+  `format::diffEdits` turns old → new into small edits (whitespace between the same characters when
+  that's all that changed, else a line diff) applied as one user action, so breakpoint marks stay on
+  their statements. Nothing is applied if the buffer changed meanwhile.
+- **The repository's own .clang-format** was fitted to the existing code (LLVM base, 4 spaces, 120
+  columns, one-line ifs/loops/case labels/short in-class functions allowed). The older code was laid
+  out by hand, so about 1,200 of its 33,000 lines still differ: format selections, not whole files,
+  unless the whole repository is reformatted once. New files should come out unchanged by Ctrl+I.
 - **Go to…**: LspManager::locations() for definition/declaration/typeDefinition/implementation/
   references; Go to Definition that lands only in .d.ts files asks typescript-language-server's
   `_typescript.goToSourceDefinition`. Several answers show in locationsPopover_ (parented to

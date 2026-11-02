@@ -28,6 +28,7 @@ add_library(kevc_core STATIC
   src/core/Dap.cpp
   src/core/Diagnostics.cpp
   src/core/FileOps.cpp
+  src/core/Format.cpp
   src/core/GitStatus.cpp
   src/core/Icons.cpp
   src/core/Lsp.cpp
@@ -102,6 +103,7 @@ add_executable(kev-cpp
   src/designer/DesignerEditing.cpp
   src/designer/DesignerPage.cpp
   src/designer/DesignerTypes.cpp
+  src/editor/CodeFormatter.cpp
   src/editor/CppIndenter.cpp
   src/editor/EditorTab.cpp
   src/editor/ProjectTree.cpp

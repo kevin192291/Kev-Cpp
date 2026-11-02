@@ -40,6 +40,7 @@
 namespace kevc {
 
 class Application;
+class CodeFormatter;
 class DesignerPage;
 class DocumentPage;
 class EditorTab;
@@ -276,6 +277,7 @@ private:
     std::filesystem::path toolsDir_; // bundled Node tools: language server, tsc, dev server
     // Declared before the widgets so it outlives the editors during teardown.
     std::unique_ptr<LspManager> lsp_;
+    std::unique_ptr<CodeFormatter> formatter_; // Edit → Auto Format
     std::unique_ptr<ProjectSession> session_;
     std::unique_ptr<SourceWatcher> watcher_;
     std::filesystem::path folder_; // project root or plain folder; empty if nothing is open

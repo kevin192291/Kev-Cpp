@@ -125,6 +125,11 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
 - **C/C++ layout as you type**: a `{` after a class, function or `if (…)` moves to a line of its own;
   `public:`, `private:` and `protected:` snap to the class's own indentation, members one level in;
   the `}` that closes a class, struct, union or enum gets its `;`.
+- **Auto Format** (Ctrl+I, in the Edit menu and the editor's right-click menu): tidies the file, or only
+  the selected lines. C and C++ go through clangd, with the project's `.clang-format` when it has one
+  and otherwise in the layout above (lines up to 120 columns, short member functions inside a class on
+  one line). Web projects use their own prettier when it's installed, with its config; otherwise the
+  TypeScript or Svelte language server formats. It's one undo step, and breakpoints stay on their lines.
 - **Build & run**: errors and warnings are listed in the Compiler tab (double-click to jump); programs run in
   the Run tab; the Terminal tab is a shell in the project folder.
 - **Slate colours**: the dark slate palette of Embarcadero Dev-C++ 6, for the window and the editor,
@@ -257,6 +262,6 @@ project instead.
 | Ctrl+P | Search files and text | Ctrl+Shift+F | Find in all files (Search tab) |
 | Ctrl+F | Find in the current file | F2 / Delete | Rename / delete in the Project tab |
 | Ctrl+R | Replace in the current file | Right-click | Go to Definition / Implementation / References |
-| | | Right-click a line number | Breakpoint, IF, Live, Break When Value Changes |
+| Ctrl+I | Auto Format (file or selected lines) | Right-click a line number | Breakpoint, IF, Live, Break When Value Changes |
 
 Logs from the language servers are in `~/.cache/kev-cpp/logs/`.

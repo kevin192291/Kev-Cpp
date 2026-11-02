@@ -3,6 +3,7 @@
 #include "app/Application.h"
 #include "app/BuildInfo.h"
 #include "designer/DesignerPage.h"
+#include "editor/CodeFormatter.h"
 #include "editor/EditorTab.h"
 #include "core/FileOps.h"
 #include "core/BuildFiles.h"
@@ -97,7 +98,9 @@ std::optional<fs::path> resolveInside(const fs::path& root, const std::string& r
 
 MainWindow::MainWindow(Application& app)
     : app_(app), recent_(app.settings()), toolsDir_(findToolsDir()),
-      lsp_(std::make_unique<LspManager>(app.toolchain(), toolsDir_)) {
+      lsp_(std::make_unique<LspManager>(app.toolchain(), toolsDir_)),
+      formatter_(std::make_unique<CodeFormatter>(*lsp_, app.toolchain(),
+                                                 [this](const std::string& status) { setStatus(status); })) {
     set_default_size(1280, 800);
     updateTitle();
 
@@ -367,6 +370,10 @@ void MainWindow::buildActions() {
     add_action("copy", [this] { forwardToEditor("clipboard.copy"); });
     add_action("paste", [this] { forwardToEditor("clipboard.paste"); });
     add_action("select-all", [this] { forwardToEditor("selection.select-all"); });
+    add_action("format", [this] {
+        if (auto* tab = currentEditor()) formatter_->format(*tab);
+        else setStatus("Auto Format works on a source file: open one first");
+    });
     // Search
     add_action("find", [this] {
         replaceToggle_.set_active(false);
@@ -498,6 +505,7 @@ Glib::RefPtr<Gio::Menu> MainWindow::buildMenuModel() {
         {{"_Undo", "win.undo"}, {"_Redo", "win.redo"}},
         {{"Cu_t", "win.cut"}, {"_Copy", "win.copy"}, {"_Paste", "win.paste"}},
         {{"Select _All", "win.select-all"}},
+        {{"Auto _Format", "win.format"}},
     });
     submenu("_Search", {
         {{"_Find…", "win.find"}, {"_Replace…", "win.replace"}},
@@ -927,6 +935,9 @@ Gtk::Widget& MainWindow::buildEditorArea() {
         section->append("Go to T_ype Definition", "win.goto-type-definition");
         section->append("Find All _References", "win.find-references");
         menu->append_section(section);
+        auto tidy = Gio::Menu::create();
+        tidy->append("Auto F_ormat", "win.format");
+        menu->append_section(tidy);
         // Right-clicking a line number shows this menu too, for that line.
         auto breakpoints = Gio::Menu::create();
         breakpoints->append("Toggle _Breakpoint", "win.toggle-breakpoint");
@@ -1666,6 +1677,7 @@ void MainWindow::showWelcome() {
                                                     "Ctrl+O        open a project or folder\n"
                                                     "Ctrl+P        search files and text\n"
                                                     "Ctrl+Shift+F  find in all files\n"
+                                                    "Ctrl+I        auto format the file or selection\n"
                                                     "F9 / F10 / F11  compile / run / compile & run\n"
                                                     "F5            debug   (F6 step over, F7 step into, F8 continue)");
     shortcuts->add_css_class("dim-label");

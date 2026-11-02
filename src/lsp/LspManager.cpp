@@ -454,6 +454,55 @@ void LspManager::documentSymbols(EditorTab* tab, std::function<void(const json&)
                     });
 }
 
+void LspManager::format(EditorTab* tab, std::optional<std::pair<GtkTextIter, GtkTextIter>> range,
+                        const fs::path& standInFolder,
+                        std::function<void(std::vector<format::TextEdit>, bool, std::string)> done) {
+    Document* doc = find(tab);
+    LspClient* client = doc ? clientFor(doc->server) : nullptr;
+    if (!client) {
+        done({}, false, "no language server is running for this file");
+        return;
+    }
+    const json& caps = client->capabilities();
+    auto offers = [&caps](const char* name) {
+        const auto it = caps.find(name);
+        return it != caps.end() && !it->is_null() && !(it->is_boolean() && !it->get<bool>());
+    };
+    // Until the server has answered `initialize` its capabilities aren't known: ask anyway.
+    if (client->ready() && !offers("documentFormattingProvider")) {
+        done({}, false, client->name() + " doesn't format files");
+        return;
+    }
+    const bool ranged = range && offers("documentRangeFormattingProvider");
+    GtkSourceView* view = tab->view();
+    json params = {{"options",
+                    {{"tabSize", static_cast<int>(gtk_source_view_get_tab_width(view))},
+                     {"insertSpaces", static_cast<bool>(gtk_source_view_get_insert_spaces_instead_of_tabs(view))}}}};
+    if (ranged) params["range"] = {{"start", positionOf(range->first)}, {"end", positionOf(range->second)}};
+    const char* method = ranged ? "textDocument/rangeFormatting" : "textDocument/formatting";
+    auto reply = [done, ranged](const json& result, const json* error) {
+        if (error) done({}, ranged, error->value("message", std::string("it refused")));
+        else done(format::parseTextEdits(result), ranged, {});
+    };
+    if (standInFolder.empty() || doc->server != lsp::Server::Clangd) {
+        flush(*doc);
+        params["textDocument"] = {{"uri", doc->uri}};
+        client->request(method, params, reply);
+        return;
+    }
+    // clangd formats the text a document was opened with, so the stand-in can close straight away,
+    // before anything could parse it.
+    const std::string uri = lsp::pathToUri(standInFolder / format::standInName(++standIns_));
+    client->notify("textDocument/didOpen", {{"textDocument",
+                                             {{"uri", uri},
+                                              {"languageId", doc->languageId},
+                                              {"version", 1},
+                                              {"text", documentText(GTK_TEXT_BUFFER(tab->buffer()))}}}});
+    params["textDocument"] = {{"uri", uri}};
+    client->request(method, params, reply);
+    client->notify("textDocument/didClose", {{"textDocument", {{"uri", uri}}}});
+}
+
 std::vector<std::string> LspManager::triggerCharacters(EditorTab* tab) const {
     const Document* doc = find(tab);
     if (!doc) return {};

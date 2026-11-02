@@ -205,6 +205,7 @@ void Application::setupAccelerators() {
         {"win.quick-search", {"<Control>p"}},
         {"win.replace", {"<Control>r"}},
         {"win.goto-line", {"<Control>g"}},
+        {"win.format", {"<Control>i"}},
         {"win.goto-definition", {"<Control>F12"}},
         {"win.project-options", {"<Alt>p"}},
         {"win.compile", {"F9"}},
