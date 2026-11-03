@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include <gtest/gtest.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 using namespace kevc::ui;
@@ -66,6 +67,32 @@ const std::string kNotes = R"(<?xml version="1.0" encoding="UTF-8"?>
     </child>
   </object>
   <template class="NotesRow" parent="GtkBox"/>
+</interface>
+)";
+
+// A panel: a top-level widget of its own, with a popover its menu button names.
+const std::string kPanel = R"(<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkBox" id="search_panel">
+    <property name="orientation">vertical</property>
+    <signal name="map" handler="on_search_panel_map"/>
+    <child>
+      <object class="GtkSearchEntry" id="query">
+        <signal name="search-changed" handler="on_query_changed"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuButton" id="options">
+        <property name="popover">options_popover</property>
+      </object>
+    </child>
+  </object>
+  <object class="GtkPopover" id="options_popover">
+    <child>
+      <object class="GtkLabel" id="hint"/>
+    </child>
+  </object>
 </interface>
 )";
 
@@ -274,6 +301,94 @@ TEST(UiCodegen, Blueprint) {
               "}\n");
 }
 
+TEST(UiCodegen, TopLevelWidgetsGetClassesUnlessAnotherObjectNamesThem) {
+    const auto doc = UiDocument::parse(kPanel);
+    const auto roots = codeRoots(doc, basicGtkTypes());
+    ASSERT_EQ(roots.size(), 1u); // not the popover: the menu button shows it
+    EXPECT_EQ(UiDocument::objectId(*roots[0]), "search_panel");
+
+    const Code code = generateGtkmm(doc, "search_panel.ui", basicGtkTypes());
+    EXPECT_TRUE(code.warnings.empty());
+    const std::string h = fileText(code, "search_panel.ui.h");
+    EXPECT_TRUE(contains(h, "class SearchPanelUi : public Gtk::Box {"));
+    EXPECT_TRUE(contains(h, "static Glib::RefPtr<T> create(Args&&... args) {"));
+    EXPECT_TRUE(contains(h, "Gtk::SearchEntry* query = nullptr;"));
+    EXPECT_TRUE(contains(h, "virtual void on_query_changed() {}"));
+    EXPECT_TRUE(contains(fileText(code, "search_panel.h", true), "static Glib::RefPtr<SearchPanel> create()"));
+    EXPECT_FALSE(contains(h, "OptionsPopover"));
+
+    const Code c = generateC(doc, "search_panel.ui", basicGtkTypes());
+    EXPECT_TRUE(contains(fileText(c, "search_panel-ui.c"), "g_object_force_floating(G_OBJECT(ui->search_panel));"));
+
+    // A window in the same file still gets a window's create().
+    const Code both = generateGtkmm(UiDocument::parse(kNotes), "main_window.ui", basicGtkTypes());
+    EXPECT_TRUE(contains(fileText(both, "main_window.ui.h"), "static T* create(Args&&... args) {"));
+}
+
+// A program's exit code from `cmd` (77: no display to run it on).
+int runStatus(const std::string& cmd) {
+    const int status = std::system(cmd.c_str());
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+// A designed widget lives while something holds it: moving it between containers keeps it, and it
+// goes once nothing does. Built and run against the real gtkmm and GTK (run only with a display).
+TEST(UiCodegen, GeneratedPanelCodeBuildsAndLivesAsLongAsItsHolders) {
+    if (!hasPkgConfig("gtkmm-4.0") || !hasPkgConfig("gtk4")) GTEST_SKIP() << "gtkmm-4.0 or gtk4 isn't installed";
+    const auto doc = UiDocument::parse(kPanel);
+    TempDir dir("panel");
+    const Code cpp = generateGtkmm(doc, "search_panel.ui", basicGtkTypes());
+    for (const auto& f : cpp.generated) dir.write(f.name, f.text);
+    for (const auto& f : cpp.user) dir.write(f.name, f.text);
+    dir.write("main.cpp", "#include \"search_panel.h\"\n"
+                          "static bool gone = false;\n"
+                          "int main() {\n"
+                          "    auto app = Gtk::Application::create(\"org.kevcpp.PanelTest\", Gio::Application::Flags::NON_UNIQUE);\n"
+                          "    if (!gtk_init_check()) return 77;\n"
+                          "    auto panel = SearchPanel::create();\n"
+                          "    g_object_weak_ref(G_OBJECT(panel->gobj()), [](gpointer, GObject*) { gone = true; }, nullptr);\n"
+                          "    Gtk::Box box;\n"
+                          "    box.append(*panel);\n"
+                          "    box.remove(*panel);\n"
+                          "    if (gone) return 1; // the RefPtr still holds it\n"
+                          "    box.append(*panel);\n"
+                          "    panel.reset();\n"
+                          "    if (gone) return 2; // the box holds it\n"
+                          "    box.remove(*box.get_first_child());\n"
+                          "    return gone ? 0 : 3; // nothing does\n"
+                          "}\n");
+    const std::string cd = "cd '" + dir.path().string() + "' && ";
+    ASSERT_EQ(runStatus(cd + "g++ -std=c++17 -Wall -Wextra -Werror main.cpp search_panel.cpp search_panel.ui.cpp -o app "
+                             "$(pkg-config --cflags --libs gtkmm-4.0) >build.log 2>&1"), 0)
+        << std::ifstream(dir.path() / "build.log").rdbuf();
+    const int cppRun = runStatus(cd + "./app >run.log 2>&1");
+    if (cppRun != 77) EXPECT_EQ(cppRun, 0) << std::ifstream(dir.path() / "run.log").rdbuf();
+
+    const Code c = generateC(doc, "search_panel.ui", basicGtkTypes());
+    for (const auto& f : c.generated) dir.write(f.name, f.text);
+    dir.write("main.c", "#include \"search_panel-ui.h\"\n"
+                        "static gboolean gone = FALSE;\n"
+                        "static void on_gone(gpointer data, GObject *object) { (void) data; (void) object; gone = TRUE; }\n"
+                        "int main(void) {\n"
+                        "    if (!gtk_init_check()) return 77;\n"
+                        "    SearchPanelUi *ui = search_panel_ui_new();\n"
+                        "    GtkWidget *panel = GTK_WIDGET(ui->search_panel);\n"
+                        "    g_object_weak_ref(G_OBJECT(panel), on_gone, NULL);\n"
+                        "    if (!g_object_is_floating(panel)) return 1; /* new, like gtk_box_new()'s */\n"
+                        "    GtkWidget *box = g_object_ref_sink(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));\n"
+                        "    gtk_box_append(GTK_BOX(box), panel);\n"
+                        "    if (gone) return 2;\n"
+                        "    gtk_box_remove(GTK_BOX(box), panel);\n"
+                        "    g_object_unref(box);\n"
+                        "    return gone ? 0 : 3;\n"
+                        "}\n");
+    ASSERT_EQ(runStatus(cd + "gcc -std=c17 -Wall -Wextra -Werror main.c search_panel-ui.c -o capp "
+                             "$(pkg-config --cflags --libs gtk4) >build.log 2>&1"), 0)
+        << std::ifstream(dir.path() / "build.log").rdbuf();
+    const int cRun = runStatus(cd + "./capp >run.log 2>&1");
+    if (cRun != 77) EXPECT_EQ(cRun, 0) << std::ifstream(dir.path() / "run.log").rdbuf();
+}
+
 // The generated code compiles and links against the real libraries (where they're installed).
 TEST(UiCodegen, GeneratedGtkmmCodeBuilds) {
     if (!hasPkgConfig("gtkmm-4.0")) GTEST_SKIP() << "gtkmm-4.0 development files aren't installed";
@@ -337,5 +452,5 @@ TEST(UiCodegen, KevCppsOwnDesignsMatchTheirCode) {
             << code.filename() << " is older than " << entry.path().filename() << ": open the .ui in Kev-C++ and save it";
         ++checked;
     }
-    EXPECT_GE(checked, 1); // the splash, at least
+    EXPECT_GE(checked, 19); // G4: the splash, the dialogs (step 2) and the panels (step 3), at least
 }

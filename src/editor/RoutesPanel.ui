@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkBox" id="RoutesPanel">
+    <property name="orientation">vertical</property>
+    <child>
+      <object class="GtkBox">
+        <property name="spacing">4</property>
+        <property name="margin-start">4</property>
+        <property name="margin-end">4</property>
+        <property name="margin-top">4</property>
+        <property name="margin-bottom">4</property>
+        <child>
+          <object class="GtkSearchEntry" id="filter_">
+            <property name="hexpand">true</property>
+            <property name="placeholder-text">Filter routes and files</property>
+            <property name="tooltip-text">Shows the routes whose URL, files or exports hold every word typed here</property>
+            <signal name="search-changed" handler="on_filter_search_changed"/>
+            <signal name="stop-search" handler="on_filter_stop_search"/>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="newRoute_">
+            <property name="icon-name">list-add-symbolic</property>
+            <property name="tooltip-text">New Route… (a +page.svelte and +page.ts)</property>
+            <signal name="clicked" handler="on_new_route_clicked"/>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkScrolledWindow">
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkListBox" id="list_">
+            <property name="activate-on-single-click">false</property>
+            <child type="placeholder">
+              <object class="GtkLabel" id="message_">
+                <property name="label">Open a SvelteKit project to see its routes.</property>
+                <property name="valign">start</property>
+                <property name="wrap">true</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <property name="margin-top">12</property>
+                <property name="margin-bottom">12</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

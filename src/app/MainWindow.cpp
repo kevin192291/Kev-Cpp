@@ -14,9 +14,12 @@
 #include "lsp/LspBridges.h"
 #include "process/Capture.h"
 #include "project/SourceWatcher.h"
+#include "ui/AboutWindow.h"
 #include "ui/Dialogs.h"
+#include "ui/NewProjectDialog.h"
 #include "ui/NpmPackagesDialog.h"
 #include "ui/ProjectOptionsDialog.h"
+#include "ui/ToolchainWindow.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -151,16 +154,16 @@ MainWindow::MainWindow(Application& app)
     projectTree_.signalSearchDone().connect([this] {
         if (auto* page = currentDocument()) page->focusPage();
     });
-    searchPanel_.signalOpen().connect([this](const fs::path& file, int line, size_t column, size_t length) {
+    searchPanel_->signalOpen().connect([this](const fs::path& file, int line, size_t column, size_t length) {
         if (EditorTab* tab = openFile(file)) tab->selectRange(line, column, length);
     });
-    searchPanel_.signalReplaceInEditor().connect([this](const fs::path& file, const std::string& text) {
+    searchPanel_->signalReplaceInEditor().connect([this](const fs::path& file, const std::string& text) {
         if (auto* tab = dynamic_cast<EditorTab*>(findDocument(file))) tab->replaceText(text);
     });
-    searchPanel_.signalDone().connect([this] {
+    searchPanel_->signalDone().connect([this] {
         if (auto* page = currentDocument()) page->focusPage();
     });
-    searchPanel_.setUnsavedText([this] { return unsavedEditorText(); });
+    searchPanel_->setUnsavedText([this] { return unsavedEditorText(); });
     quickSearch_.setUnsavedText([this] { return unsavedEditorText(); });
     quickSearch_.signalOpenFile().connect([this](const fs::path& file) { openDocument(file); });
     quickSearch_.signalOpenMatch().connect([this](const fs::path& file, int line, size_t column, size_t length) {
@@ -170,27 +173,27 @@ MainWindow::MainWindow(Application& app)
     quickSearch_.signalDone().connect([this] {
         if (auto* page = currentDocument()) page->focusPage();
     });
-    routesPanel_.signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
-    routesPanel_.signalOpenInBrowser().connect([this](const std::string& url) { openRoute(url); });
-    routesPanel_.signalNewRoute().connect([this] { newRoute(); });
-    envPanel_.signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
-    testsPanel_.signalRunAll().connect([this](TestRunner runner) { runTests(runner); });
-    testsPanel_.signalRunFailed().connect([this] {
+    routesPanel_->signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
+    routesPanel_->signalOpenInBrowser().connect([this](const std::string& url) { openRoute(url); });
+    routesPanel_->signalNewRoute().connect([this] { newRoute(); });
+    envPanel_->signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
+    testsPanel_->signalRunAll().connect([this](TestRunner runner) { runTests(runner); });
+    testsPanel_->signalRunFailed().connect([this] {
         std::vector<fs::path> files;
         for (const auto& c : lastFailed_)
             if (std::find(files.begin(), files.end(), c.file) == files.end()) files.push_back(c.file);
         runTests(lastRunner_, {}, {}, 0, files);
     });
-    testsPanel_.signalRunOne().connect([this](const TestCase& c) {
+    testsPanel_->signalRunOne().connect([this](const TestCase& c) {
         runTests(lastRunner_, c.file, lastRunner_ == TestRunner::Vitest ? c.fullName : std::string(), c.line);
     });
-    testsPanel_.signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
-    tracesPanel_.signalClear().connect([this] {
+    testsPanel_->signalOpen().connect([this](const fs::path& file, int line) { openFile(file, line); });
+    tracesPanel_->signalClear().connect([this] {
         traces_.clear();
-        tracesPanel_.setTraces(traces_);
+        tracesPanel_->setTraces(traces_);
     });
-    depsPanel_.signalRefresh().connect([this] { refreshDependencies(); });
-    depsPanel_.signalOpenPackage().connect([this](const std::string& name) {
+    depsPanel_->signalRefresh().connect([this] { refreshDependencies(); });
+    depsPanel_->signalOpenPackage().connect([this](const std::string& name) {
         if (folder_.empty()) return;
         std::ifstream in(folder_ / "package.json");
         std::string text;
@@ -204,7 +207,7 @@ MainWindow::MainWindow(Application& app)
         }
         openFile(folder_ / "package.json", found);
     });
-    envPanel_.signalEditEnv().connect([this] {
+    envPanel_->signalEditEnv().connect([this] {
         if (folder_.empty()) return;
         const fs::path env = folder_ / ".env";
         std::error_code ec;
@@ -221,11 +224,11 @@ MainWindow::MainWindow(Application& app)
         tab->showDiagnostics(lsp_->diagnosticsFor(tab));
         if (tab == currentEditor()) scheduleSymbolsRefresh();
     });
-    symbols_.signalActivated().connect([this](int line, int utf16) {
+    symbols_->signalActivated().connect([this](int line, int utf16) {
         if (auto* tab = currentEditor()) tab->placeCursor(LspManager::iterAt(GTK_TEXT_BUFFER(tab->buffer()), line, utf16));
     });
     editors_.signal_switch_page().connect([this](Gtk::Widget*, guint) { scheduleSymbolsRefresh(); });
-    debugPanel_.signalFrameActivated().connect([this](int level) {
+    debugPanel_->signalFrameActivated().connect([this](int level) {
         if (jsDebugger_ && jsDebugger_->stopped()) {
             for (const auto& f : frames_)
                 if (f.level == level) showFrame(f);
@@ -238,35 +241,35 @@ MainWindow::MainWindow(Application& app)
             if (f.level == level) showFrame(f);
         refreshDebugViews();
     });
-    debugPanel_.signalBreakpointActivated().connect([this](const fs::path& file, int line) { openFile(file, line); });
-    debugPanel_.signalBreakpointRemoved().connect([this](const fs::path& file, int line) { setBreakpointAt(file, line, std::nullopt); });
-    debugPanel_.signalBreakpointEdit().connect([this](const fs::path& file, int line) {
+    debugPanel_->signalBreakpointActivated().connect([this](const fs::path& file, int line) { openFile(file, line); });
+    debugPanel_->signalBreakpointRemoved().connect([this](const fs::path& file, int line) { setBreakpointAt(file, line, std::nullopt); });
+    debugPanel_->signalBreakpointEdit().connect([this](const fs::path& file, int line) {
         auto f = breakpoints_.find(file);
         if (f == breakpoints_.end() || !f->second.count(line)) return;
         if (f->second[line].kind == BreakKind::Live) promptLive(file, line);
         else promptConditional(file, line);
     });
-    debugPanel_.signalValueWatchRemoved().connect([this](const std::string& expression) { removeValueWatch(expression); });
-    debugPanel_.signalConsoleCommand().connect([this](const std::string& command) {
+    debugPanel_->signalValueWatchRemoved().connect([this](const std::string& expression) { removeValueWatch(expression); });
+    debugPanel_->signalConsoleCommand().connect([this](const std::string& command) {
         if (jsDebugger_) {
             // Evaluated in the paused frame, like the browser's console.
             const int frameId = jsFrames_.empty() ? 0 : jsFrames_.front().id;
-            debugPanel_.appendConsole("> " + command + "\n");
+            debugPanel_->appendConsole("> " + command + "\n");
             jsDebugger_->evaluate(command, frameId, "repl", [this](std::optional<dap::Variable> v, std::string error) {
-                debugPanel_.appendConsole((v ? v->value : "Error: " + error) + "\n");
+                debugPanel_->appendConsole((v ? v->value : "Error: " + error) + "\n");
             });
             return;
         }
         if (debugger_) debugger_->consoleCommand(command);
-        else debugPanel_.appendConsole("Not debugging. Press F5 to start.\n");
+        else debugPanel_->appendConsole("Not debugging. Press F5 to start.\n");
     });
-    watches_.signalChanged().connect([this] {
+    watches_->signalChanged().connect([this] {
         saveProjectState();
         if (jsDebugger_ && jsDebugger_->stopped()) refreshJsViews(-1);
         else if (debugger_ && debugger_->stopped()) refreshDebugViews();
-        else watches_.showPlaceholders();
+        else watches_->showPlaceholders();
     });
-    compilerPanel_.signalActivated().connect([this](const Diagnostic& d) {
+    compilerPanel_->signalActivated().connect([this](const Diagnostic& d) {
         if (d.hasLocation()) openFile(d.file, d.line, d.column);
     });
     build_.signalLine().connect(sigc::mem_fun(*this, &MainWindow::onBuildLine));
@@ -798,9 +801,9 @@ Gtk::Widget& MainWindow::buildLeftDock() {
     leftDock_.add_css_class("kevc-compact-tabs");
     leftDock_.append_page(projectTree_, *makeIconLabel("kevc-project", "Project"));
     // Next to the Project tab and its file search: finding things is all in one corner.
-    leftDock_.append_page(searchPanel_, *makeIconLabel("kevc-find-in-files", "Search"));
-    leftDock_.append_page(symbols_, *makeIconLabel("kevc-class", "Classes"));
-    leftDock_.append_page(watches_, *makeIconLabel("kevc-watch", "Debug"));
+    leftDock_.append_page(*searchPanel_, *makeIconLabel("kevc-find-in-files", "Search"));
+    leftDock_.append_page(*symbols_, *makeIconLabel("kevc-class", "Classes"));
+    leftDock_.append_page(*watches_, *makeIconLabel("kevc-watch", "Debug"));
     leftDock_.set_size_request(180, -1);
     // After the switch (the current page isn't updated yet while switch-page runs).
     leftDock_.signal_switch_page().connect(
@@ -976,16 +979,16 @@ Gtk::Widget& MainWindow::buildBottomDock() {
     // Every panel can be dragged to the right dock or out into its own window, or moved from the
     // menu on its tab.
     docks_ = std::make_unique<DockManager>(*this, bottomDock_, rightDock_, rightPaned_);
-    docks_->add("compiler", "Compiler", compilerPanel_, "kevc-error-list");
+    docks_->add("compiler", "Compiler", *compilerPanel_, "kevc-error-list");
     docks_->add("compile-log", "Compile Log", *logScroller, "kevc-compile");
     docks_->add("run", "Run", runConsole_, "kevc-run");
-    docks_->add("debug", "Debug", debugPanel_, "kevc-debug");
+    docks_->add("debug", "Debug", *debugPanel_, "kevc-debug");
     docks_->add("terminal", "Terminal", shell_, "kevc-terminal");
     docks_->add("dev-server", "Dev Server", buildServerPage(), "kevc-globe");
-    docks_->add("env", "Environment", envPanel_, "kevc-const-variable");
-    docks_->add("tests", "Tests", testsPanel_, "kevc-bool-variable");
-    docks_->add("traces", "Traces", tracesPanel_, "kevc-call-stack");
-    docks_->add("deps", "Dependencies", depsPanel_, "kevc-workspace");
+    docks_->add("env", "Environment", *envPanel_, "kevc-const-variable");
+    docks_->add("tests", "Tests", *testsPanel_, "kevc-bool-variable");
+    docks_->add("traces", "Traces", *tracesPanel_, "kevc-call-stack");
+    docks_->add("deps", "Dependencies", *depsPanel_, "kevc-workspace");
     bottomDock_.set_size_request(-1, 120);
     docks_->acceptFloatingDrops(root_);
     docks_->signalClosedChanged().connect([this](const std::string& id, bool closed, bool byUser) {
@@ -1022,7 +1025,7 @@ void MainWindow::openPath(const fs::path& path) {
 
 void MainWindow::newProject() {
     const fs::path location = session_ ? session_->root().parent_path() : defaultProjectLocation();
-    auto* dialog = new NewProjectDialog(*this, location,
+    auto* dialog = NewProjectDialog::create(*this, location,
         [this](const std::string& name, const fs::path& parent, ProjectTemplate tmpl) -> Glib::ustring {
             if (tmpl == ProjectTemplate::SvelteKit) return createSvelteKitApp(name, parent);
             try {
@@ -1109,7 +1112,7 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     watcher_.reset();
     collector_.reset();
     traces_.clear();
-    tracesPanel_.setTraces(traces_);
+    tracesPanel_->setTraces(traces_);
     session_ = std::move(session);
     folder_ = session_->root();
     restoreProjectState();
@@ -1137,7 +1140,7 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
         }
     }
     projectTree_.setRoot(folder_);
-    searchPanel_.setRoot(folder_);
+    searchPanel_->setRoot(folder_);
     quickSearch_.setRoot(folder_);
     shell_.startShell(folder_);
     updateTitle();
@@ -1182,12 +1185,12 @@ void MainWindow::closeProject() {
         valueWatches_.clear();
         clearLiveValues();
         updateBreakpointsPanel();
-        watches_.setExpressions({});
+        watches_->setExpressions({});
         watcher_.reset();
         collector_.reset();
         traces_.clear();
-        tracesPanel_.setTraces(traces_);
-        compilerPanel_.clear(); // its errors point into the project
+        tracesPanel_->setTraces(traces_);
+        compilerPanel_->clear(); // its errors point into the project
         compileLog_.get_buffer()->set_text("");
 
         session_.reset();
@@ -1197,7 +1200,7 @@ void MainWindow::closeProject() {
         refreshKit(); // the Routes tab goes
         lsp_->setWorkspace({}, nullptr);
         projectTree_.setRoot({});
-        searchPanel_.setRoot({});
+        searchPanel_->setRoot({});
         quickSearch_.setRoot({});
         watchGit(); // with no folder: forgets the repository and its icons
         // The Terminal tab keeps its shell: something may be running in it.
@@ -1222,7 +1225,7 @@ void MainWindow::setPlainFolder(const fs::path& root) {
     watcher_.reset();
     collector_.reset();
     traces_.clear();
-    tracesPanel_.setTraces(traces_);
+    tracesPanel_->setTraces(traces_);
     session_.reset();
     folder_ = root;
     restoreProjectState();
@@ -1230,7 +1233,7 @@ void MainWindow::setPlainFolder(const fs::path& root) {
     refreshKit();
     lsp_->setWorkspace(folder_, nullptr);
     projectTree_.setRoot(folder_);
-    searchPanel_.setRoot(folder_);
+    searchPanel_->setRoot(folder_);
     quickSearch_.setRoot(folder_);
     shell_.startShell(folder_);
     updateTitle();
@@ -1304,9 +1307,7 @@ void MainWindow::openDocument(const fs::path& file) {
 void MainWindow::addDocumentPage(DocumentPage& page) {
     if (welcomePage_) {
         editors_.remove_page(*welcomePage_);
-        welcomePage_ = nullptr;
-        welcomeLists_ = nullptr;
-        welcomeRows_.clear();
+        welcomePage_.reset();
     }
     const int index = editors_.append_page(page.pageWidget(), page.tabLabel());
     editors_.set_tab_reorderable(page.pageWidget(), true);
@@ -1672,124 +1673,14 @@ void MainWindow::removeEditor(DocumentPage* page) {
 
 void MainWindow::showWelcome() {
     if (welcomePage_) return;
-    auto* shortcuts = Gtk::make_managed<Gtk::Label>("Welcome to Kev-C++\n\n"
-                                                    "Ctrl+Shift+N  new project\n"
-                                                    "Ctrl+O        open a project or folder\n"
-                                                    "Ctrl+P        search files and text\n"
-                                                    "Ctrl+Shift+F  find in all files\n"
-                                                    "Ctrl+I        auto format the file or selection\n"
-                                                    "F9 / F10 / F11  compile / run / compile & run\n"
-                                                    "F5            debug   (F6 step over, F7 step into, F8 continue)");
-    shortcuts->add_css_class("dim-label");
-    shortcuts->set_xalign(0);
-    shortcuts->set_valign(Gtk::Align::START);
-    shortcuts->set_margin_top(20); // level with the first list, under its heading
-
-    welcomeLists_ = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
-    welcomeLists_->set_size_request(380, -1);
-    welcomeLists_->set_valign(Gtk::Align::START);
-    welcomeLists_->add_css_class("kevc-welcome-projects");
-
-    auto* columns = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 48);
-    columns->set_halign(Gtk::Align::CENTER);
-    columns->set_valign(Gtk::Align::CENTER);
-    columns->set_margin(24);
-    columns->append(*welcomeLists_);
-    columns->append(*shortcuts);
-    auto* scroller = Gtk::make_managed<Gtk::ScrolledWindow>();
-    scroller->set_child(*columns);
-    welcomePage_ = scroller;
+    welcomePage_ = WelcomePage::create(recent_);
+    welcomePage_->signalOpen().connect([this](const fs::path& folder) { openPath(folder); });
+    welcomePage_->signalStatus().connect([this](const Glib::ustring& text) { setStatus(text); });
     editors_.append_page(*welcomePage_, "Welcome");
-    refreshWelcome();
 }
 
 void MainWindow::refreshWelcome() {
-    if (!welcomeLists_) return;
-    while (Gtk::Widget* child = welcomeLists_->get_first_child()) welcomeLists_->remove(*child);
-    welcomeRows_.clear();
-    std::error_code ec;
-    auto section = [&](const Glib::ustring& title, const std::vector<fs::path>& folders, bool pinned) {
-        if (folders.empty()) return;
-        auto* heading = Gtk::make_managed<Gtk::Label>();
-        heading->set_markup("<b>" + Glib::Markup::escape_text(title) + "</b>");
-        heading->set_xalign(0);
-        heading->set_margin_top(welcomeLists_->get_first_child() ? 12 : 0);
-        welcomeLists_->append(*heading);
-        auto* list = Gtk::make_managed<Gtk::ListBox>();
-        list->set_selection_mode(Gtk::SelectionMode::NONE);
-        list->add_css_class("kevc-welcome-list");
-        for (const auto& folder : folders) list->append(welcomeRow(folder, pinned, *list));
-        list->signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
-            auto it = welcomeRows_.find(row);
-            if (it == welcomeRows_.end()) return;
-            const fs::path folder = it->second;
-            std::error_code missing;
-            if (!fs::is_directory(folder, missing)) {
-                setStatus(folder.string() + " no longer exists");
-                return;
-            }
-            openPath(folder);
-        });
-        welcomeLists_->append(*list);
-    };
-    section("Pinned", recent_.pinned(), true);
-    std::vector<fs::path> recent;
-    for (const auto& folder : recent_.recent())
-        if (fs::is_directory(folder, ec)) recent.push_back(folder); // gone folders aren't worth a row
-    section("Recent", recent, false);
-    if (!welcomeLists_->get_first_child()) {
-        auto* hint = Gtk::make_managed<Gtk::Label>("Projects and folders you open are listed here.\n"
-                                                   "Pin one to keep it at the top.");
-        hint->add_css_class("dim-label");
-        hint->set_xalign(0);
-        welcomeLists_->append(*hint);
-    }
-}
-
-Gtk::Widget& MainWindow::welcomeRow(const fs::path& folder, bool pinned, Gtk::ListBox&) {
-    std::error_code ec;
-    const bool exists = fs::is_directory(folder, ec);
-    auto* pin = Gtk::make_managed<Gtk::Button>();
-    pin->set_icon_name(pinned ? "kevc-pinned" : "kevc-unpinned");
-    pin->set_has_frame(false);
-    pin->set_valign(Gtk::Align::CENTER);
-    pin->set_tooltip_text(pinned ? "Unpin" : "Pin, to keep it at the top of this list");
-    pin->add_css_class("kevc-pin");
-    pin->signal_clicked().connect([this, folder, pinned] {
-        recent_.setPinned(folder, !pinned);
-        // Later: rebuilding the list now would destroy this button inside its own handler.
-        Glib::signal_idle().connect_once(sigc::track_obj([this] { refreshWelcome(); }, *this));
-    });
-
-    // ~ for the home folder, so the paths stay short.
-    std::string shown = folder.string();
-    if (const char* home = std::getenv("HOME"); home && *home && shown.rfind(std::string(home) + "/", 0) == 0)
-        shown = "~" + shown.substr(std::strlen(home));
-    auto* name = Gtk::make_managed<Gtk::Label>();
-    name->set_markup("<b>" + Glib::Markup::escape_text(folder.filename().string()) + "</b>" +
-                     (exists ? "" : "  <span alpha=\"60%\">(not found)</span>"));
-    name->set_xalign(0);
-    name->set_ellipsize(Pango::EllipsizeMode::END);
-    name->set_max_width_chars(48);
-    auto* path = Gtk::make_managed<Gtk::Label>(shown);
-    path->set_xalign(0);
-    path->set_ellipsize(Pango::EllipsizeMode::MIDDLE);
-    path->set_max_width_chars(48); // long paths are shortened in the middle, not widening the list
-    path->add_css_class("dim-label");
-    auto* text = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
-    text->set_hexpand(true);
-    text->append(*name);
-    text->append(*path);
-
-    auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 6);
-    box->set_margin(4);
-    box->append(*pin);
-    box->append(*text);
-    auto* row = Gtk::make_managed<Gtk::ListBoxRow>();
-    row->set_child(*box);
-    row->set_tooltip_text(exists ? "Open " + folder.string() : folder.string() + " no longer exists");
-    welcomeRows_[row] = folder;
-    return *row;
+    if (welcomePage_) welcomePage_->refresh();
 }
 
 void MainWindow::rememberFolder(const fs::path& root) {
@@ -1908,8 +1799,8 @@ Glib::ustring MainWindow::selectedLineText() {
 void MainWindow::findInFiles(Glib::ustring text) {
     if (text.empty()) text = selectedLineText();
     leftDock_.set_visible(true);
-    leftDock_.set_current_page(leftDock_.page_num(searchPanel_));
-    searchPanel_.focusSearch(text);
+    leftDock_.set_current_page(leftDock_.page_num(*searchPanel_));
+    searchPanel_->focusSearch(text);
 }
 
 void MainWindow::focusQuickSearch() {
@@ -2031,21 +1922,21 @@ void MainWindow::startBuild(BuildAction action, Task task, std::function<void(bo
     auto commands = buildCommands(session_->project(), session_->root(), action, buildConfig_, buildTools());
 
     compileLog_.get_buffer()->set_text("");
-    compilerPanel_.clear();
+    compilerPanel_->clear();
     const bool web = session_->project().kind == ProjectKind::WebTs;
     if (web) refreshWebProject(); // package.json may have changed since the project was opened
     if (commands.empty()) {
         if (web && action != BuildAction::Clean && web_.svelte()) {
-            compilerPanel_.setEmptyText("Nothing to check yet: svelte-check isn't installed.");
+            compilerPanel_->setEmptyText("Nothing to check yet: svelte-check isn't installed.");
             appendLog("Checking a Svelte project runs svelte-check from node_modules. Install the dependencies first "
                       "(Project → Install Dependencies).\n");
             setStatus("svelte-check isn't installed: Project → Install Dependencies");
         } else if (web && action != BuildAction::Clean) {
-            compilerPanel_.setEmptyText("Nothing to type-check: the project has no tsconfig.json.");
+            compilerPanel_->setEmptyText("Nothing to type-check: the project has no tsconfig.json.");
             appendLog("Type checking runs `tsc --noEmit` and needs a tsconfig.json in the project folder.\n");
             setStatus("No tsconfig.json: skipped type checking");
         } else {
-            compilerPanel_.setEmptyText("Nothing to clean.");
+            compilerPanel_->setEmptyText("Nothing to clean.");
             appendLog("Nothing to clean: this configuration has not been built yet.\n");
             setStatus("Nothing to clean");
         }
@@ -2075,7 +1966,7 @@ void MainWindow::runCommands(std::vector<Command> commands, const std::string& h
         return;
     }
     const fs::path base = folder_.empty() ? (commands.empty() ? fs::path{} : commands.front().cwd) : folder_;
-    compilerPanel_.setEmptyText(heading + "…");
+    compilerPanel_->setEmptyText(heading + "…");
     parser_ = std::make_unique<DiagnosticParser>(base);
     afterBuild_ = std::move(then);
     doneLabel_ = std::move(doneLabel);
@@ -2095,7 +1986,7 @@ void MainWindow::onBuildLine(const std::string& line, bool isCommand) {
     }
     Glib::ustring tag;
     for (const Diagnostic& d : parser_->feed(line)) {
-        compilerPanel_.add(d);
+        compilerPanel_->add(d);
         if (d.severity == Diagnostic::Severity::Error) tag = "error";
         else if (d.severity == Diagnostic::Severity::Warning && tag.empty()) tag = "warning";
     }
@@ -2129,24 +2020,24 @@ void MainWindow::onBuildFinished(bool success) {
     status << std::fixed << std::setprecision(1);
     if (!doneLabel_.empty()) {
         status << doneLabel_ << (success ? " finished" : " failed") << " (" << seconds << " s)";
-        compilerPanel_.setEmptyText(success ? doneLabel_ + " finished." : doneLabel_ + " failed. See the Compile Log.");
+        compilerPanel_->setEmptyText(success ? doneLabel_ + " finished." : doneLabel_ + " failed. See the Compile Log.");
         doneLabel_.clear();
     } else if (buildAction_ == BuildAction::Clean) {
         status << (success ? "Clean finished" : "Clean failed");
-        compilerPanel_.setEmptyText(success ? "Cleaned." : "Clean failed. See the Compile Log.");
+        compilerPanel_->setEmptyText(success ? "Cleaned." : "Clean failed. See the Compile Log.");
     } else if (session_ && session_->project().kind == ProjectKind::WebTs) {
         status << (success ? "Check passed" : "Check failed: ") << (success ? "" : std::to_string(errors) + " errors")
                << " (" << seconds << " s)";
-        compilerPanel_.setEmptyText(success ? "No type errors." : "Type check failed. See the Compile Log for details.");
+        compilerPanel_->setEmptyText(success ? "No type errors." : "Type check failed. See the Compile Log for details.");
     } else if (success) {
         status << "Build succeeded: " << errors << " errors, " << warnings << " warnings in " << seconds << " s";
-        compilerPanel_.setEmptyText("Build succeeded with no errors or warnings.");
+        compilerPanel_->setEmptyText("Build succeeded with no errors or warnings.");
     } else {
         status << "Build failed: " << errors << " errors, " << warnings << " warnings";
-        compilerPanel_.setEmptyText("Build failed. See the Compile Log for details.");
+        compilerPanel_->setEmptyText("Build failed. See the Compile Log for details.");
     }
     setStatus(status.str());
-    if (errors > 0 || (warnings > 0 && success)) showBottomPage(compilerPanel_);
+    if (errors > 0 || (warnings > 0 && success)) showBottomPage(*compilerPanel_);
 
     if (auto then = std::move(afterBuild_)) then(success);
     updateToolbar(); // after `then`, which may have started the program or the debugger
@@ -2170,7 +2061,7 @@ void MainWindow::runProgram(Task task) {
         // Run = serve the project and open it in the browser.
         if (devServer_ && devServer_->ready() && devServer_->root() == session_->root()) openInBrowser();
         else startDevServer(true);
-        showBottomPage(serverPage_);
+        showBottomPage(*serverPanel_);
         return;
     }
     const auto output = runnableOutput(session_->project(), session_->root(), currentConfig());
@@ -2292,50 +2183,30 @@ void MainWindow::updateToolbar() {
 // TypeScript dev server
 
 Gtk::Widget& MainWindow::buildServerPage() {
-    auto* bar = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-    bar->set_margin(6);
-    serverStatus_.set_xalign(0.0f);
-    serverStatus_.set_hexpand(true);
-    serverStatus_.set_ellipsize(Pango::EllipsizeMode::END);
-    serverOpen_.signal_clicked().connect([this] { openInBrowser(); });
-    serverToggle_.setLabels("Start", "Stop");
-    serverToggle_.signalStart().connect([this] { startDevServer(false); });
-    serverToggle_.signalStop().connect([this] {
+    serverPanel_->signalOpen().connect([this] { openInBrowser(); });
+    serverPanel_->signalStart().connect([this] { startDevServer(false); });
+    serverPanel_->signalStop().connect([this] {
         if (devServer_) devServer_->stop();
     });
-    bar->append(serverStatus_);
-    bar->append(serverOpen_);
-    bar->append(serverToggle_);
-
-    serverLog_.set_editable(false);
-    serverLog_.set_cursor_visible(false);
-    serverLog_.set_monospace(true);
-    serverLog_.add_css_class("kevc-log");
-    auto* scroller = Gtk::make_managed<Gtk::ScrolledWindow>();
-    scroller->set_child(serverLog_);
-    scroller->set_vexpand(true);
-
-    serverPage_.append(*bar);
-    serverPage_.append(*Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL));
-    serverPage_.append(*scroller);
     updateServerPage();
-    return serverPage_;
+    return *serverPanel_;
 }
 
 void MainWindow::updateServerPage() {
     const bool running = devServer_ && devServer_->running();
     const bool ready = running && devServer_->ready();
-    serverToggle_.setRunning(running);
+    serverPanel_->setState(running, ready);
     updateToolbar();
-    serverOpen_.set_sensitive(ready);
-    if (ready) serverStatus_.set_markup((devServer_->label() == "Vite" ? "Vite is serving <b>" : "Serving <b>") +
-                                        Glib::Markup::escape_text(devServer_->root().filename().string()) +
-                                        "</b> at <a href=\"" + Glib::Markup::escape_text(devServer_->url()) + "\">" +
-                                        Glib::Markup::escape_text(devServer_->url()) + "</a> (this computer only)");
-    else if (running) serverStatus_.set_text("Starting…");
-    else if (web_.usesVite()) serverStatus_.set_text("Stopped. Runs this project's Vite dev server on 127.0.0.1.");
-    else serverStatus_.set_text("Stopped. Serves the open folder on http://127.0.0.1:" +
-                                std::to_string(DevServer::kDefaultPort) + "/ with live reload.");
+    if (ready)
+        serverPanel_->setStatusMarkup((devServer_->label() == "Vite" ? "Vite is serving <b>" : "Serving <b>") +
+                                      Glib::Markup::escape_text(devServer_->root().filename().string()) +
+                                      "</b> at <a href=\"" + Glib::Markup::escape_text(devServer_->url()) + "\">" +
+                                      Glib::Markup::escape_text(devServer_->url()) + "</a> (this computer only)");
+    else if (running) serverPanel_->setStatusText("Starting…");
+    else if (web_.usesVite()) serverPanel_->setStatusText("Stopped. Runs this project's Vite dev server on 127.0.0.1.");
+    else
+        serverPanel_->setStatusText("Stopped. Serves the open folder on http://127.0.0.1:" +
+                                    std::to_string(DevServer::kDefaultPort) + "/ with live reload.");
 }
 
 void MainWindow::toggleDevServer() {
@@ -2389,13 +2260,7 @@ void MainWindow::startDevServer(bool openBrowserWhenReady) {
 
     devServer_ = std::make_unique<DevServer>();
     serverWasReady_ = false;
-    devServer_->signalLog().connect([this](const std::string& line) {
-        auto buffer = serverLog_.get_buffer();
-        buffer->insert(buffer->end(), line + "\n");
-        auto end = buffer->create_mark(buffer->end());
-        serverLog_.scroll_to(end);
-        buffer->delete_mark(end);
-    });
+    devServer_->signalLog().connect([this](const std::string& line) { serverPanel_->appendLog(line + "\n"); });
     devServer_->signalReady().connect([this](const std::string& url) {
         serverWasReady_ = true;
         updateServerPage();
@@ -2410,16 +2275,16 @@ void MainWindow::startDevServer(bool openBrowserWhenReady) {
         if (status == DevServer::kExitPortInUse && label != "Vite") {
             setStatus("Port " + std::to_string(DevServer::kDefaultPort) +
                       " is already in use. Stop whatever is using it, then press Start in the Dev Server tab.");
-            showBottomPage(serverPage_);
+            showBottomPage(*serverPanel_);
         } else if (!serverWasReady_ && status != 0) {
             setStatus((label == "Vite" ? std::string("Vite") : std::string("The dev server")) +
                       " stopped before it was ready (exit status " + std::to_string(status) + "). See the Dev Server tab.");
-            showBottomPage(serverPage_);
+            showBottomPage(*serverPanel_);
         } else {
             setStatus(label == "Vite" ? "Vite stopped" : "Dev server stopped");
         }
     });
-    serverLog_.get_buffer()->set_text("");
+    serverPanel_->clearLog();
     try {
         // node's folder first, so `npm run dev` and its scripts find the same node as the IDE.
         devServer_->start(argv, folder_, ready, label, fs::path(node).parent_path().string(),
@@ -2468,7 +2333,7 @@ void MainWindow::refreshWebProject() {
         scriptsMenu_->append_item(item);
     }
     if (web_.scripts.empty()) scriptsMenu_->append("No package.json scripts", "win.no-scripts"); // no such action: greyed out
-    testsPanel_.setRunners(session_ && session_->project().kind == ProjectKind::WebTs ? testRunners(session_->root())
+    testsPanel_->setRunners(session_ && session_->project().kind == ProjectKind::WebTs ? testRunners(session_->root())
                                                                                        : std::vector<TestRunner>{});
 }
 
@@ -2478,7 +2343,7 @@ void MainWindow::installDependencies() {
         return;
     }
     compileLog_.get_buffer()->set_text("");
-    compilerPanel_.clear();
+    compilerPanel_->clear();
     buildAction_ = BuildAction::Build;
     runCommands({{web_.installCommand(), session_->root()}},
                 "Installing " + session_->project().name + "'s packages (" + web_.packageManagerName() + " install)",
@@ -2514,7 +2379,7 @@ void MainWindow::showNpmPackages() {
         setStatus("Packages are for web projects with a package.json");
         return;
     }
-    auto* dialog = new NpmPackagesDialog(*this, session_->root(), web_.packageManagerName()); // deletes itself
+    auto* dialog = NpmPackagesDialog::create(*this, session_->root(), web_.packageManagerName()); // deletes itself
     dialog->signalSaved().connect([this](bool install) {
         refreshWebProject();
         updateTitle();
@@ -2564,20 +2429,20 @@ void MainWindow::runScript(const std::string& name) {
 void MainWindow::refreshKit() {
     kitRefresh_.disconnect();
     const bool kit = web_.flavor == WebFlavor::SvelteKit;
-    const int page = leftDock_.page_num(routesPanel_);
+    const int page = leftDock_.page_num(*routesPanel_);
     if (!kit) {
-        if (page >= 0) leftDock_.remove_page(routesPanel_);
-        envPanel_.showMessage("Open a SvelteKit project to see its environment variables.");
+        if (page >= 0) leftDock_.remove_page(*routesPanel_);
+        envPanel_->showMessage("Open a SvelteKit project to see its environment variables.");
         return;
     }
     if (page < 0) {
         // Show it when a SvelteKit project opens, so it's noticed.
-        leftDock_.append_page(routesPanel_, *makeIconLabel("kevc-svelte-file", "Routes"));
-        leftDock_.set_current_page(leftDock_.page_num(routesPanel_));
+        leftDock_.append_page(*routesPanel_, *makeIconLabel("kevc-svelte-file", "Routes"));
+        leftDock_.set_current_page(leftDock_.page_num(*routesPanel_));
         fitLeftTabs();
     }
-    routesPanel_.setApp(kit::scan(folder_), folder_);
-    envPanel_.setReport(kit::envReport(folder_), folder_);
+    routesPanel_->setApp(kit::scan(folder_), folder_);
+    envPanel_->setReport(kit::envReport(folder_), folder_);
 }
 
 void MainWindow::scheduleKitRefresh() {
@@ -2651,25 +2516,25 @@ void MainWindow::runTests(TestRunner runner, const fs::path& file, const std::st
     auto argv = testCommand(runner, root, app_.toolchain().pathOf("node").string(), report, file, title, line);
     for (const auto& f : files) argv.push_back(f.lexically_relative(root).generic_string());
     lastRunner_ = runner;
-    testsPanel_.setBusy(true);
+    testsPanel_->setBusy(true);
     compileLog_.get_buffer()->set_text("");
-    compilerPanel_.clear();
+    compilerPanel_->clear();
     buildAction_ = BuildAction::Build;
     const std::string what = std::string(runnerName(runner)) + (title.empty() ? (files.empty() ? "" : " (failed tests)") : ": " + title);
     runCommands({{argv, root}}, "Running " + what, Task::None,
                 [this, runner, report, root](bool) {
-                    testsPanel_.setBusy(false);
+                    testsPanel_->setBusy(false);
                     std::ifstream in(report);
                     std::stringstream text;
                     text << in.rdbuf();
                     TestRun run;
                     if (text.str().empty()) run.error = "The test runner wrote no report: see the Compile Log.";
                     else run = runner == TestRunner::Vitest ? parseVitestJson(text.str()) : parsePlaywrightJson(text.str(), root);
-                    testsPanel_.setRun(run, root);
+                    testsPanel_->setRun(run, root);
                     lastFailed_.clear();
                     for (const auto& c : run.cases)
                         if (c.status == TestCase::Status::Failed) lastFailed_.push_back(c);
-                    showBottomPage(testsPanel_);
+                    showBottomPage(*testsPanel_);
                     setStatus(run.error.empty() ? "Tests: " + std::to_string(run.passed) + " passed, " + std::to_string(run.failed) +
                                                       " failed" + (run.skipped ? ", " + std::to_string(run.skipped) + " skipped" : "")
                                                 : run.error);
@@ -2689,8 +2554,8 @@ std::vector<std::pair<std::string, std::string>> MainWindow::traceEnvironment() 
         collector_->signalLine().connect([this](const std::string& line) {
             if (line.starts_with("KEVC_SPANS ")) {
                 traces_.add(parseOtlpJson(line.substr(11)));
-                tracesPanel_.setTraces(traces_);
-                tracesPanel_.setStatus(std::to_string(traces_.traces().size()) + " traces · collecting at 127.0.0.1:" +
+                tracesPanel_->setTraces(traces_);
+                tracesPanel_->setStatus(std::to_string(traces_.traces().size()) + " traces · collecting at 127.0.0.1:" +
                                        std::to_string(collectorPort_));
             } else if (line.starts_with("KEVC_OTLP_NOTE ")) {
                 setStatus("Traces: " + line.substr(15));
@@ -2703,7 +2568,7 @@ std::vector<std::pair<std::string, std::string>> MainWindow::traceEnvironment() 
             collector_.reset();
             return {};
         }
-        tracesPanel_.setStatus("Collecting at http://127.0.0.1:" + std::to_string(collectorPort_));
+        tracesPanel_->setStatus("Collecting at http://127.0.0.1:" + std::to_string(collectorPort_));
     }
     const std::string endpoint = "http://127.0.0.1:" + std::to_string(collectorPort_);
     return {{"OTEL_EXPORTER_OTLP_ENDPOINT", endpoint},
@@ -2713,15 +2578,15 @@ std::vector<std::pair<std::string, std::string>> MainWindow::traceEnvironment() 
 
 void MainWindow::refreshDependencies() {
     if (!session_ || session_->project().kind != ProjectKind::WebTs || !web_.hasPackageJson) {
-        depsPanel_.showMessage("Open a web project with a package.json.");
+        depsPanel_->showMessage("Open a web project with a package.json.");
         return;
     }
     if (web_.packageManager != PackageManager::Npm) {
-        depsPanel_.showMessage("This project uses " + web_.packageManagerName() +
+        depsPanel_->showMessage("This project uses " + web_.packageManagerName() +
                                "; the Dependencies panel reads npm's reports, which need an npm lockfile.");
         return;
     }
-    depsPanel_.setBusy(true);
+    depsPanel_->setBusy(true);
     struct Results {
         std::string outdated, audit;
         int remaining = 2;
@@ -2729,10 +2594,10 @@ void MainWindow::refreshDependencies() {
     auto results = std::make_shared<Results>();
     auto finish = [this, results] {
         if (--results->remaining) return;
-        depsPanel_.setBusy(false);
+        depsPanel_->setBusy(false);
         const auto outdated = parseNpmOutdated(results->outdated);
         const auto audit = parseNpmAudit(results->audit);
-        depsPanel_.setReports(outdated, audit);
+        depsPanel_->setReports(outdated, audit);
         setStatus("Dependencies: " + std::to_string(outdated.size()) + " outdated, " +
                   std::to_string(audit.vulnerabilities.size()) + " with known vulnerabilities");
     };
@@ -2760,7 +2625,7 @@ Glib::ustring MainWindow::createSvelteKitApp(const std::string& name, const fs::
     if (build_.running()) return "Wait for the running build to finish first.";
     if (!fs::is_directory(parent, ec)) return parent.string() + " isn't a folder.";
     compileLog_.get_buffer()->set_text("");
-    compilerPanel_.clear();
+    compilerPanel_->clear();
     buildAction_ = BuildAction::Build;
     runCommands({{svCreateCommand(name), parent}}, "Creating the SvelteKit app " + name + " with sv (this downloads packages)",
                 Task::None, [this, root](bool ok) {
@@ -2845,7 +2710,7 @@ void MainWindow::startJsDebugging() {
         setStatus("Paused (" + reason + ") in " + (top.name.empty() ? std::string("code") : top.name) +
                   (top.file.empty() ? std::string() : ", " + top.file.filename().string() + ":" + std::to_string(top.line)));
         noteWatchTriggered(reason);
-        showBottomPage(debugPanel_);
+        showBottomPage(*debugPanel_);
         refreshJsViews(-1); // a watch's trap is the top frame: show the code that changed the value
     });
     jsDebugger_->signalLiveHit().connect(sigc::mem_fun(*this, &MainWindow::onLiveHit));
@@ -2863,21 +2728,16 @@ void MainWindow::startJsDebugging() {
         ++stopGeneration_;
         clearExecutionLine();
         lsp_->setHoverEnabled(true);
-        debugPanel_.showMessage("Running…  (Debug → Pause to break in)");
+        debugPanel_->showMessage("Running…  (Debug → Pause to break in)");
         setStatus("Running " + folder_.filename().string() + " under the debugger…");
     });
-    jsDebugger_->signalOutput().connect([this](const std::string& text) {
-        auto buffer = serverLog_.get_buffer();
-        buffer->insert(buffer->end(), stripAnsi(text));
-        auto end = buffer->create_mark(buffer->end());
-        serverLog_.scroll_to(end);
-        buffer->delete_mark(end);
-    });
+    jsDebugger_->signalOutput().connect([this](const std::string& text) { serverPanel_->appendLog(stripAnsi(text)); });
     jsDebugger_->signalServing().connect([this](const std::string& url) {
         jsServerUrl_ = url;
         const bool browser = jsDebugger_ && jsDebugger_->browserAttached() && dap::findChrome(app_.settings().getString("/web/chrome"), Glib::getenv("PATH"));
-        serverStatus_.set_markup("Debugging <b>" + Glib::Markup::escape_text(folder_.filename().string()) + "</b>: Vite at <a href=\"" +
-                                 Glib::Markup::escape_text(url) + "\">" + Glib::Markup::escape_text(url) + "</a>");
+        serverPanel_->setStatusMarkup("Debugging <b>" + Glib::Markup::escape_text(folder_.filename().string()) +
+                                      "</b>: Vite at <a href=\"" + Glib::Markup::escape_text(url) + "\">" +
+                                      Glib::Markup::escape_text(url) + "</a>");
         if (browser) {
             setStatus("Debugging server and browser code: Vite at " + url + " (opened in a separate browser window)");
         } else {
@@ -2894,8 +2754,8 @@ void MainWindow::startJsDebugging() {
         frames_.clear();
         jsServerUrl_.clear();
         resetValueWatchStates();
-        debugPanel_.showMessage(outcome + ". Press F5 to debug again.");
-        watches_.showPlaceholders();
+        debugPanel_->showMessage(outcome + ". Press F5 to debug again.");
+        watches_->showPlaceholders();
         setStatus(outcome);
         updateServerPage();
         // We are inside one of its signals: drop it once that returns.
@@ -2905,11 +2765,11 @@ void MainWindow::startJsDebugging() {
         });
     });
 
-    serverLog_.get_buffer()->set_text("");
-    debugPanel_.clearConsole();
-    debugPanel_.showMessage("Starting js-debug and Vite…");
-    serverStatus_.set_text("Starting Vite under the debugger…");
-    showBottomPage(serverPage_);
+    serverPanel_->clearLog();
+    debugPanel_->clearConsole();
+    debugPanel_->showMessage("Starting js-debug and Vite…");
+    serverPanel_->setStatusText("Starting Vite under the debugger…");
+    showBottomPage(*serverPanel_);
     setStatus(std::string("Starting the debugger") + (options.chrome ? "" : " (server code only: no Chrome or Chromium found)") + "…");
     clearLiveValues();
     jsDebugger_->start(breakpoints_, valueWatchExpressions());
@@ -2938,7 +2798,7 @@ void MainWindow::refreshJsViews(int frameIndex) {
                     index = static_cast<int>(i);
                     break;
                 }
-        debugPanel_.setFrames(frames_, index);
+        debugPanel_->setFrames(frames_, index);
         if (frames.empty()) return;
         const int frameId = frames[std::min<size_t>(static_cast<size_t>(index), frames.size() - 1)].id;
 
@@ -2948,7 +2808,7 @@ void MainWindow::refreshJsViews(int frameIndex) {
             auto dbg = weak.lock();
             if (generation != stopGeneration_ || !dbg) return;
             if (scopes.empty()) {
-                debugPanel_.setLocals({});
+                debugPanel_->setLocals({});
                 return;
             }
             dbg->variables(scopes.front().reference, [this, generation, weak, fetch, scopes](std::vector<dap::Variable> vars) {
@@ -2957,14 +2817,14 @@ void MainWindow::refreshJsViews(int frameIndex) {
                 for (auto& v : vars) rows.push_back(Gtk::make_managed<DapVarNode>(std::move(v), 0, fetch));
                 for (size_t i = 1; i < scopes.size(); ++i)
                     rows.push_back(Gtk::make_managed<DapVarNode>(dap::Variable{scopes[i].name, "…", "scope", scopes[i].reference}, 0, fetch));
-                debugPanel_.setLocals(rows);
+                debugPanel_->setLocals(rows);
             });
         });
 
         // Watches, evaluated in the same frame.
-        const auto exprs = watches_.expressions();
+        const auto exprs = watches_->expressions();
         if (exprs.empty()) {
-            watches_.setRows({});
+            watches_->setRows({});
             return;
         }
         auto results = std::make_shared<std::vector<Gtk::Widget*>>(exprs.size(), nullptr);
@@ -2975,7 +2835,7 @@ void MainWindow::refreshJsViews(int frameIndex) {
                               if (generation != stopGeneration_ || !weak.lock()) return;
                               (*results)[i] = v ? static_cast<Gtk::Widget*>(Gtk::make_managed<DapVarNode>(*v, 0, fetch))
                                                 : DapVarNode::error(name, error);
-                              if (--*remaining == 0) watches_.setRows(*results);
+                              if (--*remaining == 0) watches_->setRows(*results);
                           });
         }
     });
@@ -2991,7 +2851,7 @@ void MainWindow::launchDebugger() {
     debugger_ = std::make_shared<DebugController>(app_.toolchain().pathOf("gdb").string(), *exe, session_->root(), tty);
     debugger_->signalStopped().connect(sigc::mem_fun(*this, &MainWindow::onDebugStopped));
     debugger_->signalFinished().connect(sigc::mem_fun(*this, &MainWindow::onDebugFinished));
-    debugger_->signalConsole().connect([this](const std::string& text) { debugPanel_.appendConsole(text); });
+    debugger_->signalConsole().connect([this](const std::string& text) { debugPanel_->appendConsole(text); });
     debugger_->signalLiveHit().connect(sigc::mem_fun(*this, &MainWindow::onLiveHit));
     debugger_->signalWatchState().connect([this](const std::string& expression, bool armed, const std::string& note) {
         for (auto& w : valueWatches_)
@@ -3007,7 +2867,7 @@ void MainWindow::launchDebugger() {
         ++stopGeneration_;
         clearExecutionLine();
         lsp_->setHoverEnabled(true);
-        debugPanel_.showMessage("Running…  (Debug → Pause to break in)");
+        debugPanel_->showMessage("Running…  (Debug → Pause to break in)");
         setStatus("Running " + session_->project().name + " under the debugger…");
     });
 
@@ -3015,8 +2875,8 @@ void MainWindow::launchDebugger() {
     for (const auto& [file, lines] : breakpoints_)
         for (const auto& [line, bp] : lines)
             if (bp.kind != BreakKind::Live) anyBreakpoint = true;
-    debugPanel_.clearConsole();
-    debugPanel_.showMessage("Starting gdb…");
+    debugPanel_->clearConsole();
+    debugPanel_->showMessage("Starting gdb…");
     showBottomPage(runConsole_);
     setStatus("Debugging " + exe->filename().string() +
               (anyBreakpoint ? "" : " (no breakpoints set: it will run to the end)"));
@@ -3043,7 +2903,7 @@ void MainWindow::onDebugStopped(const StopInfo& info) {
     showFrame(info.frame);
     setStatus(info.description);
     noteWatchTriggered(info.description);
-    showBottomPage(debugPanel_);
+    showBottomPage(*debugPanel_);
     refreshDebugViews();
 }
 
@@ -3067,8 +2927,8 @@ void MainWindow::onDebugFinished(const std::string& outcome) {
     lsp_->setHoverEnabled(true);
     frames_.clear();
     resetValueWatchStates();
-    debugPanel_.showMessage(outcome + ". Press F5 to debug again.");
-    watches_.showPlaceholders();
+    debugPanel_->showMessage(outcome + ". Press F5 to debug again.");
+    watches_->showPlaceholders();
     // gdb reports the exit before the terminal has drawn the program's last output (VTE reads a pty
     // it didn't spawn in batches, more slowly while hidden), so show the Run tab and add the note later.
     showBottomPage(runConsole_);
@@ -3090,7 +2950,7 @@ void MainWindow::refreshDebugViews() {
     debugger_->frames([this, generation, weak](std::vector<StackFrame> frames) {
         if (generation != stopGeneration_ || !weak.lock()) return;
         frames_ = std::move(frames);
-        debugPanel_.setFrames(frames_, weak.lock()->selectedFrame());
+        debugPanel_->setFrames(frames_, weak.lock()->selectedFrame());
     });
 
     // Creates a variable object per expression; once all have answered (and the program hasn't
@@ -3134,9 +2994,9 @@ void MainWindow::refreshDebugViews() {
 
     debugger_->locals([this, generation, weak, evaluateAll](std::vector<std::string> names) {
         if (generation != stopGeneration_ || !weak.lock()) return;
-        evaluateAll("L:", names, [this](std::vector<Gtk::Widget*> rows) { debugPanel_.setLocals(rows); });
+        evaluateAll("L:", names, [this](std::vector<Gtk::Widget*> rows) { debugPanel_->setLocals(rows); });
     });
-    evaluateAll("W:", watches_.expressions(), [this](std::vector<Gtk::Widget*> rows) { watches_.setRows(rows); });
+    evaluateAll("W:", watches_->expressions(), [this](std::vector<Gtk::Widget*> rows) { watches_->setRows(rows); });
 }
 
 bool MainWindow::debugHover(EditorTab* tab, const GtkTextIter& at, std::function<void(GtkWidget*)> show) {
@@ -3307,8 +3167,8 @@ void MainWindow::promptValueWatch() {
                    if (jsDebugger_) jsDebugger_->addValueWatch(expression);
                    updateBreakpointsPanel();
                    saveProjectState();
-                   showBottomPage(debugPanel_);
-                   debugPanel_.set_current_page(2); // Breakpoints
+                   showBottomPage(*debugPanel_);
+                   debugPanel_->set_current_page(2); // Breakpoints
                    setStatus("The debugger will stop when " + expression + " changes");
                    return {};
                }, -2);
@@ -3363,7 +3223,7 @@ bool MainWindow::flushLiveValues() {
         const auto it = liveHits_.find(key);
         if (it == liveHits_.end()) continue;
         const std::string text = it->second.text + "   \u00d7" + std::to_string(it->second.hits);
-        debugPanel_.setLiveValues(key.first, key.second, text);
+        debugPanel_->setLiveValues(key.first, key.second, text);
         for (EditorTab* tab : editors())
             if (tab->path() == key.first) tab->showLiveValues(key.second, text);
     }
@@ -3375,7 +3235,7 @@ void MainWindow::clearLiveValues() {
     liveFlush_.disconnect();
     liveHits_.clear();
     liveDirty_.clear();
-    debugPanel_.clearLiveValues();
+    debugPanel_->clearLiveValues();
     for (EditorTab* tab : editors()) tab->clearLiveValues();
 }
 
@@ -3392,7 +3252,7 @@ void MainWindow::syncBreakpoints(EditorTab* tab) {
 void MainWindow::saveProjectState() {
     if (folder_.empty()) return;
     for (EditorTab* tab : editors()) syncBreakpoints(tab); // marks move with edits
-    ProjectState state{breakpoints_, watches_.expressions(), valueWatchExpressions(), {}};
+    ProjectState state{breakpoints_, watches_->expressions(), valueWatchExpressions(), {}};
     // A project without a .kevc (a web folder) keeps its look here instead.
     if (session_ && session_->projectFile().empty()) state.ui = session_->project().ui;
     std::error_code ec;
@@ -3406,7 +3266,7 @@ void MainWindow::restoreProjectState() {
     valueWatches_.clear();
     for (const auto& expression : state.valueWatches) valueWatches_.push_back({expression, "placed when debugging starts", false});
     updateBreakpointsPanel();
-    watches_.setExpressions(state.watches);
+    watches_->setExpressions(state.watches);
     if (session_ && session_->projectFile().empty()) session_->project().ui = state.ui;
 }
 
@@ -3461,7 +3321,7 @@ void MainWindow::updateBreakpointsPanel() {
     std::vector<BreakpointItem> items;
     for (const auto& [file, lines] : breakpoints_)
         for (const auto& [line, bp] : lines) items.push_back({file, line, bp});
-    debugPanel_.setBreakpoints(items, valueWatches_);
+    debugPanel_->setBreakpoints(items, valueWatches_);
 }
 
 void MainWindow::addWatch() {
@@ -3477,8 +3337,8 @@ void MainWindow::addWatch() {
     promptText(*this, "Add Watch", "Expression to watch (evaluated whenever the program pauses):", initial,
                [this](const Glib::ustring& text) -> Glib::ustring {
                    if (text.empty()) return "Enter an expression, e.g. p->next->value";
-                   watches_.addExpression(text);
-                   leftDock_.set_current_page(leftDock_.page_num(watches_));
+                   watches_->addExpression(text);
+                   leftDock_.set_current_page(leftDock_.page_num(*watches_));
                    return {};
                }, -2);
 }
@@ -3707,15 +3567,15 @@ void MainWindow::scheduleSymbolsRefresh() {
 void MainWindow::refreshSymbols() {
     EditorTab* tab = currentEditor();
     if (!tab) {
-        symbols_.showMessage("Symbols of the current file appear here.");
+        symbols_->showMessage("Symbols of the current file appear here.");
         return;
     }
     if (!lsp_->handles(tab)) {
-        symbols_.showMessage("No symbol information for this file.");
+        symbols_->showMessage("No symbol information for this file.");
         return;
     }
     lsp_->documentSymbols(tab, [this, tab](const lsp::json& symbols) {
-        if (tab == currentEditor()) symbols_.setSymbols(symbols);
+        if (tab == currentEditor()) symbols_->setSymbols(symbols);
     });
 }
 
@@ -3734,7 +3594,7 @@ void MainWindow::showProjectOptions(bool packagesPage) {
         return;
     }
     using Page = ProjectOptionsDialog::Page;
-    auto* dialog = new ProjectOptionsDialog(
+    auto* dialog = ProjectOptionsDialog::create(
         *this, session_->project(), app_.toolchain(), packagesPage ? Page::Packages : Page::General,
         [this](const Project& edited) {
             if (!session_) return;
@@ -3803,7 +3663,8 @@ void MainWindow::checkForUpdates() {
             std::error_code ec;
             const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
             const fs::path prefix = installPrefix(exe).value_or(fs::path(Glib::get_home_dir()) / ".local");
-            std::string notes = release->notes.size() > 700 ? release->notes.substr(0, 700) + "…" : release->notes;
+            // The message box scrolls a long detail, so only very long notes are cut.
+            std::string notes = release->notes.size() > 6000 ? release->notes.substr(0, 6000) + "…" : release->notes;
             std::ostringstream size;
             size << std::fixed << std::setprecision(0) << static_cast<double>(release->assetSize) / (1024 * 1024);
             setStatus("Kev-C++ " + release->version.text + " is available");
@@ -3865,28 +3726,11 @@ void MainWindow::installUpdate(const Release& release) {
 }
 
 void MainWindow::showAbout() {
-    auto* about = new Gtk::AboutDialog();
-    about->set_transient_for(*this);
-    about->set_modal(true);
-    about->set_program_name("Kev-C++");
-    about->set_version(buildVersion().text); // the commit it was built from: date, time and hash
-    about->set_logo_icon_name("org.kevcpp.KevCpp");
-    about->set_comments("A lightweight IDE for C, C++, JavaScript and TypeScript,\n"
-                        "built on gcc, g++, CMake, Make and GTK 4.");
-    about->signal_hide().connect([about] { Glib::signal_idle().connect_once([about] { delete about; }); });
-    about->present();
+    AboutWindow::create(*this, buildVersion().text)->present();
 }
 
 void MainWindow::showToolchainInfo() {
-    Glib::ustring detail;
-    for (const ToolInfo& t : app_.toolchain().tools()) {
-        detail += t.name + (t.required ? " (required)" : " (optional)") + ": ";
-        detail += t.found() ? Glib::ustring(t.path->string()) + "\n    " + t.version : Glib::ustring("not found");
-        detail += "\n";
-    }
-    auto dialog = Gtk::AlertDialog::create("Toolchain");
-    dialog->set_detail(detail);
-    dialog->show(*this);
+    ToolchainWindow::create(*this, app_.toolchain())->present();
 }
 
 } // namespace kevc

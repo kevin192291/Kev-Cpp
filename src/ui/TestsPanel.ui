@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkBox" id="TestsPanel">
+    <property name="orientation">vertical</property>
+    <child>
+      <object class="GtkBox">
+        <property name="spacing">6</property>
+        <property name="margin-start">6</property>
+        <property name="margin-end">6</property>
+        <property name="margin-top">6</property>
+        <property name="margin-bottom">6</property>
+        <child>
+          <object class="GtkLabel" id="summary_">
+            <property name="xalign">0</property>
+            <property name="hexpand">true</property>
+            <property name="ellipsize">end</property>
+          </object>
+        </child>
+            <child>
+              <object class="GtkButton" id="failed_">
+                <property name="label">Re-run Failed</property>
+                <property name="sensitive">false</property>
+                <signal name="clicked" handler="on_failed_clicked"/>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="vitest_">
+                <property name="label">Run Vitest</property>
+                <signal name="clicked" handler="on_vitest_clicked"/>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="playwright_">
+                <property name="label">Run Playwright</property>
+                <signal name="clicked" handler="on_playwright_clicked"/>
+              </object>
+            </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparator"/>
+    </child>
+    <child>
+      <object class="GtkScrolledWindow">
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkListBox" id="list_">
+            <property name="activate-on-single-click">false</property>
+            <child type="placeholder">
+              <object class="GtkLabel" id="message_">
+                <property name="label">No test runner installed.</property>
+                <property name="wrap">true</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <property name="margin-top">12</property>
+                <property name="margin-bottom">12</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

@@ -4,38 +4,31 @@
 
 namespace kevc {
 
-SymbolsPanel::SymbolsPanel() {
-    message_.add_css_class("dim-label");
-    message_.set_wrap(true);
-    message_.set_margin(12);
-    list_.set_selection_mode(Gtk::SelectionMode::SINGLE);
-    list_.set_activate_on_single_click(true);
-    list_.signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
+SymbolsPanel::SymbolsPanel(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder)
+    : SymbolsPanelUi(object, builder) {
+    list_->signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
         const int i = row->get_index();
         if (i >= 0 && static_cast<size_t>(i) < positions_.size()) activated_.emit(positions_[i].first, positions_[i].second);
     });
-    box_.append(message_);
-    box_.append(list_);
-    set_child(box_);
     showMessage("Symbols of the current file appear here.");
 }
 
 void SymbolsPanel::showMessage(const Glib::ustring& text) {
-    while (auto* row = list_.get_row_at_index(0)) list_.remove(*row);
+    while (auto* row = list_->get_row_at_index(0)) list_->remove(*row);
     positions_.clear();
-    message_.set_text(text);
-    message_.set_visible(true);
-    list_.set_visible(false);
+    message_->set_text(text);
+    message_->set_visible(true);
+    list_->set_visible(false);
 }
 
 void SymbolsPanel::setSymbols(const lsp::json& symbols) {
-    while (auto* row = list_.get_row_at_index(0)) list_.remove(*row);
+    while (auto* row = list_->get_row_at_index(0)) list_->remove(*row);
     positions_.clear();
     for (const auto& s : symbols) addSymbol(s, 0, 0);
     const bool empty = positions_.empty();
-    if (empty) message_.set_text("No symbols in this file.");
-    message_.set_visible(empty);
-    list_.set_visible(!empty);
+    if (empty) message_->set_text("No symbols in this file.");
+    message_->set_visible(empty);
+    list_->set_visible(!empty);
 }
 
 void SymbolsPanel::addSymbol(const lsp::json& symbol, int depth, int parentKind) {
@@ -65,7 +58,7 @@ void SymbolsPanel::addSymbol(const lsp::json& symbol, int depth, int parentKind)
         detail->set_xalign(0.0f);
         row->append(*detail);
     }
-    list_.append(*row);
+    list_->append(*row);
     positions_.emplace_back(start.value("line", 0), start.value("character", 0));
 
     for (const auto& child : symbol.value("children", lsp::json::array())) addSymbol(child, depth + 1, kindValue);

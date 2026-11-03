@@ -21,49 +21,38 @@ std::string join(const std::vector<std::string>& items, const char* sep = ", ") 
 
 } // namespace
 
-RoutesPanel::RoutesPanel() : Gtk::Box(Gtk::Orientation::VERTICAL) {
-    auto* bar = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 4);
-    bar->set_margin(4);
-    auto* add = Gtk::make_managed<Gtk::Button>();
-    add->set_icon_name("list-add-symbolic");
-    add->set_tooltip_text("New Route… (a +page.svelte and +page.ts)");
-    add->signal_clicked().connect([this] { newRoute_.emit(); });
-    filter_.set_placeholder_text("Filter routes and files");
-    filter_.set_tooltip_text("Shows the routes whose URL, files or exports hold every word typed here");
-    filter_.set_hexpand(true);
-    filter_.signal_search_changed().connect(sigc::mem_fun(*this, &RoutesPanel::onFilterChanged));
-    filter_.signal_stop_search().connect([this] { filter_.set_text(""); });
-    bar->append(filter_);
-    bar->append(*add);
-    append(*bar);
-
-    list_.set_selection_mode(Gtk::SelectionMode::SINGLE);
-    list_.set_activate_on_single_click(false); // a double-click (or Enter) opens the file
-    list_.signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
+RoutesPanel::RoutesPanel(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder)
+    : RoutesPanelUi(object, builder) {
+    // A double-click (or Enter) opens the file.
+    list_->signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
         if (auto it = targets_.find(row); it != targets_.end()) open_.emit(it->second.file, it->second.line);
     });
-    list_.set_filter_func([this](Gtk::ListBoxRow* row) {
-        const std::string query = filter_.get_text();
+    list_->set_filter_func([this](Gtk::ListBoxRow* row) {
+        const std::string query = filter_->get_text();
         auto it = rowGroup_.find(row);
         return query.empty() || it == rowGroup_.end() || search::containsAllWords(groupText_[it->second], query);
     });
-    message_.add_css_class("dim-label");
-    message_.set_valign(Gtk::Align::START); // under the filter, not halfway down the panel
-    message_.set_wrap(true);
-    message_.set_margin(12);
-    scroller_.set_child(list_);
-    scroller_.set_vexpand(true);
-    append(scroller_);
+}
+
+void RoutesPanel::on_filter_search_changed() {
+    onFilterChanged();
+}
+
+void RoutesPanel::on_filter_stop_search() {
+    filter_->set_text("");
+}
+
+void RoutesPanel::on_new_route_clicked() {
+    newRoute_.emit();
 }
 
 void RoutesPanel::showMessage(const Glib::ustring& text) {
     targets_.clear();
     rowGroup_.clear();
     groupText_.clear();
-    while (auto* row = list_.get_row_at_index(0)) list_.remove(*row);
+    while (auto* row = list_->get_row_at_index(0)) list_->remove(*row);
     emptyMessage_ = text;
-    message_.set_text(text);
-    list_.set_placeholder(message_);
+    message_->set_text(text);
     onFilterChanged();
 }
 
@@ -72,11 +61,12 @@ void RoutesPanel::beginGroup(std::string text) {
 }
 
 void RoutesPanel::onFilterChanged() {
-    const std::string query = filter_.get_text();
+    const std::string query = filter_->get_text();
     // The placeholder shows whenever no row is visible: say why.
-    message_.set_text(query.empty() || groupText_.empty() ? emptyMessage_
-                                                          : Glib::ustring("No routes match \u201c" + query + "\u201d."));
-    list_.invalidate_filter();
+    message_->set_text(query.empty() || groupText_.empty()
+                           ? emptyMessage_
+                           : Glib::ustring("No routes match \u201c" + query + "\u201d."));
+    list_->invalidate_filter();
 }
 
 Gtk::Widget& RoutesPanel::line(const char* icon, const Glib::ustring& markup) {
@@ -104,7 +94,7 @@ Gtk::ListBoxRow& RoutesPanel::addRow(Gtk::Widget& content, int depth, std::optio
     content.set_margin_top(1);
     content.set_margin_bottom(1);
     row->set_child(content);
-    list_.append(*row);
+    list_->append(*row);
     if (target) targets_[row] = *target;
     if (!groupText_.empty()) rowGroup_[row] = groupText_.size() - 1;
     return *row;

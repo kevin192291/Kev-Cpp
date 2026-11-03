@@ -162,7 +162,7 @@ These facts shape the STM32 track.
 
 ## Milestones (each builds, runs and ships on its own)
 
-**Status (2026-11-01):** M0, W1–W5 and G1–G3 are done. G4 (Kev-C++'s own windows in its designer)
+**Status (2026-11-03):** M0, W1–W5 and G1–G3 are done. G4 (Kev-C++'s own windows in its designer)
 is under way; S1 follows it.
 
 **Also done along the way** (not milestones):
@@ -320,19 +320,44 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
      changed on the Design page, saved, F11, and the new Kev-C++'s splash showed it. Gap found: the
      preview shows a window as a box, so `window.kevc-splash` CSS (the splash's gradient) doesn't
      apply there (step 5).
-  2. **Dialogs:** New Project, Project Options, the npm Packages dialog, the small question and
-     message dialogs, Toolchain info, About and Check for Updates.
-  3. **Panels:** a base class for a top-level widget that isn't a window (a Box or Notebook with an
-     id), for the panels inside the main window: Search, Debug (Locals, Call Stack, Breakpoints,
-     Console), Watches, Compiler, Tests, Traces, Environment, Dependencies, Routes, Symbols and the
-     Welcome tab. MainWindow holds some of these by value today; they become pointers.
+  2. **Dialogs** (done 2026-11-03): `AboutWindow.ui` and `ToolchainWindow.ui` (both were GTK's
+     stock dialogs, now designs of their own); `MessageDialog.ui`, one design behind promptText,
+     askChoice, showError, showInfo and the missing-tools box at start-up, so Kev-C++ no longer uses
+     Gtk::AlertDialog (Check for Updates goes through it, and since its detail scrolls, the release
+     notes are no longer cut at 700 characters); `NewProjectDialog.ui` (its own files now, out of
+     Dialogs.cpp; Enter in either field creates); `ProjectOptionsDialog.ui` (four notebook pages; the
+     package rows and drop-down choices stay in code); `NpmPackagesDialog.ui` (the frame; a row per
+     package and per scope in code). Checked in Xephyr: each dialog's behaviour, and the loop in a
+     copy of the repository (About's text changed on the Design page, saved, F9 rebuilt one file in
+     4 s, F10's Kev-C++ showed it). Designer gap found and fixed: the preview showed only a
+     notebook's or stack's first page, so Project Options' other tabs couldn't be seen; it now shows
+     the page holding the selection (clicking a tab selects its label and turns to it) and keeps the
+     pages across the rebuild after each edit. Gaps left for step 5: lists filled at run time show as
+     empty boxes in the design; the preview of a wide window is cut by the canvas (it scrolls).
+  3. **Panels** (done 2026-11-03): the generator makes a base class for a top-level widget that
+     isn't a window and that no other object names (a panel; not a menu button's popover). Its
+     `create()` returns a `Glib::RefPtr<T>` holding a reference: a widget GtkBuilder made is held
+     only by the builder, so without one it would die with the builder, and docks move panels
+     between notebooks. C gets a new widget's floating reference, as from `gtk_box_new()`. Both are
+     built and run in UiCodegenTest. Designs: CompilerPanel, SymbolsPanel (Classes), SearchPanel,
+     RoutesPanel, EnvPanel, TestsPanel, TracesPanel, DependenciesPanel, DebugPanel (its four pages,
+     tab labels and breakpoint buttons are in the design), WatchPanel, and two new classes taken
+     out of MainWindow: WelcomePage and DevServerPanel. DebugPanel and WatchPanel moved out of
+     DebugViews into files of their own. MainWindow holds each as a `Glib::RefPtr`. A list's empty
+     message is its `<child type="placeholder">`. Checked in Xephyr: every panel with a C++, C, plain
+     web and SvelteKit-shaped project (search, filter, debug session, breakpoint buttons, GDB console,
+     dev server start and stop, compiler errors), and the loop on a panel (the Welcome page's text
+     changed on the Design page, F9 rebuilt one file, F10's Kev-C++ showed it). Designer gap found
+     and fixed: a top-level container showed at its natural size, a few pixels for a panel; it now
+     shows at 640×420. Not converted: the Project tab (ProjectTree), the Compile Log and the two
+     terminals, which are one custom widget each with little layout; they go with step 4.
   4. **The main window:** its frame (menu row, toolbar rows, the three docks, status bar) and its
      menus as `<menu>`s in the design. What changes while it runs (which toolbar groups and panels
      show, the docks' contents) stays in code, which fills named places in the design.
   5. **Designer gaps** these turn up, fixed as found. Expected: Kev-C++'s own look in the preview of
      its own designs (Slate rather than GTK's default), widgets GtkBuilder can't make (Kev-C++'s
      C++-only classes) shown as named placeholders, editing `<menu>`s, CSS classes in the properties.
-- **Picking it up again** (paused 2026-11-01 after step 1; the user resumes in a few days with step 2):
+- **Picking it up again** (steps 2 and 3 finished 2026-11-03; step 4, the main window, is next):
   - **Moving one window, the recipe the splash followed:** write `src/ui/<Class>.ui` with the window's
     layout (top-level id = the class name, so the designer leaves the existing `<Class>.h/.cpp` alone;
     ids that code needs end in `_`); open it in Kev-C++, Code → Write gtkmm Code; add
@@ -340,17 +365,29 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
     constructor `(BaseObjectType*, const Glib::RefPtr<Gtk::Builder>&, …its own arguments)` and a
     static `create(…)`; delete the layout code; keep data, timers, controllers and lists in code.
     Callers change from `new X(…)` or a member to `X::create(…)`.
-  - **Order for step 2**, simplest first: Toolchain info and About (in MainWindow), the message and
-    question boxes in `Dialogs.cpp` (promptText, askChoice, showError, showInfo: one shared design),
-    New Project (`Dialogs.cpp`), Check for Updates, Project Options, then the npm Packages dialog
-    (its rows are built at run time; only the frame is designed).
+  - **What step 2 settled:** a class's design shows every optional part (a prompt's entry, an error
+    line) and the class hides what a case doesn't use; data (rows, drop-down choices with the values
+    behind them) stays in code under the design's headings; buttons are wired by `<signal>`s in the
+    design (`on_ok_clicked`…), so the Signals tab and Go to handler work on Kev-C++'s own windows.
+    Shared helpers in Dialogs.h: `closeOnEscape`, `deleteWhenHidden` (hide-on-close, then delete).
+    A design id can't reuse a member name the class already has (`scopes_`).
+  - **What step 3 settled:** a designed widget is held only by its parent. Code must never take one
+    out of its container to put it back later (DebugPanel's Locals message used to be removed and
+    re-added; now it's shown and hidden), and anything that lives outside a container is held by a
+    RefPtr. A signal whose handler needs its arguments (`row-activated`'s row) stays connected in
+    code: designed gtkmm handlers take none. Kev-C++'s own C++ widgets (TaskButton) go into an empty
+    Box in the design (`toggleSlot_`).
+  - **Step 4 needs:** `<menu>` editing in the designer, the main window's toolbar rows, docks and
+    status bar as a design with named places for what code fills, and the Project tab, the Compile
+    Log and the terminals.
   - **Testing it:** in a copy of the repository (rsync without `build/` and `.git`) pre-built with
     `cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug` and `cmake --build build/debug -- -k 0`,
     opened in Kev-C++ on Xephyr. Then the designer writes the code, F9 builds only what changed, and
     F10/F11 runs the new Kev-C++ on the same display. The copy has no git history, so its version
     reads "unknown".
   - **Known gaps** for step 5: the preview shows windows as boxes, so `window.<class>` CSS doesn't
-    apply there; the generator makes a base class only for windows (panels need step 3's change).
+    apply there; lists filled at run time and slots for C++-only widgets show as empty boxes; a
+    design wider than the canvas is cut (it scrolls).
 - **Done when** every Kev-C++ window and panel has a `.ui` file, a change made on the Design page
   shows in the next F10 run, and the tests pass.
 - **Risks:** converting the main window touches docking, focus and key handling, which are checked
@@ -384,12 +421,11 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
   - Drag and drop in the outline (moving is by drag in the design or Move Up/Down today).
   - gtkmm handlers that receive the signal's arguments.
   - A light/dark switch for the preview: it shows GTK's dark theme, where the app may run light.
-  - Showing other stack and notebook pages in the preview, not only the visible one.
+  - Showing a stack's or notebook's other pages without selecting something on them (done for the
+    selection in G4 step 2: clicking a tab, or picking a widget in the outline, turns to its page).
   - Checking the Blueprint export with blueprint-compiler when it's installed.
 - Existing gaps (Replace, Find Results, saved breakpoints and recent projects are done): the bundled
   TypeScript dev server can't load npm packages.
-- Kev-C++'s own windows in the designer: they're built in code; moving them, dialogs first, to `.ui`
-  files loaded with Gtk::Builder would let the designer edit them (see docs/IMPORTANT_TODO.md).
 - ESLint and Tailwind language servers (from W2). LspManager has to route one file to several
   servers and merge their diagnostics.
 - From M0: Toolchain Info listing the tools ToolLocator finds (e.g. both STM32CubeIDE toolchains),

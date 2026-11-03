@@ -87,6 +87,8 @@ private:
     void showMessage(const Glib::ustring& text, bool error);
 
     void rebuildPreview();
+    // Shows the notebook and stack pages that hold the selection, so it's on screen.
+    void revealSelection();
     void stripMnemonics(GtkWidget* widget);
     void pickAt(double x, double y);
     void drawSelection(const Cairo::RefPtr<Cairo::Context>& cr);
@@ -185,6 +187,8 @@ private:
     GtkBuilder* builder_ = nullptr; // owns the preview's objects
     GtkWidget* previewRoot_ = nullptr;
     std::map<int, GtkWidget*> widgets_; // node uid → its widget in the preview
+    // The page each notebook (by uid) shows, and each stack's visible child, kept across rebuilds.
+    std::map<int, int> notebookPages_, stackChildren_;
     std::set<int> previewRoots_;        // the top-level objects the preview can show
     std::vector<std::string> actionGroups_; // dummy groups inserted on frame_
     std::map<Gtk::ListBoxRow*, int> rowUids_;

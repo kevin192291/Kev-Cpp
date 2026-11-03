@@ -35,14 +35,10 @@ std::string location(const Diagnostic& d) {
 
 } // namespace
 
-CompilerPanel::CompilerPanel() {
-    message_.add_css_class("dim-label");
-    message_.set_wrap(true);
-    message_.set_margin(12);
+CompilerPanel::CompilerPanel(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder)
+    : CompilerPanelUi(object, builder) {
     // Double-click (or Enter) jumps, so a single click can just select a row.
-    list_.set_selection_mode(Gtk::SelectionMode::SINGLE);
-    list_.set_activate_on_single_click(false);
-    list_.signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
+    list_->signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
         const int i = row->get_index();
         if (i < 0 || static_cast<size_t>(i) >= diagnostics_.size()) return;
         // GtkListBox activates on the second press and refocuses the row on release, which would
@@ -50,20 +46,17 @@ CompilerPanel::CompilerPanel() {
         Glib::signal_idle().connect_once(
             sigc::track_obj([this, d = diagnostics_[i]] { activated_.emit(d); }, *this));
     });
-    box_.append(message_);
-    box_.append(list_);
-    set_child(box_);
     setEmptyText("Errors and warnings from builds appear here.");
 }
 
 void CompilerPanel::clear() {
-    while (auto* row = list_.get_row_at_index(0)) list_.remove(*row);
+    while (auto* row = list_->get_row_at_index(0)) list_->remove(*row);
     diagnostics_.clear();
     updateVisibility();
 }
 
 void CompilerPanel::setEmptyText(const Glib::ustring& text) {
-    message_.set_text(text);
+    message_->set_text(text);
     updateVisibility();
 }
 
@@ -96,15 +89,15 @@ void CompilerPanel::add(const Diagnostic& d) {
     row->append(*severity);
     row->append(*where);
     row->append(*text);
-    list_.append(*row);
+    list_->append(*row);
     diagnostics_.push_back(d);
     updateVisibility();
 }
 
 void CompilerPanel::updateVisibility() {
     const bool empty = diagnostics_.empty();
-    message_.set_visible(empty);
-    list_.set_visible(!empty);
+    message_->set_visible(empty);
+    list_->set_visible(!empty);
 }
 
 } // namespace kevc

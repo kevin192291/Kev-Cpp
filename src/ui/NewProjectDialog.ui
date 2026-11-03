@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkWindow" id="NewProjectDialog">
+    <property name="title">New Project</property>
+    <property name="modal">true</property>
+    <property name="default-width">520</property>
+    <property name="default-widget">create_</property>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="spacing">8</property>
+        <property name="margin-start">16</property>
+        <property name="margin-end">16</property>
+        <property name="margin-top">16</property>
+        <property name="margin-bottom">16</property>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">Project type</property>
+            <property name="xalign">0</property>
+            <style>
+              <class name="heading"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkFrame">
+            <child>
+              <object class="GtkListBox" id="templates_">
+                <property name="selection-mode">browse</property>
+                <property name="activate-on-single-click">false</property>
+                <style>
+                  <class name="boxed-list"/>
+                </style>
+                <signal name="row-activated" handler="on_templates_row_activated"/>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkGrid">
+            <property name="row-spacing">8</property>
+            <property name="column-spacing">8</property>
+            <property name="margin-top">8</property>
+            <child>
+              <object class="GtkLabel">
+                <property name="label">Name</property>
+                <property name="xalign">1</property>
+                <layout>
+                  <property name="column">0</property>
+                  <property name="row">0</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkEntry" id="name_">
+                <property name="hexpand">true</property>
+                <property name="placeholder-text">MyProject</property>
+                <property name="activates-default">true</property>
+                <layout>
+                  <property name="column">1</property>
+                  <property name="row">0</property>
+                  <property name="column-span">2</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label">Location</property>
+                <property name="xalign">1</property>
+                <layout>
+                  <property name="column">0</property>
+                  <property name="row">1</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkEntry" id="location_">
+                <property name="hexpand">true</property>
+                <property name="activates-default">true</property>
+                <layout>
+                  <property name="column">1</property>
+                  <property name="row">1</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="browse_">
+                <property name="icon-name">kevc-open</property>
+                <property name="tooltip-text">Choose folder</property>
+                <signal name="clicked" handler="on_browse_clicked"/>
+                <layout>
+                  <property name="column">2</property>
+                  <property name="row">1</property>
+                </layout>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="error_">
+            <property name="label">What's wrong with the name or location</property>
+            <property name="visible">false</property>
+            <property name="wrap">true</property>
+            <property name="xalign">0</property>
+            <style>
+              <class name="error"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="spacing">8</property>
+            <property name="halign">end</property>
+            <property name="margin-top">8</property>
+            <child>
+              <object class="GtkButton" id="cancel_">
+                <property name="label">Cancel</property>
+                <signal name="clicked" handler="on_cancel_clicked"/>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="create_">
+                <property name="label">Create</property>
+                <style>
+                  <class name="suggested-action"/>
+                </style>
+                <signal name="clicked" handler="on_create_clicked"/>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

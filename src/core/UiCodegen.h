@@ -41,7 +41,8 @@ struct Code {
     std::vector<std::string> warnings;
 };
 
-// The windows code is generated for: top-level <object>s with an id whose class is a window.
+// What code is generated for: top-level <object>s with an id that are windows, or GTK widgets no
+// other object names (a panel; not a menu button's popover).
 std::vector<Node*> codeRoots(const UiDocument& doc, const TypeInfo& types);
 
 // "main_window" → "MainWindow"; anything that isn't a letter or digit separates words.

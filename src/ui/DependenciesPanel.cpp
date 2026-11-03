@@ -19,48 +19,32 @@ const char* severityColour(const std::string& severity) {
 
 } // namespace
 
-DependenciesPanel::DependenciesPanel() : Gtk::Box(Gtk::Orientation::VERTICAL) {
-    auto* bar = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 6);
-    bar->set_margin(6);
-    summary_.set_xalign(0.0f);
-    summary_.set_hexpand(true);
-    summary_.set_ellipsize(Pango::EllipsizeMode::END);
-    refreshButton_.set_tooltip_text("Runs npm outdated and npm audit (asks the npm registry)");
-    refreshButton_.signal_clicked().connect([this] { refresh_.emit(); });
-    bar->append(summary_);
-    bar->append(refreshButton_);
-    append(*bar);
-    append(*Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL));
-
-    list_.set_selection_mode(Gtk::SelectionMode::SINGLE);
-    list_.set_activate_on_single_click(false);
-    list_.signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
+DependenciesPanel::DependenciesPanel(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder)
+    : DependenciesPanelUi(object, builder) {
+    list_->signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
         if (auto it = packages_.find(row); it != packages_.end()) openPackage_.emit(it->second);
     });
-    message_.add_css_class("dim-label");
-    message_.set_wrap(true);
-    message_.set_margin(12);
-    list_.set_placeholder(message_);
-    scroller_.set_child(list_);
-    scroller_.set_vexpand(true);
-    append(scroller_);
     showMessage("Open a web project with a package.json, then press Check for updates.");
+}
+
+void DependenciesPanel::on_refresh_clicked() {
+    refresh_.emit();
 }
 
 void DependenciesPanel::clear() {
     packages_.clear();
-    while (auto* row = list_.get_row_at_index(0)) list_.remove(*row);
+    while (auto* row = list_->get_row_at_index(0)) list_->remove(*row);
 }
 
 void DependenciesPanel::showMessage(const Glib::ustring& text) {
     clear();
-    summary_.set_text("");
-    message_.set_text(text);
+    summary_->set_text("");
+    message_->set_text(text);
 }
 
 void DependenciesPanel::setBusy(bool busy) {
-    refreshButton_.set_sensitive(!busy);
-    if (busy) summary_.set_text("Asking the npm registry…");
+    refreshButton_->set_sensitive(!busy);
+    if (busy) summary_->set_text("Asking the npm registry…");
 }
 
 void DependenciesPanel::addRow(const Glib::ustring& markup, const std::string& package) {
@@ -73,19 +57,19 @@ void DependenciesPanel::addRow(const Glib::ustring& markup, const std::string& p
     label->set_margin_bottom(1);
     auto* row = Gtk::make_managed<Gtk::ListBoxRow>();
     row->set_child(*label);
-    list_.append(*row);
+    list_->append(*row);
     if (!package.empty()) packages_[row] = package;
 }
 
 void DependenciesPanel::setReports(const std::vector<OutdatedPackage>& outdated, const AuditReport& audit) {
     clear();
-    message_.set_text("Everything is up to date and npm audit found no known vulnerabilities.");
+    message_->set_text("Everything is up to date and npm audit found no known vulnerabilities.");
     int vulns = 0;
     for (const auto& [severity, n] : audit.counts) vulns += n;
-    summary_.set_markup((vulns ? "<span foreground=\"#ff6b6b\">" + std::to_string(vulns) + " vulnerable</span>"
-                               : std::string("<span foreground=\"#7bd88f\">no known vulnerabilities</span>")) +
-                        "  ·  " + std::to_string(outdated.size()) + " outdated" +
-                        (audit.error.empty() ? "" : "  ·  " + esc(audit.error)));
+    summary_->set_markup((vulns ? "<span foreground=\"#ff6b6b\">" + std::to_string(vulns) + " vulnerable</span>"
+                                : std::string("<span foreground=\"#7bd88f\">no known vulnerabilities</span>")) +
+                         "  ·  " + std::to_string(outdated.size()) + " outdated" +
+                         (audit.error.empty() ? "" : "  ·  " + esc(audit.error)));
     if (!audit.vulnerabilities.empty()) addRow("<b>Vulnerabilities</b>", {});
     for (const auto& v : audit.vulnerabilities) {
         std::string via;

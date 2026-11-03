@@ -14,43 +14,26 @@ Glib::ustring esc(const std::string& s) {
 
 } // namespace
 
-EnvPanel::EnvPanel() : Gtk::Box(Gtk::Orientation::VERTICAL) {
-    auto* bar = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
-    bar->set_margin(6);
-    summary_.set_xalign(0.0f);
-    summary_.set_hexpand(true);
-    summary_.set_ellipsize(Pango::EllipsizeMode::END);
-    auto* edit = Gtk::make_managed<Gtk::Button>("Edit .env");
-    edit->signal_clicked().connect([this] { editEnv_.emit(); });
-    bar->append(summary_);
-    bar->append(*edit);
-    append(*bar);
-    append(*Gtk::make_managed<Gtk::Separator>(Gtk::Orientation::HORIZONTAL));
-
-    list_.set_selection_mode(Gtk::SelectionMode::SINGLE);
-    list_.set_activate_on_single_click(false);
-    list_.signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
+EnvPanel::EnvPanel(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder) : EnvPanelUi(object, builder) {
+    list_->signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
         if (auto it = targets_.find(row); it != targets_.end()) open_.emit(it->second.file, it->second.line);
     });
-    message_.add_css_class("dim-label");
-    message_.set_wrap(true);
-    message_.set_margin(12);
-    list_.set_placeholder(message_);
-    scroller_.set_child(list_);
-    scroller_.set_vexpand(true);
-    append(scroller_);
     showMessage("Open a SvelteKit project to see its environment variables.");
+}
+
+void EnvPanel::on_edit_env_clicked() {
+    editEnv_.emit();
 }
 
 void EnvPanel::clear() {
     targets_.clear();
-    while (auto* row = list_.get_row_at_index(0)) list_.remove(*row);
+    while (auto* row = list_->get_row_at_index(0)) list_->remove(*row);
 }
 
 void EnvPanel::showMessage(const Glib::ustring& text) {
     clear();
-    summary_.set_text("");
-    message_.set_text(text);
+    summary_->set_text("");
+    message_->set_text(text);
 }
 
 void EnvPanel::addRow(const char* icon, const Glib::ustring& markup, std::optional<Target> target) {
@@ -70,13 +53,13 @@ void EnvPanel::addRow(const char* icon, const Glib::ustring& markup, std::option
     box->append(*label);
     auto* row = Gtk::make_managed<Gtk::ListBoxRow>();
     row->set_child(*box);
-    list_.append(*row);
+    list_->append(*row);
     if (target) targets_[row] = *target;
 }
 
 void EnvPanel::setReport(const kit::EnvReport& report, const fs::path& root) {
     clear();
-    message_.set_text("No environment variables: nothing in .env files or $env imports in src/.");
+    message_->set_text("No environment variables: nothing in .env files or $env imports in src/.");
     int serious = 0;
     for (const auto& p : report.problems) {
         const bool unused = p.kind == kit::EnvProblem::Kind::Unused;
@@ -113,7 +96,7 @@ void EnvPanel::setReport(const kit::EnvReport& report, const fs::path& root) {
         else if (!row.uses.empty()) target = Target{row.uses.front().file, row.uses.front().line};
         addRow("kevc-const-variable", markup, target);
     }
-    summary_.set_markup(std::to_string(report.rows.size()) + " variables" +
+    summary_->set_markup(std::to_string(report.rows.size()) + " variables" +
                         (serious ? "  ·  <span foreground=\"#ff6b6b\">" + std::to_string(serious) + " problem" +
                                        (serious == 1 ? "" : "s") + "</span>"
                                  : std::string("  ·  no problems")));

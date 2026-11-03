@@ -1,18 +1,20 @@
 #pragma once
 
-#include "core/Diagnostics.h"
+#include "build/CompilerPanel.ui.h"
 
-#include <gtkmm.h>
+#include "core/Diagnostics.h"
 
 #include <vector>
 
 namespace kevc {
 
 // The "Compiler" tab: the errors, warnings and notes of the last build. Activating a row
-// (double-click or Enter) reports its diagnostic so the editor can jump to it.
-class CompilerPanel : public Gtk::ScrolledWindow {
+// (double-click or Enter) reports its diagnostic so the editor can jump to it. Its layout is
+// CompilerPanel.ui (edit it on Kev-C++'s Design page); this class adds a row per diagnostic.
+class CompilerPanel : public CompilerPanelUi {
 public:
-    CompilerPanel();
+    static Glib::RefPtr<CompilerPanel> create() { return CompilerPanelUi::create<CompilerPanel>(); }
+    CompilerPanel(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder);
 
     void clear();
     void add(const Diagnostic& d);
@@ -24,9 +26,6 @@ public:
 private:
     void updateVisibility();
 
-    Gtk::Box box_{Gtk::Orientation::VERTICAL};
-    Gtk::Label message_;
-    Gtk::ListBox list_;
     std::vector<Diagnostic> diagnostics_;
     sigc::signal<void(const Diagnostic&)> activated_;
 };

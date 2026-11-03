@@ -2,7 +2,7 @@
 
 #include "core/SvelteKit.h"
 
-#include <gtkmm.h>
+#include "ui/EnvPanel.ui.h"
 
 #include <filesystem>
 #include <map>
@@ -13,9 +13,10 @@ namespace kevc {
 // The Environment panel for SvelteKit projects: each variable from the .env files and src/, whether
 // it's public or private, where it's defined and used, and problems (a private variable in code that
 // reaches the browser, a static one no .env defines, the wrong module for its prefix).
-class EnvPanel : public Gtk::Box {
+class EnvPanel : public EnvPanelUi {
 public:
-    EnvPanel();
+    static Glib::RefPtr<EnvPanel> create() { return EnvPanelUi::create<EnvPanel>(); }
+    EnvPanel(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder);
 
     void setReport(const kit::EnvReport& report, const std::filesystem::path& root);
     void showMessage(const Glib::ustring& text);
@@ -23,6 +24,9 @@ public:
     sigc::signal<void(const std::filesystem::path& file, int line)>& signalOpen() { return open_; }
     // "Edit .env": open (creating it if needed) the project's .env file.
     sigc::signal<void()>& signalEditEnv() { return editEnv_; }
+
+protected:
+    void on_edit_env_clicked() override;
 
 private:
     struct Target {
@@ -32,10 +36,6 @@ private:
     void clear();
     void addRow(const char* icon, const Glib::ustring& markup, std::optional<Target> target);
 
-    Gtk::Label summary_;
-    Gtk::ScrolledWindow scroller_;
-    Gtk::ListBox list_;
-    Gtk::Label message_;
     std::map<Gtk::ListBoxRow*, Target> targets_;
     sigc::signal<void(const std::filesystem::path&, int)> open_;
     sigc::signal<void()> editEnv_;

@@ -3,7 +3,7 @@
 #include "core/Search.h"
 #include "process/BackgroundJob.h"
 
-#include <gtkmm.h>
+#include "ui/SearchPanel.ui.h"
 
 #include <filesystem>
 #include <functional>
@@ -32,9 +32,10 @@ protected:
 // (Ctrl+Shift+F), with match case, whole word and regular expression switches and a "files to
 // include" filter. Open editors are searched as they are, unsaved changes included. Results are
 // grouped by file; clicking a match opens it with the text selected.
-class SearchPanel : public Gtk::Box {
+class SearchPanel : public SearchPanelUi {
 public:
-    SearchPanel();
+    static Glib::RefPtr<SearchPanel> create() { return SearchPanelUi::create<SearchPanel>(); }
+    SearchPanel(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder);
     ~SearchPanel() override;
 
     void setRoot(const std::filesystem::path& root);
@@ -55,6 +56,12 @@ public:
         return replaceInEditor_;
     }
 
+protected:
+    void on_options_changed() override; // what to find, or how: search again
+    void on_query_stop_search() override;
+    void on_replace_all_clicked() override;
+    void on_include_changed() override;
+
 private:
     void search();
     void clearResults();
@@ -63,20 +70,11 @@ private:
     void onSetupItem(const Glib::RefPtr<Gtk::ListItem>& item);
     void onBindItem(const Glib::RefPtr<Gtk::ListItem>& item);
     void onActivate(guint position);
-    void setupOption(Gtk::ToggleButton& button, const char* markup, const char* tooltip);
     void replaceAll(); // asks first
     void doReplaceAll(const std::string& text, const std::string& with);
     std::shared_ptr<const search::Matcher> matcher(const std::string& text) const;
 
     std::filesystem::path root_;
-    Gtk::SearchEntry query_;
-    Gtk::ToggleButton matchCase_, wholeWord_, regex_;
-    Gtk::Entry include_;
-    Gtk::Entry replace_;
-    Gtk::Button replaceAll_{"Replace All"};
-    Gtk::Label summary_;
-    Gtk::ScrolledWindow scroller_;
-    Gtk::ListView list_;
     Glib::RefPtr<Gio::ListStore<SearchItem>> files_;
     Glib::RefPtr<Gtk::TreeListModel> tree_;
     Glib::RefPtr<Gtk::SingleSelection> selection_;

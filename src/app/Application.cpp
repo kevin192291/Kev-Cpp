@@ -2,6 +2,7 @@
 
 #include "app/BuildInfo.h"
 #include "app/MainWindow.h"
+#include "ui/MessageDialog.h"
 #include "ui/SplashWindow.h"
 
 #include <glib-unix.h>
@@ -176,19 +177,18 @@ void Application::showMissingToolsAndQuit() {
         detail += "  • " + t->name + " — " + t->purpose + "\n";
     detail += "\nOn Ubuntu/Mint: sudo apt install build-essential cmake gdb nodejs";
 
-    auto dialog = Gtk::AlertDialog::create("Required tools are missing");
-    dialog->set_detail(detail);
-    dialog->set_modal(true);
+    // There's no main window yet: a box of its own, and the application held until it's closed.
+    auto* dialog = MessageDialog::create(nullptr, MessageDialog::Kind::Error, "Required tools are missing", detail);
+    dialog->set_title("Kev-C++");
     hold();
-    dialog->choose([this, dialog](const Glib::RefPtr<Gio::AsyncResult>& result) {
-        try {
-            dialog->choose_finish(result);
-        } catch (const Glib::Error&) {
-            // Dismissed with Escape or the close button; nothing to handle.
-        }
-        release();
-        quit();
+    dialog->setButtons({"Quit"}, 0, 0, [this](int) {
+        Glib::signal_idle().connect_once([this] {
+            release();
+            quit();
+        });
+        return true;
     });
+    dialog->open();
 }
 
 void Application::setupAccelerators() {

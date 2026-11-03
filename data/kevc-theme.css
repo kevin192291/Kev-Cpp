@@ -89,6 +89,12 @@ scrolledwindow > viewport {
   background-color: @kevc_panel;
   color: @kevc_fg;
 }
+/* A scrolled window that's part of a window's layout rather than a list (a message box's long
+   detail, the Toolchain table): the window's own background. */
+scrolledwindow.kevc-plain > viewport,
+.kevc-design-frame scrolledwindow.kevc-plain > viewport {
+  background-color: transparent;
+}
 list > row:hover,
 listview > row:hover {
   background-color: @kevc_hover;
@@ -321,6 +327,18 @@ window.kevc-splash {
 .kevc-splash-small {
   font-size: 9pt;
   color: #8fa3b0;
+}
+
+/* Message boxes (MessageDialog): the message as a heading over its detail, as GTK's own do. */
+.kevc-message {
+  font-weight: bold;
+  font-size: 12pt;
+}
+
+/* Help → About (AboutWindow). */
+.kevc-about-name {
+  font-size: 22pt;
+  font-weight: 800;
 }
 
 /* A live breakpoint's latest values: after its line in the editor, and in the Breakpoints tab. */

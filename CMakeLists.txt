@@ -91,13 +91,18 @@ add_executable(kev-cpp
   src/app/MainWindow.cpp
   src/build/BuildRunner.cpp
   src/build/CompilerPanel.cpp
+  src/build/CompilerPanel.ui.cpp
   src/debug/DapClient.cpp
   src/debug/DapViews.cpp
   src/debug/DebugController.cpp
   src/debug/DebugHover.cpp
+  src/debug/DebugPanel.cpp
+  src/debug/DebugPanel.ui.cpp
   src/debug/DebugViews.cpp
   src/debug/GdbSession.cpp
   src/debug/JsDebugger.cpp
+  src/debug/WatchPanel.cpp
+  src/debug/WatchPanel.ui.cpp
   src/devserver/DevServer.cpp
   src/designer/DesignerCode.cpp
   src/designer/DesignerEditing.cpp
@@ -108,7 +113,9 @@ add_executable(kev-cpp
   src/editor/EditorTab.cpp
   src/editor/ProjectTree.cpp
   src/editor/RoutesPanel.cpp
+  src/editor/RoutesPanel.ui.cpp
   src/editor/SymbolsPanel.cpp
+  src/editor/SymbolsPanel.ui.cpp
   src/lsp/LspBridges.cpp
   src/lsp/LspClient.cpp
   src/lsp/LspManager.cpp
@@ -117,20 +124,39 @@ add_executable(kev-cpp
   src/process/ManagedProcess.cpp
   src/project/SourceWatcher.cpp
   src/terminal/TerminalPane.cpp
+  src/ui/AboutWindow.cpp
+  src/ui/AboutWindow.ui.cpp
   src/ui/Dialogs.cpp
   src/ui/DependenciesPanel.cpp
+  src/ui/DependenciesPanel.ui.cpp
+  src/ui/DevServerPanel.cpp
+  src/ui/DevServerPanel.ui.cpp
   src/ui/DockManager.cpp
   src/ui/EnvPanel.cpp
+  src/ui/EnvPanel.ui.cpp
   src/ui/IconWidgets.cpp
+  src/ui/MessageDialog.cpp
+  src/ui/MessageDialog.ui.cpp
+  src/ui/NewProjectDialog.cpp
+  src/ui/NewProjectDialog.ui.cpp
   src/ui/NpmPackagesDialog.cpp
+  src/ui/NpmPackagesDialog.ui.cpp
   src/ui/ProjectOptionsDialog.cpp
+  src/ui/ProjectOptionsDialog.ui.cpp
   src/ui/QuickSearch.cpp
   src/ui/SearchMarkup.cpp
   src/ui/SearchPanel.cpp
+  src/ui/SearchPanel.ui.cpp
   src/ui/SplashWindow.cpp
   src/ui/SplashWindow.ui.cpp
   src/ui/TestsPanel.cpp
+  src/ui/TestsPanel.ui.cpp
+  src/ui/ToolchainWindow.cpp
+  src/ui/ToolchainWindow.ui.cpp
   src/ui/TracesPanel.cpp
+  src/ui/TracesPanel.ui.cpp
+  src/ui/WelcomePage.cpp
+  src/ui/WelcomePage.ui.cpp
 )
 target_link_libraries(kev-cpp PRIVATE
   kevc_core

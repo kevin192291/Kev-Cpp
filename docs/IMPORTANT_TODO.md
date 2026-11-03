@@ -1,6 +1,6 @@
 # Important to-dos
 
-Done items say where to find them. Last updated 2026-11-01.
+Done items say where to find them. Last updated 2026-11-03.
 
 ## Done
 
@@ -38,8 +38,10 @@ Done items say where to find them. Last updated 2026-11-01.
   (`Kev-Cpp.kevc`; Kev-C++ never edits its CMakeLists.txt), builds with F9, runs a second Kev-C++
   with F10 and debugs it with F5.
   **In progress: milestone G4** (docs/ROADMAP.md) moves Kev-C++'s windows to `.ui` files so the
-  visual designer edits them. Done: the splash (`src/ui/SplashWindow.ui`): change it on the Design
-  page, save, F9, and F10 runs Kev-C++ with the change. Next: the dialogs, the panels, the main window.
+  visual designer edits them. Done: the splash, every dialog (About, Toolchain, the message boxes,
+  New Project, Project Options, npm Packages) and the panels (Search, Classes, Routes, Compiler,
+  Debug, Watches, Environment, Tests, Traces, Dependencies, Dev Server, Welcome): change one on the
+  Design page, save, F9, and F10 runs Kev-C++ with the change. Next: the main window.
 
 ## Not done
 

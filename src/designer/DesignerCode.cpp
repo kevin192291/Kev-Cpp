@@ -110,7 +110,8 @@ void DesignerPage::goToHandler(int uid, const std::string& signal) {
     const bool cpp = *language == "gtkmm";
     const auto stub = ui::handlerStub(doc_, *object, signal, cpp, designer::gtkTypes());
     if (!stub) {
-        showMessage("Only handlers in a window with an id get code (and the object needs an id too).", true);
+        showMessage("Only handlers in a window or top-level widget with an id get code, and the object needs an "
+                    "id too.", true);
         return;
     }
     const fs::path dir = path_.parent_path(), file = dir / stub->file;

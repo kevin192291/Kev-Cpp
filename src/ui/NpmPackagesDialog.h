@@ -1,8 +1,8 @@
 #pragma once
 
-#include "core/NpmPackages.h"
+#include "ui/NpmPackagesDialog.ui.h"
 
-#include <gtkmm.h>
+#include "core/NpmPackages.h"
 
 #include <deque>
 #include <filesystem>
@@ -16,14 +16,29 @@ namespace kevc {
 // what's installed and the newest one, a Lock box (exactly this version) and the update rule in plain
 // words (~, ^, >=, *); add and remove packages; and where packages come from (the registry, also per
 // @scope, for a company's own npm server), saved in the project's .npmrc. Nothing changes until Save.
-class NpmPackagesDialog : public Gtk::Window {
+// Its frame is NpmPackagesDialog.ui (edit it on Kev-C++'s Design page); this class adds a row per
+// package and per scope. It deletes itself when closed.
+class NpmPackagesDialog : public NpmPackagesDialogUi {
 public:
-    NpmPackagesDialog(Gtk::Window& parent, std::filesystem::path root, std::string packageManager);
+    static NpmPackagesDialog* create(Gtk::Window& parent, std::filesystem::path root, std::string packageManager) {
+        return NpmPackagesDialogUi::create<NpmPackagesDialog>(parent, std::move(root), std::move(packageManager));
+    }
+    NpmPackagesDialog(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder, Gtk::Window& parent,
+                      std::filesystem::path root, std::string packageManager);
 
     // After Save; `install`: Save and Install was pressed.
     sigc::signal<void(bool install)>& signalSaved() { return saved_; }
     // Log In… for a registry ("" for npm's own): run `npm login` where the user can type.
     sigc::signal<void(const std::string& url)>& signalLogin() { return login_; }
+
+protected:
+    void on_login_clicked() override;
+    void on_add_scope_clicked() override;
+    void on_check_clicked() override;
+    void on_add_clicked() override;
+    void on_cancel_clicked() override;
+    void on_save_clicked() override;
+    void on_install_clicked() override;
 
 private:
     struct Row {
@@ -48,18 +63,15 @@ private:
         Gtk::Box* box;
     };
 
-    Gtk::Widget& buildSource();
-    Gtk::Widget& buildPackages();
-    Gtk::Widget& buildAdd();
+    void fillSource();
+    void fillPackages();
     void addRow(npm::Dependency dep, bool added);
     void update(Row& row);
     void addScopeRow(const std::string& scope, const std::string& url);
     npm::Registries registries() const;
     // `npm view` arguments for this registry set-up (what the dialog shows, saved or not).
     std::vector<std::string> registryArgs(const std::string& package) const;
-    void checkNewest();
     void runNextCheck();
-    void addPackage();
     void save(bool install);
 
     std::filesystem::path root_;
@@ -70,19 +82,9 @@ private:
     npm::Registries savedRegistries_;
     std::string npmrcText_;
 
-    Gtk::Entry source_;
-    Gtk::Box scopeList_{Gtk::Orientation::VERTICAL, 4};
-    Gtk::Grid grid_;
-    int nextGridRow_ = 1;
-    Gtk::Button checkButton_{"Check for Newer Versions"};
-    Gtk::Label checkStatus_;
+    int nextGridRow_ = 1; // row 0 holds the design's headings
     std::deque<Row*> checkQueue_;
     int checksRunning_ = 0;
-    Gtk::Entry addName_, addVersion_;
-    Gtk::CheckButton addDev_{"Only for development"};
-    Gtk::Button addButton_{"Add"};
-    Gtk::Label addStatus_;
-    Gtk::Label error_;
     sigc::signal<void(bool)> saved_;
     sigc::signal<void(const std::string&)> login_;
 };

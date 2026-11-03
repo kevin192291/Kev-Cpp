@@ -10,7 +10,9 @@
 #include "core/Version.h"
 #include "core/WebProject.h"
 #include "debug/DebugController.h"
+#include "debug/DebugPanel.h"
 #include "debug/DebugViews.h"
+#include "debug/WatchPanel.h"
 #include "debug/JsDebugger.h"
 #include "devserver/DevServer.h"
 #include "editor/ProjectTree.h"
@@ -19,11 +21,13 @@
 #include "lsp/LspManager.h"
 #include "ui/DockManager.h"
 #include "ui/DependenciesPanel.h"
+#include "ui/DevServerPanel.h"
 #include "ui/EnvPanel.h"
 #include "ui/QuickSearch.h"
 #include "ui/SearchPanel.h"
 #include "ui/TestsPanel.h"
 #include "ui/TracesPanel.h"
+#include "ui/WelcomePage.h"
 #include "ui/IconWidgets.h"
 #include "terminal/TerminalPane.h"
 
@@ -107,7 +111,6 @@ private:
     // The Welcome tab, shown when no file is open: pinned and recent projects, and the main keys.
     void showWelcome();
     void refreshWelcome();
-    Gtk::Widget& welcomeRow(const std::filesystem::path& folder, bool pinned, Gtk::ListBox& list);
     void rememberFolder(const std::filesystem::path& root);
     // The Project tab's git icons: files with changes git hasn't committed.
     void watchGit();          // after opening a folder: find its repository, watch its index
@@ -291,16 +294,16 @@ private:
     Gtk::Notebook rightDock_;
     Gtk::Notebook leftDock_;
     ProjectTree projectTree_;
-    SearchPanel searchPanel_;
+    Glib::RefPtr<SearchPanel> searchPanel_ = SearchPanel::create();
     QuickSearch quickSearch_;
-    SymbolsPanel symbols_;
-    RoutesPanel routesPanel_;
-    EnvPanel envPanel_;
+    Glib::RefPtr<SymbolsPanel> symbols_ = SymbolsPanel::create();
+    Glib::RefPtr<RoutesPanel> routesPanel_ = RoutesPanel::create();
+    Glib::RefPtr<EnvPanel> envPanel_ = EnvPanel::create();
     sigc::connection kitRefresh_;
     std::string pendingRoute_; // opened once the dev server is ready
-    TestsPanel testsPanel_;
-    TracesPanel tracesPanel_;
-    DependenciesPanel depsPanel_;
+    Glib::RefPtr<TestsPanel> testsPanel_ = TestsPanel::create();
+    Glib::RefPtr<TracesPanel> tracesPanel_ = TracesPanel::create();
+    Glib::RefPtr<DependenciesPanel> depsPanel_ = DependenciesPanel::create();
     TraceStore traces_;
     std::unique_ptr<ManagedProcess> collector_;
     int collectorPort_ = 0;
@@ -313,13 +316,11 @@ private:
     Glib::RefPtr<Gio::Menu> gutterMenu_;                 // a right-click on a line number
     std::set<std::filesystem::path> warnedUnlisted_;     // designer code already reported as not in CMakeLists.txt
     Gtk::Notebook editors_;
-    Gtk::Widget* welcomePage_ = nullptr;
-    Gtk::Box* welcomeLists_ = nullptr; // pinned and recent projects, left of the shortcuts
+    Glib::RefPtr<WelcomePage> welcomePage_; // while no file is open
     std::filesystem::path gitTopLevel_; // the open folder's git work tree ("" if it isn't in one)
     Glib::RefPtr<Gio::FileMonitor> gitMonitor_;
     sigc::connection gitSoon_;
     bool gitRunning_ = false, gitAgain_ = false;
-    std::map<Gtk::ListBoxRow*, std::filesystem::path> welcomeRows_;
     Gtk::SearchBar findBar_;
     Gtk::SearchEntry findEntry_;
     Gtk::CheckButton findCase_{"Match case"};
@@ -330,7 +331,7 @@ private:
     Gtk::Notebook bottomDock_;
     Gtk::TextView compileLog_;
     Glib::RefPtr<Gtk::TextMark> logEnd_;
-    CompilerPanel compilerPanel_;
+    Glib::RefPtr<CompilerPanel> compilerPanel_ = CompilerPanel::create();
     TerminalPane runConsole_;
     TerminalPane shell_;
     Gtk::DropDown* configDrop_ = nullptr;
@@ -374,18 +375,14 @@ private:
                             toolsMenu_ = Gio::Menu::create();
     std::string doneLabel_;       // see runCommands
     bool openBrowserWhenReady_ = false;
-    Gtk::Box serverPage_{Gtk::Orientation::VERTICAL};
-    Gtk::Label serverStatus_;
-    Gtk::Button serverOpen_{"Open in Browser"};
-    TaskButton serverToggle_{"kevc-globe", "Start the dev server", "kevc-stop", "Stop the dev server", 16};
-    Gtk::TextView serverLog_;
+    Glib::RefPtr<DevServerPanel> serverPanel_ = DevServerPanel::create();
 
     std::shared_ptr<DebugController> debugger_;
     std::shared_ptr<JsDebugger> jsDebugger_;
     std::vector<dap::Frame> jsFrames_;
     std::string jsServerUrl_; // the Vite the JS debugger runs, once it's serving
-    DebugPanel debugPanel_;
-    WatchPanel watches_;
+    Glib::RefPtr<DebugPanel> debugPanel_ = DebugPanel::create();
+    Glib::RefPtr<WatchPanel> watches_ = WatchPanel::create();
     BreakpointMap breakpoints_;                // file -> 1-based line -> kind
     std::vector<ValueWatchItem> valueWatches_; // break when these change
     struct LiveHit {

@@ -1,0 +1,816 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkWindow" id="ProjectOptionsDialog">
+    <property name="title">Project Options</property>
+    <property name="modal">true</property>
+    <property name="default-width">760</property>
+    <property name="default-height">600</property>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkNotebook" id="notebook_">
+            <property name="vexpand">true</property>
+            <child>
+              <object class="GtkNotebookPage">
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-bottom">12</property>
+                    <child>
+                      <object class="GtkGrid">
+                        <property name="row-spacing">8</property>
+                        <property name="column-spacing">12</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Project</property>
+                            <property name="xalign">1</property>
+                            <layout>
+                              <property name="column">0</property>
+                              <property name="row">0</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="projectName_">
+                            <property name="label">MyProject</property>
+                            <property name="xalign">0</property>
+                            <property name="selectable">true</property>
+                            <layout>
+                              <property name="column">1</property>
+                              <property name="row">0</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Type</property>
+                            <property name="xalign">1</property>
+                            <layout>
+                              <property name="column">0</property>
+                              <property name="row">1</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="projectKind_">
+                            <property name="label">C++, built with CMake and g++</property>
+                            <property name="xalign">0</property>
+                            <layout>
+                              <property name="column">1</property>
+                              <property name="row">1</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Target type</property>
+                            <property name="xalign">1</property>
+                            <layout>
+                              <property name="column">0</property>
+                              <property name="row">2</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkDropDown" id="targetType_">
+                            <property name="halign">start</property>
+                            <layout>
+                              <property name="column">1</property>
+                              <property name="row">2</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Language standard</property>
+                            <property name="xalign">1</property>
+                            <layout>
+                              <property name="column">0</property>
+                              <property name="row">3</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkDropDown" id="standard_">
+                            <property name="halign">start</property>
+                            <layout>
+                              <property name="column">1</property>
+                              <property name="row">3</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Output file name</property>
+                            <property name="xalign">1</property>
+                            <layout>
+                              <property name="column">0</property>
+                              <property name="row">4</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkEntry" id="outputName_">
+                            <property name="hexpand">true</property>
+                            <layout>
+                              <property name="column">1</property>
+                              <property name="row">4</property>
+                            </layout>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="generalHint_">
+                        <property name="label">The managed block in CMakeLists.txt is regenerated when you press OK. Anything you wrote outside the block is left alone.</property>
+                        <property name="wrap">true</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+                <property name="tab">
+                  <object class="GtkLabel">
+                    <property name="label">General</property>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkNotebookPage">
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-bottom">12</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Warnings</property>
+                        <property name="xalign">0</property>
+                        <property name="margin-top">6</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">12</property>
+                        <child>
+                          <object class="GtkCheckButton" id="wall_">
+                            <property name="label">-Wall</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkCheckButton" id="wextra_">
+                            <property name="label">-Wextra</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkCheckButton" id="wpedantic_">
+                            <property name="label">-Wpedantic</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkCheckButton" id="werror_">
+                            <property name="label">Treat warnings as errors</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Optimization</property>
+                        <property name="xalign">0</property>
+                        <property name="margin-top">6</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">8</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Debug</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkDropDown" id="debugOpt_">
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Release</property>
+                            <property name="margin-start">16</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkDropDown" id="releaseOpt_">
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Extra compiler flags</property>
+                        <property name="xalign">0</property>
+                        <property name="margin-top">6</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkEntry" id="extraFlags_">
+                        <property name="placeholder-text">-fsanitize=address -march=native</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">12</property>
+                        <property name="vexpand">true</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">4</property>
+                            <property name="hexpand">true</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Defines (one per line)</property>
+                                <property name="xalign">0</property>
+                                <property name="margin-top">6</property>
+                                <style>
+                                  <class name="heading"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">NAME or NAME=value</property>
+                                <property name="wrap">true</property>
+                                <property name="xalign">0</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkFrame">
+                                <child>
+                                  <object class="GtkScrolledWindow">
+                                    <property name="min-content-height">80</property>
+                                    <property name="vexpand">true</property>
+                                    <child>
+                                      <object class="GtkTextView" id="defines_">
+                                        <property name="monospace">true</property>
+                                        <property name="top-margin">4</property>
+                                        <property name="left-margin">4</property>
+                                        <style>
+                                          <class name="kevc-log"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">4</property>
+                            <property name="hexpand">true</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Include directories (one per line)</property>
+                                <property name="xalign">0</property>
+                                <property name="margin-top">6</property>
+                                <style>
+                                  <class name="heading"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Relative to the project folder, or absolute</property>
+                                <property name="wrap">true</property>
+                                <property name="xalign">0</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkFrame">
+                                <child>
+                                  <object class="GtkScrolledWindow">
+                                    <property name="min-content-height">80</property>
+                                    <property name="vexpand">true</property>
+                                    <child>
+                                      <object class="GtkTextView" id="includeDirs_">
+                                        <property name="monospace">true</property>
+                                        <property name="top-margin">4</property>
+                                        <property name="left-margin">4</property>
+                                        <style>
+                                          <class name="kevc-log"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+                <property name="tab">
+                  <object class="GtkLabel">
+                    <property name="label">Compiler</property>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkNotebookPage">
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-bottom">12</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">12</property>
+                        <property name="vexpand">true</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">4</property>
+                            <property name="hexpand">true</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Libraries (one per line)</property>
+                                <property name="xalign">0</property>
+                                <property name="margin-top">6</property>
+                                <style>
+                                  <class name="heading"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">m links libm (-lm). Paths and CMake targets like Threads::Threads are used as-is.</property>
+                                <property name="wrap">true</property>
+                                <property name="xalign">0</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkFrame">
+                                <child>
+                                  <object class="GtkScrolledWindow">
+                                    <property name="min-content-height">80</property>
+                                    <property name="vexpand">true</property>
+                                    <child>
+                                      <object class="GtkTextView" id="libraries_">
+                                        <property name="monospace">true</property>
+                                        <property name="top-margin">4</property>
+                                        <property name="left-margin">4</property>
+                                        <style>
+                                          <class name="kevc-log"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">4</property>
+                            <property name="hexpand">true</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Library directories (one per line)</property>
+                                <property name="xalign">0</property>
+                                <property name="margin-top">6</property>
+                                <style>
+                                  <class name="heading"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Searched with -L</property>
+                                <property name="wrap">true</property>
+                                <property name="xalign">0</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkFrame">
+                                <child>
+                                  <object class="GtkScrolledWindow">
+                                    <property name="min-content-height">80</property>
+                                    <property name="vexpand">true</property>
+                                    <child>
+                                      <object class="GtkTextView" id="libraryDirs_">
+                                        <property name="monospace">true</property>
+                                        <property name="top-margin">4</property>
+                                        <property name="left-margin">4</property>
+                                        <style>
+                                          <class name="kevc-log"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Extra linker flags</property>
+                        <property name="xalign">0</property>
+                        <property name="margin-top">6</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkEntry" id="linkerFlags_">
+                        <property name="placeholder-text">-Wl,--as-needed -pthread</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="staticRuntime_">
+                        <property name="label">Link libstdc++ and libgcc statically (-static-libstdc++ -static-libgcc)</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Packages from the Packages tab are linked automatically; you don't need to list them here.</property>
+                        <property name="wrap">true</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+                <property name="tab">
+                  <object class="GtkLabel">
+                    <property name="label">Linker</property>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkNotebookPage">
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-bottom">12</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Packages in this project</property>
+                        <property name="xalign">0</property>
+                        <property name="margin-top">6</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="installedEmpty_">
+                        <property name="label">None yet.</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow" id="installedScroller_">
+                        <property name="hscrollbar-policy">never</property>
+                        <property name="propagate-natural-height">true</property>
+                        <property name="max-content-height">170</property>
+                        <child>
+                          <object class="GtkListBox" id="installed_">
+                            <property name="selection-mode">none</property>
+                            <style>
+                              <class name="boxed-list"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="addHeading_">
+                        <property name="label">Add a package</property>
+                        <property name="xalign">0</property>
+                        <property name="margin-top">6</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="packagesHint_">
+                        <property name="label">git was not found. Catalog and Git packages need it at build time: sudo apt install git</property>
+                        <property name="wrap">true</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkStackSwitcher" id="switcher_">
+                        <property name="stack">sources_</property>
+                        <property name="halign">start</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkStack" id="sources_">
+                        <property name="vexpand">true</property>
+                        <signal name="notify::visible-child-name" handler="on_sources_page_changed"/>
+                        <child>
+                          <object class="GtkStackPage">
+                            <property name="name">catalog</property>
+                            <property name="title">Catalog</property>
+                            <property name="child">
+                              <object class="GtkScrolledWindow">
+                                <property name="vexpand">true</property>
+                                <child>
+                                  <object class="GtkListBox" id="catalogList_">
+                                    <property name="selection-mode">none</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkStackPage">
+                            <property name="name">git</property>
+                            <property name="title">Git Repository</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">6</property>
+                                <property name="margin-top">8</property>
+                                <child>
+                                  <object class="GtkGrid">
+                                    <property name="row-spacing">8</property>
+                                    <property name="column-spacing">12</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label">Repository URL</property>
+                                        <property name="xalign">1</property>
+                                        <layout>
+                                          <property name="column">0</property>
+                                          <property name="row">0</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="gitUrl_">
+                                        <property name="hexpand">true</property>
+                                        <property name="placeholder-text">https://github.com/owner/project.git</property>
+                                        <signal name="changed" handler="on_git_url_changed"/>
+                                        <layout>
+                                          <property name="column">1</property>
+                                          <property name="row">0</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label">Tag or branch</property>
+                                        <property name="xalign">1</property>
+                                        <layout>
+                                          <property name="column">0</property>
+                                          <property name="row">1</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="gitTag_">
+                                        <property name="hexpand">true</property>
+                                        <property name="placeholder-text">v1.2.3 (a tag or branch)</property>
+                                        <layout>
+                                          <property name="column">1</property>
+                                          <property name="row">1</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label">Name</property>
+                                        <property name="xalign">1</property>
+                                        <layout>
+                                          <property name="column">0</property>
+                                          <property name="row">2</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="gitName_">
+                                        <property name="hexpand">true</property>
+                                        <property name="placeholder-text">filled in from the URL</property>
+                                        <layout>
+                                          <property name="column">1</property>
+                                          <property name="row">2</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label">Targets to link</property>
+                                        <property name="xalign">1</property>
+                                        <layout>
+                                          <property name="column">0</property>
+                                          <property name="row">3</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="gitTargets_">
+                                        <property name="hexpand">true</property>
+                                        <property name="placeholder-text">owner::project (press Detect Targets to find them)</property>
+                                        <layout>
+                                          <property name="column">1</property>
+                                          <property name="row">3</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkButton" id="detect_">
+                                        <property name="label">Detect Targets</property>
+                                        <signal name="clicked" handler="on_detect_clicked"/>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="addGit_">
+                                        <property name="label">Add Package</property>
+                                        <signal name="clicked" handler="on_add_git_clicked"/>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel" id="gitStatus_">
+                                    <property name="wrap">true</property>
+                                    <property name="xalign">0</property>
+                                    <property name="selectable">true</property>
+                                    <style>
+                                      <class name="dim-label"/>
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkStackPage">
+                            <property name="name">system</property>
+                            <property name="title">System (pkg-config)</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">6</property>
+                                <property name="margin-top">8</property>
+                                <child>
+                                  <object class="GtkSearchEntry" id="systemSearch_">
+                                    <property name="placeholder-text">Search installed libraries</property>
+                                    <signal name="search-changed" handler="on_system_search_changed"/>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkScrolledWindow">
+                                    <property name="vexpand">true</property>
+                                    <child>
+                                      <object class="GtkListBox" id="systemList_">
+                                        <property name="selection-mode">none</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkSeparator" id="cacheSeparator_"/>
+                    </child>
+                    <child>
+                      <object class="GtkBox" id="cacheRow_">
+                        <property name="spacing">8</property>
+                        <property name="margin-top">4</property>
+                        <child>
+                          <object class="GtkLabel" id="cacheLabel_">
+                            <property name="label">Package cache: 0 B in ~/.cache/kev-cpp/detect (empty)</property>
+                            <property name="wrap">true</property>
+                            <property name="xalign">0</property>
+                            <property name="hexpand">true</property>
+                            <style>
+                              <class name="dim-label"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="cleanCache_">
+                            <property name="label">Clean Package Cache</property>
+                            <property name="tooltip-text">Delete the repositories Detect Targets downloaded. Your projects are not affected.</property>
+                            <signal name="clicked" handler="on_clean_cache_clicked"/>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+                <property name="tab">
+                  <object class="GtkLabel">
+                    <property name="label">Packages</property>
+                  </object>
+                </property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="spacing">8</property>
+            <property name="halign">end</property>
+            <property name="margin-start">12</property>
+            <property name="margin-end">12</property>
+            <property name="margin-top">12</property>
+            <property name="margin-bottom">12</property>
+            <child>
+              <object class="GtkButton" id="cancel_">
+                <property name="label">Cancel</property>
+                <signal name="clicked" handler="on_cancel_clicked"/>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="ok_">
+                <property name="label">OK</property>
+                <style>
+                  <class name="suggested-action"/>
+                </style>
+                <signal name="clicked" handler="on_ok_clicked"/>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

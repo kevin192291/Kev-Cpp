@@ -62,22 +62,25 @@ verified by driving the real app (see "GUI testing").
   DesignerTypes (GType lookups, the catalog from `data/designer/catalog.json` in the GResource).
 - `src/lsp/` LspClient (JSON-RPC over stdio), LspManager (documents ↔ servers), LspBridges
   (GObject completion/hover providers for GtkSourceView, written in C style).
-- `src/debug/` GdbSession (MI process), DebugController (session state), DebugViews (VarNode tree,
-  Debug panel, Watches), DebugHover (hover provider); for web projects DapClient (one DAP session
-  over TCP), JsDebugger (js-debug server + root/child sessions) and DapViews (DapVarNode).
+- `src/debug/` GdbSession (MI process), DebugController (session state), DebugViews (VarNode tree),
+  DebugPanel (Locals, Call Stack, Breakpoints, GDB Console), WatchPanel, DebugHover (hover
+  provider); for web projects DapClient (one DAP session over TCP), JsDebugger (js-debug server +
+  root/child sessions) and DapViews (DapVarNode).
 - `src/process/` ManagedProcess (long-running child: own process group, PR_SET_PDEATHSIG, stdin pipe,
   line output; Vite, the dev server, js-debug, the OTLP collector; stopping it signals the group and
   every descendant that left it), Capture (run + collect stdout; a form that feeds stdin, for prettier) and
   BackgroundJob (one worker thread at a time, results posted to the main loop, cancelled and joined
   before a new one starts or its owner goes; used by the searches).
 - `src/build/` BuildRunner (sequential subprocesses, line streaming), CompilerPanel.
-- `src/ui/` Dialogs, ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
+- `src/ui/` Dialogs (promptText/askChoice/showError/showInfo on MessageDialog, Kev-C++'s one message
+  box; closeOnEscape, deleteWhenHidden), AboutWindow, ToolchainWindow, NewProjectDialog,
+  ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
   bottom/right/floating or closed; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton,
   icon tab labels), QuickSearch (the menu bar's search field), SearchPanel (the left dock's Search
   tab: Find in Files), SearchMarkup (their shared highlighting), NpmPackagesDialog (a web project's
-  Project → Packages), SplashWindow (start-up splash), and the web panels
-  EnvPanel, TestsPanel, TracesPanel, DependenciesPanel (`src/editor/RoutesPanel` is the left-dock
-  Routes tab, with a filter field).
+  Project → Packages), SplashWindow (start-up splash), WelcomePage (the Welcome tab), DevServerPanel,
+  and the web panels EnvPanel, TestsPanel, TracesPanel, DependenciesPanel (`src/editor/RoutesPanel`
+  is the left-dock Routes tab, with a filter field).
 - `src/devserver/DevServer` runs the bundled `tools/devserver/devserver.mjs` or the project's Vite.
   `tools/package.json` pins typescript 5.9.3, typescript-language-server 5.3.0, svelte-language-server
   0.18.5 and typescript-svelte-plugin 0.3.52 (`npm ci` during the build); `tools/fetch-js-debug.cmake`
@@ -210,8 +213,12 @@ verified by driving the real app (see "GUI testing").
   the IDE window) and empty action groups shadow `win.*`/`app.*` for action-name buttons. Theme CSS
   under `.kevc-design-frame` restores GTK's Default look where the Slate rules would restyle the design.
   Drags carry "new:<class>" or "move:<uid>"; the page remembers which (`dragging_`) since a drop
-  target only sees the data on drop. Rebuilding the property list destroys the focused field, whose
-  focus-out would commit stale text: every commit returns while `syncing_` is set.
+  target only sees the data on drop. Notebooks and stacks in the preview show the page holding the
+  selection (a click on a tab selects its label, which turns to its page) and keep their pages
+  across the rebuild that follows every edit (`revealSelection`, `notebookPages_`). A top-level
+  container (a panel) previews at 640×420, not its natural size. Rebuilding the property list
+  destroys the focused field, whose focus-out would commit stale text: every commit returns while
+  `syncing_` is set.
 - **Designer code**: generated files (`x.ui.h/.cpp` gtkmm, `x-ui.h/.c` C) are rewritten on every save
   once they exist (that's the opt-in); the user's files are only created when missing. gtkmm windows
   come from `Gtk::Builder::get_widget_derived`, and signals connect with `g_signal_connect_data`
@@ -222,12 +229,34 @@ verified by driving the real app (see "GUI testing").
   in projects whose CMakeLists.txt Kev-C++ manages; in one that keeps its own, it says (a dialog the
   first time) which generated .cpp files no CMakeLists.txt names yet (`cmake_gen::unlistedSources`).
   The generated `create(args…)` passes extra arguments on to the derived class's constructor.
+  Code is generated for top-level windows and for top-level GTK widgets no other object names (a
+  panel). A widget's `create()` returns a `Glib::RefPtr<T>` that holds a reference: GtkBuilder's is
+  the only one, so it would die with the builder, and deleting a gtkmm wrapper of a builder-made
+  widget doesn't release it; dropping the last reference does, and gtkmm then deletes the wrapper.
+  In C a widget comes back with a new widget's floating reference (`g_object_force_floating`).
 - **Kev-C++'s own windows (G4)**: each gets a `.ui` beside its class (`src/ui/SplashWindow.ui`),
   handled exactly like a user's gtkmm design: the designer writes `SplashWindow.ui.h/.ui.cpp` on save
   (base class `SplashWindowUi`, global namespace; ids end in `_` so members follow our convention),
   the class derives from it and adds behaviour, `create(…)` builds it. Generated files are committed
   and listed in CMakeLists.txt by hand; `UiCodegen.KevCppsOwnDesignsMatchTheirCode` fails when a .ui
-  changed outside the designer. Done: the splash. Next: the dialogs, panels, then the main window.
+  changed outside the designer. Done: the splash, every dialog (step 2: About, Toolchain,
+  MessageDialog, New Project, Project Options, npm Packages) and the panels (step 3: Compiler,
+  Classes, Search, Routes, Environment, Tests, Traces, Dependencies, Debug, Watches, Dev Server,
+  Welcome; MainWindow holds them as `Glib::RefPtr`s). Next: the main window (step 4), with the
+  Project tab, Compile Log and terminals. A designed widget is held only by its parent: never take
+  one out of its container to re-add it later (show/hide it instead). Signals whose handlers need
+  arguments (`row-activated`) stay connected in code; C++-only widgets (TaskButton) go into an
+  empty Box in the design. A list's empty message is its `<child type="placeholder">`. Lists, rows
+  and drop-down choices that come from data stay in code, under headings and frames from the
+  design; the design shows every optional part (a prompt's entry, an error line) and the class
+  hides what a case doesn't use.
+- **Message boxes** are `MessageDialog.ui`, not Gtk::AlertDialog (whose window a design can't
+  describe). Escape or the close button choose the cancel button, as AlertDialog did; askChoice's
+  callback runs from idle, after the box is gone. The focus goes to the default button before the
+  window maps: otherwise GTK focuses the selectable detail, which then shows all its text selected.
+  The detail scrolls only when it's taller than the box allows; a scrolled window that may scroll
+  asks a wrapped label for its height at too narrow a width, leaving a gap. `.kevc-plain` gives a
+  scrolled window that's part of a layout the window's background instead of a list's.
 - **Project tab file operations**: ProjectTree only emits rename/delete/new/move signals (context
   menu, F2/Delete, drag and drop); MainWindow does them with `core/FileOps` checks, so open documents
   follow (`DocumentPage::moveTo`; editors are detached from and re-attached to the language servers)

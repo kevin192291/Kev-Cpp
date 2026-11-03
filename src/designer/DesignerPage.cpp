@@ -622,6 +622,15 @@ void DesignerPage::rebuildPreview() {
         gtk_box_remove(GTK_BOX(frame_.gobj()), previewRoot_);
         previewRoot_ = nullptr;
     }
+    // Every edit rebuilds the preview: the notebooks and stacks it has stay on the pages they show.
+    for (const auto& [uid, widget] : widgets_) {
+        if (GTK_IS_NOTEBOOK(widget)) {
+            notebookPages_[uid] = gtk_notebook_get_current_page(GTK_NOTEBOOK(widget));
+        } else if (GTK_IS_STACK(widget)) {
+            if (GtkWidget* child = gtk_stack_get_visible_child(GTK_STACK(widget)))
+                stackChildren_[uid] = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(child), "kevc-node"));
+        }
+    }
     widgets_.clear();
     previewRoots_.clear();
     for (const auto& group : actionGroups_) gtk_widget_insert_action_group(GTK_WIDGET(frame_.gobj()), group.c_str(), nullptr);
@@ -681,6 +690,17 @@ void DesignerPage::rebuildPreview() {
             if (const ui::ClassInfo* info = designer::catalogInfo(UiDocument::className(*n)); info && info->slots != ui::Slots::None)
                 gtk_widget_add_css_class(GTK_WIDGET(o), "kevc-empty-container");
     }
+    for (const auto& [uid, page] : notebookPages_)
+        if (auto it = widgets_.find(uid); it != widgets_.end() && GTK_IS_NOTEBOOK(it->second) &&
+                                          page < gtk_notebook_get_n_pages(GTK_NOTEBOOK(it->second)))
+            gtk_notebook_set_current_page(GTK_NOTEBOOK(it->second), page);
+    for (const auto& [uid, childUid] : stackChildren_) {
+        auto stack = widgets_.find(uid), child = widgets_.find(childUid);
+        if (stack != widgets_.end() && child != widgets_.end() && GTK_IS_STACK(stack->second) &&
+            gtk_widget_get_parent(child->second) == stack->second)
+            gtk_stack_set_visible_child(GTK_STACK(stack->second), child->second);
+    }
+    revealSelection();
 
     // Buttons with action-name="win.save" find these empty actions before the IDE's own, so they
     // look as they will in the app and do nothing here.
@@ -712,12 +732,50 @@ void DesignerPage::rebuildPreview() {
     fakeTitle_.set_text(root->title.empty() ? " " : root->title);
     fakeTitle_.set_visible(root->window && !root->titlebar);
     gtk_box_append(GTK_BOX(frame_.gobj()), previewRoot_);
-    if (root->window && (root->width > 0 || root->height > 0))
+    if (root->window && (root->width > 0 || root->height > 0)) {
         frame_.set_size_request(root->width > 0 ? root->width : -1, root->height > 0 ? root->height : -1);
+    } else if (!root->window) {
+        // A top-level container is a panel: in the app whatever holds it gives it its size, and on
+        // its own it would shrink to its natural size, a few pixels for a scrolled list.
+        if (Node* n = doc_.find(root->uid))
+            if (const ui::ClassInfo* info = designer::catalogInfo(UiDocument::className(*n));
+                info && info->slots != ui::Slots::None)
+                frame_.set_size_request(640, 420);
+    }
     if (root->window) frame_.add_css_class("kevc-design-window");
     else frame_.remove_css_class("kevc-design-window");
     frame_.set_visible(true);
     if (!message_.has_css_class("error") || message_.get_text().find("GTK can't build") == 0) showMessage("", false);
+}
+
+void DesignerPage::revealSelection() {
+    Node* node = doc_.find(selected_);
+    if (!node) return;
+    // A page object (GtkNotebookPage, GtkStackPage) has no widget of its own: show its child.
+    if (!widgets_.count(node->uid))
+        if (Node* child = ui::propertyObject(*node, "child")) node = child;
+    auto it = widgets_.find(node->uid);
+    if (it == widgets_.end()) return;
+    GtkWidget* widget = it->second;
+    for (GtkWidget *below = widget, *above = gtk_widget_get_parent(widget); above;
+         below = above, above = gtk_widget_get_parent(above)) {
+        if (GTK_IS_NOTEBOOK(above)) {
+            // The page holding the widget, or whose tab it is (a click on a tab selects its label).
+            GtkNotebook* notebook = GTK_NOTEBOOK(above);
+            for (int i = 0; i < gtk_notebook_get_n_pages(notebook); ++i) {
+                GtkWidget* page = gtk_notebook_get_nth_page(notebook, i);
+                GtkWidget* tab = gtk_notebook_get_tab_label(notebook, page);
+                if (widget == page || gtk_widget_is_ancestor(widget, page) ||
+                    (tab && (widget == tab || gtk_widget_is_ancestor(widget, tab)))) {
+                    gtk_notebook_set_current_page(notebook, i);
+                    break;
+                }
+            }
+        } else if (GTK_IS_STACK(above) && !GTK_IS_NOTEBOOK(gtk_widget_get_parent(above))) {
+            // (A notebook's pages are in a stack of its own, which the notebook switches.)
+            gtk_stack_set_visible_child(GTK_STACK(above), below);
+        }
+    }
 }
 
 // Labels in the design would otherwise register their _mnemonics on the IDE's window, where Alt+key
@@ -804,6 +862,7 @@ void DesignerPage::select(int uid) {
     }
     // An object in another top-level window or widget: show that one.
     if (const int root = rootOf(uid); root && root != shownRoot_ && previewRoots_.count(root)) rebuildPreview();
+    revealSelection();
     selectionLayer_.queue_draw();
     scheduleProperties();
     if (Node* n = doc_.find(uid)) {
