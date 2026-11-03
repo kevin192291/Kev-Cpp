@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkBox" id="ProjectTree">
+    <property name="orientation">vertical</property>
+    <child>
+      <object class="GtkSearchEntry" id="search_">
+        <property name="placeholder-text">Search files by name</property>
+        <property name="margin-start">4</property>
+        <property name="margin-end">4</property>
+        <property name="margin-top">4</property>
+        <property name="margin-bottom">4</property>
+        <signal name="search-changed" handler="on_search_changed"/>
+        <signal name="activate" handler="on_search_activate"/>
+        <signal name="stop-search" handler="on_search_stop_search"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkStack" id="stack_">
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">empty</property>
+            <property name="child">
+              <object class="GtkLabel" id="placeholder_">
+                <property name="label">No project open.
+
+File → New Project or Open Project.</property>
+                <property name="wrap">true</property>
+                <property name="justify">center</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">tree</property>
+            <property name="child">
+              <object class="GtkScrolledWindow">
+                <child>
+                  <object class="GtkListView" id="list_">
+                    <style>
+                      <class name="kevc-project-list"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">results</property>
+            <property name="child">
+              <object class="GtkScrolledWindow" id="resultsScroller_">
+                <child>
+                  <object class="GtkListBox" id="results_">
+                    <property name="selection-mode">browse</property>
+                    <child type="placeholder">
+                      <object class="GtkLabel" id="resultsMessage_">
+                        <property name="valign">start</property>
+                        <property name="wrap">true</property>
+                        <property name="margin-start">12</property>
+                        <property name="margin-end">12</property>
+                        <property name="margin-top">12</property>
+                        <property name="margin-bottom">12</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+  <menu id="contextMenu_">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Open</attribute>
+        <attribute name="action">tree.open</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">New _File…</attribute>
+        <attribute name="action">tree.new-file</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">New Fol_der…</attribute>
+        <attribute name="action">tree.new-folder</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Rename…</attribute>
+        <attribute name="action">tree.rename</attribute>
+        <attribute name="accel">F2</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Delete</attribute>
+        <attribute name="action">tree.delete</attribute>
+        <attribute name="accel">Delete</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Copy _Path</attribute>
+        <attribute name="action">tree.copy-path</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Copy Relati_ve Path</attribute>
+        <attribute name="action">tree.copy-relative-path</attribute>
+      </item>
+    </section>
+  </menu>
+</interface>

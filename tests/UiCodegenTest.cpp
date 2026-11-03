@@ -96,6 +96,63 @@ const std::string kPanel = R"(<?xml version="1.0" encoding="UTF-8"?>
 </interface>
 )";
 
+// Menus and the other top-level things a window's class holds: what it names, and what nothing names.
+const std::string kMenus = R"(<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkApplicationWindow" id="main_window">
+    <child>
+      <object class="GtkBox">
+        <child>
+          <object class="GtkPopoverMenuBar" id="bar">
+            <property name="menu-model">menubar</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkMenuButton" id="more">
+            <property name="popover">more_popover</property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+  <menu id="menubar">
+    <submenu id="file_menu">
+      <attribute name="label">_File</attribute>
+      <section id="recent_section"/>
+      <section>
+        <item>
+          <attribute name="label">_Quit</attribute>
+          <attribute name="action">app.quit</attribute>
+        </item>
+      </section>
+    </submenu>
+  </menu>
+  <menu id="context_menu">
+    <item>
+      <attribute name="label">_Copy</attribute>
+      <attribute name="action">win.copy</attribute>
+    </item>
+  </menu>
+  <object class="GtkPopover" id="more_popover">
+    <child>
+      <object class="GtkButton" id="more_reset">
+        <signal name="clicked" handler="on_more_reset_clicked"/>
+      </object>
+    </child>
+  </object>
+  <object class="GtkStringList" id="sizes"/>
+  <object class="GtkWindow" id="other_window">
+    <child>
+      <object class="GtkMenuButton">
+        <property name="popover">other_popover</property>
+      </object>
+    </child>
+  </object>
+  <object class="GtkPopover" id="other_popover"/>
+</interface>
+)";
+
 std::string fileText(const Code& code, const std::string& name, bool user = false) {
     for (const auto& f : user ? code.user : code.generated)
         if (f.name == name) return f.text;
@@ -316,6 +373,7 @@ TEST(UiCodegen, TopLevelWidgetsGetClassesUnlessAnotherObjectNamesThem) {
     EXPECT_TRUE(contains(h, "virtual void on_query_changed() {}"));
     EXPECT_TRUE(contains(fileText(code, "search_panel.h", true), "static Glib::RefPtr<SearchPanel> create()"));
     EXPECT_FALSE(contains(h, "OptionsPopover"));
+    EXPECT_TRUE(contains(h, "Gtk::Popover* options_popover = nullptr;")); // the panel's, as a member
 
     const Code c = generateC(doc, "search_panel.ui", basicGtkTypes());
     EXPECT_TRUE(contains(fileText(c, "search_panel-ui.c"), "g_object_force_floating(G_OBJECT(ui->search_panel));"));
@@ -333,6 +391,81 @@ int runStatus(const std::string& cmd) {
 
 // A designed widget lives while something holds it: moving it between containers keeps it, and it
 // goes once nothing does. Built and run against the real gtkmm and GTK (run only with a display).
+TEST(UiCodegen, MenusAndWhatAWindowNamesAreMembersOfItsClass) {
+    const auto doc = UiDocument::parse(kMenus);
+    const auto types = basicGtkTypes();
+    const Code code = generateGtkmm(doc, "main_window.ui", types);
+    EXPECT_TRUE(code.warnings.empty());
+    const std::string h = fileText(code, "main_window.ui.h"), cpp = fileText(code, "main_window.ui.cpp");
+    const std::string mine = h.substr(h.find("class MainWindowUi"), h.find("class OtherWindowUi") - h.find("class MainWindowUi"));
+    const std::string other = h.substr(h.find("class OtherWindowUi"));
+    // What the window names (and what those name), and the menus and objects nothing names.
+    for (const char* member : {"Gtk::PopoverMenuBar* bar = nullptr;", "Gtk::Popover* more_popover = nullptr;",
+                               "Gtk::Button* more_reset = nullptr;", "Glib::RefPtr<Gio::Menu> menubar;",
+                               "Glib::RefPtr<Gio::Menu> file_menu;", "Glib::RefPtr<Gio::Menu> recent_section;",
+                               "Glib::RefPtr<Gio::Menu> context_menu;", "Glib::RefPtr<Gtk::StringList> sizes;",
+                               "virtual void on_more_reset_clicked() {}"})
+        EXPECT_TRUE(contains(mine, member)) << member;
+    EXPECT_FALSE(contains(mine, "other_popover"));
+    // The other window has its own popover and the shared ones, not the first window's.
+    EXPECT_TRUE(contains(other, "Gtk::Popover* other_popover = nullptr;"));
+    EXPECT_TRUE(contains(other, "Glib::RefPtr<Gio::Menu> context_menu;"));
+    EXPECT_FALSE(contains(other, "menubar"));
+    EXPECT_FALSE(contains(other, "more_popover"));
+    EXPECT_TRUE(contains(cpp, "menubar = builder->get_object<Gio::Menu>(\"menubar\");"));
+    EXPECT_TRUE(contains(cpp, "g_signal_connect_data(more_reset->gobj(), \"clicked\","));
+    // Go to handler finds the class a popover's button belongs to.
+    Node* reset = nullptr;
+    for (Node* o : doc.objects())
+        if (UiDocument::objectId(*o) == "more_reset") reset = o;
+    ASSERT_NE(reset, nullptr);
+    const auto stub = handlerStub(doc, *reset, "clicked", true, types);
+    ASSERT_TRUE(stub.has_value());
+    EXPECT_EQ(stub->qualifiedName, "MainWindow::on_more_reset_clicked");
+
+    const Code c = generateC(doc, "main_window.ui", types);
+    const std::string ch = fileText(c, "main_window-ui.h"), cc = fileText(c, "main_window-ui.c");
+    EXPECT_TRUE(contains(ch, "GMenu *menubar;"));
+    EXPECT_TRUE(contains(cc, "ui->menubar = (GMenu *) gtk_builder_get_object(builder, \"menubar\");"));
+
+    if (!hasPkgConfig("gtkmm-4.0") || !hasPkgConfig("gtk4")) GTEST_SKIP() << "gtkmm-4.0 or gtk4 isn't installed";
+    TempDir dir("menus");
+    for (const auto& f : code.generated) dir.write(f.name, f.text);
+    for (const auto& f : code.user) dir.write(f.name, f.text);
+    dir.write("main.cpp", "#include \"main_window.h\"\n"
+                          "int main() {\n"
+                          "    auto app = Gtk::Application::create(\"org.kevcpp.MenuTest\", Gio::Application::Flags::NON_UNIQUE);\n"
+                          "    if (!gtk_init_check()) return 77;\n"
+                          "    struct Probe : MainWindowUi {\n"
+                          "        Probe(BaseObjectType* o, const Glib::RefPtr<Gtk::Builder>& b) : MainWindowUi(o, b) {}\n"
+                          "        int check() {\n"
+                          "            if (!menubar || menubar->get_n_items() != 1) return 1;\n"
+                          "            if (!file_menu || file_menu->get_n_items() != 2 || recent_section->get_n_items() != 0) return 2;\n"
+                          "            if (bar->get_menu_model() != menubar) return 3;\n"
+                          "            if (more->get_popover() != more_popover || !more_reset) return 4;\n"
+                          "            recent_section->append(\"notes.txt\", \"win.open\");\n"
+                          "            return file_menu->get_n_items() == 2 && context_menu->get_n_items() == 1 ? 0 : 5;\n"
+                          "        }\n"
+                          "    };\n"
+                          "    auto* window = MainWindowUi::create<Probe>();\n"
+                          "    const int status = window->check();\n"
+                          "    delete window;\n"
+                          "    return status;\n"
+                          "}\n");
+    const std::string cd = "cd '" + dir.path().string() + "' && ";
+    ASSERT_EQ(runStatus(cd + "g++ -std=c++17 -Wall -Wextra -Werror main.cpp main_window.ui.cpp -o app "
+                             "$(pkg-config --cflags --libs gtkmm-4.0) >build.log 2>&1"), 0)
+        << std::ifstream(dir.path() / "build.log").rdbuf();
+    const int run = runStatus(cd + "./app >run.log 2>&1");
+    if (run != 77) EXPECT_EQ(run, 0) << std::ifstream(dir.path() / "run.log").rdbuf();
+    for (const auto& f : c.generated) dir.write(f.name, f.text);
+    dir.write("main.c", "#include \"main_window-ui.h\"\nint main(int argc, char **argv) {\n"
+                        "    (void) argv;\n    if (argc > 99) main_window_ui_new();\n    return 0;\n}\n");
+    EXPECT_EQ(runStatus(cd + "gcc -std=c17 -Wall -Wextra -Werror main.c main_window-ui.c -o capp "
+                             "$(pkg-config --cflags --libs gtk4) >build.log 2>&1"), 0)
+        << std::ifstream(dir.path() / "build.log").rdbuf();
+}
+
 TEST(UiCodegen, GeneratedPanelCodeBuildsAndLivesAsLongAsItsHolders) {
     if (!hasPkgConfig("gtkmm-4.0") || !hasPkgConfig("gtk4")) GTEST_SKIP() << "gtkmm-4.0 or gtk4 isn't installed";
     const auto doc = UiDocument::parse(kPanel);
@@ -452,5 +585,5 @@ TEST(UiCodegen, KevCppsOwnDesignsMatchTheirCode) {
             << code.filename() << " is older than " << entry.path().filename() << ": open the .ui in Kev-C++ and save it";
         ++checked;
     }
-    EXPECT_GE(checked, 19); // G4: the splash, the dialogs (step 2) and the panels (step 3), at least
+    EXPECT_GE(checked, 23); // G4: the splash, the dialogs (step 2), the panels (step 3) and the main window (step 4)
 }

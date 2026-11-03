@@ -794,7 +794,7 @@ void DesignerPage::pickAt(double x, double y) {
 }
 
 void DesignerPage::drawSelection(const Cairo::RefPtr<Cairo::Context>& cr) {
-    auto it = widgets_.find(selected_);
+    auto it = widgets_.find(shownFor(selected_));
     graphene_rect_t r;
     if (it != widgets_.end() && gtk_widget_get_mapped(it->second) &&
         gtk_widget_compute_bounds(it->second, GTK_WIDGET(selectionLayer_.gobj()), &r)) {
@@ -913,7 +913,11 @@ void DesignerPage::rebuildOutline() {
         if (o.uid == selected_) outline_.select_row(*row);
         for (const Node* c : UiDocument::childObjects(o)) add(*c, depth + 1);
     };
-    for (const Node* top : doc_.topLevelObjects()) add(*top, 0);
+    if (const Node* iface = doc_.interface())
+        for (const Node* top : iface->childElements()) {
+            if (UiDocument::isObject(*top)) add(*top, 0);
+            else if (top->isElement("menu")) addMenuRows(*top, 0);
+        }
     syncing_ = false;
 }
 
@@ -1059,6 +1063,12 @@ void DesignerPage::rebuildProperties() {
         syncing_ = false;
         return;
     }
+    if (ui::menuPart(*object) != ui::MenuPart::None) {
+        rebuildMenuProperties(*object);
+        syncing_ = false;
+        restoreFocus(sameObject, focused);
+        return;
+    }
     const int uid = object->uid;
     const std::string cls = UiDocument::className(*object);
     const bool isTemplate = object->name == "template";
@@ -1106,11 +1116,10 @@ void DesignerPage::rebuildProperties() {
         if (!o || o->name == "template") return;
         const std::string id = idEntry->get_text();
         if (id == UiDocument::objectId(*o)) return;
-        for (Node* other : doc_.objects())
-            if (other != o && UiDocument::objectId(*other) == id && !id.empty()) {
-                showMessage("Another object already has the id \"" + id + "\".", true);
-                return;
-            }
+        if (!id.empty() && ui::usedIds(doc_).count(id)) {
+            showMessage("Another object or menu already has the id \"" + id + "\".", true);
+            return;
+        }
         edit([&] { doc_.setAttribute(*o, "id", id); });
     };
     idEntry->signal_activate().connect(commitId);
@@ -1247,6 +1256,14 @@ void DesignerPage::rebuildSignals(Node* object) {
     while (Gtk::Widget* c = signals_.get_first_child()) signals_.remove(*c);
     if (!object) {
         auto* hint = Gtk::make_managed<Gtk::Label>("Select a widget to see its signals.");
+        hint->set_wrap(true);
+        hint->add_css_class("dim-label");
+        signals_.append(*hint);
+        return;
+    }
+    if (ui::menuPart(*object) != ui::MenuPart::None) {
+        auto* hint = Gtk::make_managed<Gtk::Label>("Menus have no signals: an item runs its action (win.… or app.…), "
+                                                   "set in its properties.");
         hint->set_wrap(true);
         hint->add_css_class("dim-label");
         signals_.append(*hint);

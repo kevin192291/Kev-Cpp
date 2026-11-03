@@ -493,14 +493,7 @@ std::vector<std::pair<std::string, std::string>> UiDocument::properties(const No
 
 void UiDocument::setProperty(Node& object, std::string_view name, std::string_view value) {
     if (Node* p = propertyNode(object, name)) {
-        if (p->childElements().empty() && p->innerText() == value) return;
-        p->children.clear();
-        if (!value.empty()) {
-            auto t = textNode(std::string(value));
-            t->parent = p;
-            p->children.push_back(std::move(t));
-        }
-        touch(*p);
+        setText(*p, value);
         return;
     }
     int index = 0, i = 0;
@@ -509,6 +502,17 @@ void UiDocument::setProperty(Node& object, std::string_view name, std::string_vi
         if (e->name == "property") index = i;
     }
     insertElement(object, "<property name=\"" + escape(name, true) + "\">" + escape(value) + "</property>", index);
+}
+
+void UiDocument::setText(Node& element, std::string_view text) {
+    if (element.childElements().empty() && element.innerText() == text) return;
+    element.children.clear();
+    if (!text.empty()) {
+        auto t = textNode(std::string(text));
+        t->parent = &element;
+        element.children.push_back(std::move(t));
+    }
+    touch(element);
 }
 
 void UiDocument::removeProperty(Node& object, std::string_view name) {
@@ -791,6 +795,7 @@ private:
             if (e.name == "property") {
                 if (contains(e, "closure")) continue;
                 const std::string name = normalized(e.attribute("name"));
+                if (cls == "GtkSearchBar" && name == "search-mode-enabled") continue; // shown open, below
                 if (name == "action-name") actionName = e.innerText();
                 if (name == "action-target") actionTarget = e.innerText();
                 const auto inner = e.childElements("object");
@@ -823,6 +828,8 @@ private:
             }
         }
         if (fill && !UiDocument::propertyNode(o, "vexpand")) out_ += "<property name=\"vexpand\">true</property>";
+        // A search bar is closed until its window opens it; here it's open, so what's in it can be seen.
+        if (cls == "GtkSearchBar") out_ += "<property name=\"search-mode-enabled\">true</property>";
         // A header bar shows its window's title unless it has a title widget, and here its window is the IDE.
         if (cls == "GtkHeaderBar" && !UiDocument::propertyNode(o, "title-widget")) {
             out_ += "<property name=\"title-widget\"><object class=\"GtkLabel\"><property name=\"label\">" +

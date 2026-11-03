@@ -3,13 +3,10 @@
 namespace kevc {
 
 DevServerPanel::DevServerPanel(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder)
-    : DevServerPanelUi(object, builder) {
-    toggle_.setLabels("Start", "Stop");
-    toggleSlot_->append(toggle_);
-}
+    : DevServerPanelUi(object, builder) {}
 
 void DevServerPanel::setState(bool running, bool ready) {
-    toggle_.setRunning(running);
+    task_.setRunning(running);
     open_->set_sensitive(ready);
 }
 

@@ -66,6 +66,8 @@ struct Placement {
 
 // An id for a new object of class `cls` ("button1", "spin_button2") that the document doesn't use.
 std::string freshId(const UiDocument& doc, const std::string& cls, const std::set<std::string>& taken = {});
+// Every id the document gives GtkBuilder: its objects', menus', submenus' and sections'.
+std::set<std::string> usedIds(const UiDocument& doc);
 // A new object as XML: an id, the catalog's defaults and extra XML.
 std::string newObjectXml(const UiDocument& doc, const std::string& cls, const ClassInfo* info);
 // `objectXml` with each id the document already uses changed to a new one (for pasting).
@@ -103,5 +105,33 @@ struct SignalHandler {
 std::vector<SignalHandler> signalHandlers(const Node& object);
 // Sets the handler of `signal` ("" removes it).
 void setSignalHandler(UiDocument& doc, Node& object, const std::string& signal, const std::string& handler);
+
+// ---- menus: a top-level <menu> and the <submenu>, <section> and <item> elements in it
+
+enum class MenuPart { None, Menu, Submenu, Section, Item };
+// <menu>, <submenu>, <section>, <item>; an item's <link name="submenu|section"> counts as one.
+MenuPart menuPart(const Node& node);
+// The entries (items, sections, submenus) in a menu, submenu, section or link, in order.
+std::vector<Node*> menuEntries(const Node& part);
+// The top-level <menu> a part is in (itself for a menu).
+Node* menuOf(const Node& part);
+// A submenu's, section's or item's <attribute name="…">: label, action, target, icon, accel,
+// hidden-when.
+std::optional<std::string> menuAttribute(const Node& part, std::string_view name);
+// Sets it ("" removes it). A new label is marked translatable, as Glade and Cambalache write it.
+void setMenuAttribute(UiDocument& doc, Node& part, std::string_view name, std::string_view value);
+// Adds an item ("New Item"), a section or a submenu ("New Menu") inside a menu, submenu or section,
+// as its `index`th entry (-1: last). Returns it.
+Node* addMenuPart(UiDocument& doc, Node& into, MenuPart what, int index = -1);
+// A new top-level <menu> with a free id ("menu1") and one item, after the file's other objects.
+Node* addMenu(UiDocument& doc);
+// Moves an entry before its previous (-1) or after its next (+1) sibling entry; returns it at its new
+// place, or nullptr if it can't move that way.
+Node* shiftMenuPart(UiDocument& doc, Node& part, int delta);
+// A label as the menu shows it: "_Save" → "Save" ("__" is an underscore).
+std::string menuLabelText(std::string_view label);
+// `xml` (a <menu>, <submenu>, <section> or <item>) with its ids made unique in the document, for
+// pasting.
+std::string menuPartWithUniqueIds(const UiDocument& doc, std::string_view xml);
 
 } // namespace kevc::ui

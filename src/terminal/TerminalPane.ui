@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkBox" id="TerminalPane">
+    <child>
+      <object class="VteTerminal" id="vte_">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <property name="scrollback-lines">10000</property>
+        <property name="scroll-on-output">true</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkScrollbar" id="scrollbar_">
+        <property name="orientation">vertical</property>
+      </object>
+    </child>
+  </object>
+</interface>

@@ -1,6 +1,9 @@
 #pragma once
 
+#include "app/MainWindow.ui.h"
+
 #include "build/BuildRunner.h"
+#include "build/CompileLog.h"
 #include "build/CompilerPanel.h"
 #include "core/BuildPlan.h"
 #include "core/Diagnostics.h"
@@ -50,9 +53,14 @@ class DocumentPage;
 class EditorTab;
 class SourceWatcher;
 
-class MainWindow : public Gtk::ApplicationWindow {
+// Kev-C++'s window. Its frame and menus are MainWindow.ui (edit it on Kev-C++'s Design page): the menu
+// row, the toolbar's groups, the docks, the find bar, the status bar. This class fills the places the
+// design leaves for what's made in code (the search field, the panels, the editors) and picks which
+// of the design's menu sections and toolbar groups apply to what's open.
+class MainWindow : public MainWindowUi {
 public:
-    explicit MainWindow(Application& app);
+    static MainWindow* create(Application& app) { return MainWindowUi::create<MainWindow>(app); }
+    MainWindow(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder, Application& app);
     ~MainWindow() override;
     // Closes as the window's close button does, but unsaved files aren't asked about (a SIGTERM at
     // logout: nobody is there to answer). Breakpoints and the project's state are still saved.
@@ -62,25 +70,40 @@ public:
     // Opens a project folder, a .kevc file, or a single file (from the command line).
     void openPath(const std::filesystem::path& path);
 
+protected:
+    // The find bar's handlers (named in MainWindow.ui).
+    void on_find_changed() override;
+    void on_find_activate() override;
+    void on_find_next_match() override;
+    void on_find_previous_match() override;
+    void on_find_stop_search() override;
+    void on_find_previous_clicked() override;
+    void on_find_next_clicked() override;
+    void on_find_case_toggled() override;
+    void on_find_everywhere_clicked() override;
+    void on_replace_toggled() override;
+    void on_replace_activate() override;
+    void on_replace_clicked() override;
+    void on_replace_all_clicked() override;
+
 private:
-    // UI construction
+    // Filling in the design
     void buildActions();
-    Glib::RefPtr<Gio::Menu> buildMenuModel();
-    Gtk::Widget& buildToolbar();
-    Gtk::Widget& buildLeftDock();
+    void setupToolbar();
+    void setupLeftDock();
     // The left dock's tabs show their names where they fit (the selected tab first, then Project and
     // Search); the others show their icon, named in a tooltip, so no tab hides behind scroll arrows.
     void fitLeftTabs();
-    Gtk::Widget& buildEditorArea();
-    Gtk::Widget& buildBottomDock();
-    Gtk::Widget& buildStatusBar();
+    void setupEditorArea();
+    void setupBottomDock();
     // Registers a win.<name> action that only reports it is not implemented yet.
     void addStubAction(const Glib::ustring& name, const Glib::ustring& label);
     // Shows the toolbar groups and panels the current profile (what's open) wants; see
     // core/ProjectKinds. Called whenever a project or folder is opened.
     void applyProfile();
     // The File, View, Project, Execute and Tools menus list only what applies to what's open (see
-    // core/ProjectKinds), and web projects get web names (Check Types, Production Build).
+    // core/ProjectKinds), and web projects get web names (Check Types, Production Build): the design
+    // has a section for each case, and this picks them.
     void updateMenus();
     void updateToolbarRows();
 
@@ -287,13 +310,7 @@ private:
     std::filesystem::path lspRootForLooseFiles_;
     bool closeConfirmed_ = false;
 
-    Gtk::Box root_{Gtk::Orientation::VERTICAL};
-    Gtk::Paned hpaned_{Gtk::Orientation::HORIZONTAL};
-    Gtk::Paned vpaned_{Gtk::Orientation::VERTICAL};
-    Gtk::Paned rightPaned_{Gtk::Orientation::HORIZONTAL}; // editor + bottom dock | right dock
-    Gtk::Notebook rightDock_;
-    Gtk::Notebook leftDock_;
-    ProjectTree projectTree_;
+    Glib::RefPtr<ProjectTree> projectTree_ = ProjectTree::create();
     Glib::RefPtr<SearchPanel> searchPanel_ = SearchPanel::create();
     QuickSearch quickSearch_;
     Glib::RefPtr<SymbolsPanel> symbols_ = SymbolsPanel::create();
@@ -310,50 +327,28 @@ private:
     TestRunner lastRunner_ = TestRunner::Vitest;
     std::vector<TestCase> lastFailed_;
     sigc::connection symbolsTimer_;
-    Gtk::Box editorArea_{Gtk::Orientation::VERTICAL};
     Gtk::Popover locationsPopover_; // several answers to a Go to…, at the cursor
-    Glib::RefPtr<Gio::Menu> editorMenu_, cppEditorMenu_; // added to the editors' right-click menu
-    Glib::RefPtr<Gio::Menu> gutterMenu_;                 // a right-click on a line number
-    std::set<std::filesystem::path> warnedUnlisted_;     // designer code already reported as not in CMakeLists.txt
-    Gtk::Notebook editors_;
+    std::set<std::filesystem::path> warnedUnlisted_; // designer code already reported as not in CMakeLists.txt
     Glib::RefPtr<WelcomePage> welcomePage_; // while no file is open
     std::filesystem::path gitTopLevel_; // the open folder's git work tree ("" if it isn't in one)
     Glib::RefPtr<Gio::FileMonitor> gitMonitor_;
     sigc::connection gitSoon_;
     bool gitRunning_ = false, gitAgain_ = false;
-    Gtk::SearchBar findBar_;
-    Gtk::SearchEntry findEntry_;
-    Gtk::CheckButton findCase_{"Match case"};
-    Gtk::Label findCount_;
-    Gtk::ToggleButton replaceToggle_; // shows the Replace row
-    Gtk::Box replaceRow_{Gtk::Orientation::HORIZONTAL, 6};
-    Gtk::Entry replaceEntry_;
-    Gtk::Notebook bottomDock_;
-    Gtk::TextView compileLog_;
-    Glib::RefPtr<Gtk::TextMark> logEnd_;
+    Glib::RefPtr<CompileLog> compileLog_ = CompileLog::create();
     Glib::RefPtr<CompilerPanel> compilerPanel_ = CompilerPanel::create();
-    TerminalPane runConsole_;
-    TerminalPane shell_;
-    Gtk::DropDown* configDrop_ = nullptr;
-    std::map<Task, TaskButton*> taskButtons_;
-    // Named groups of toolbar buttons that View → Toolbars shows or hides per profile.
-    struct ToolbarGroup {
-        std::string id;
-        Gtk::Box* box;
-        Gtk::Separator* separator; // before the group, hidden when it's the first one in its row
-        size_t row;
-    };
-    std::vector<ToolbarGroup> toolbarGroups_;
-    std::vector<Gtk::Box*> toolbarRows_;
-    std::vector<Gtk::Separator*> toolbarRules_; // the line above each row after the first
+    Glib::RefPtr<TerminalPane> runConsole_ = TerminalPane::create(); // the Run tab
+    Glib::RefPtr<TerminalPane> shell_ = TerminalPane::create();      // the Terminal tab
+    std::map<Task, std::unique_ptr<TaskButton>> taskButtons_; // the design's buttons that show Stop
+    // Named groups of toolbar buttons that View → Toolbars shows or hides per profile: the design's
+    // boxes in its toolbar rows, each after a separator.
+    std::vector<std::pair<std::string, Gtk::Box*>> toolbarGroups_;
     // View → Toolbars / Panels check items, by group or panel id.
     std::map<std::string, Glib::RefPtr<Gio::SimpleAction>> toolbarActions_;
     std::map<std::string, Glib::RefPtr<Gio::SimpleAction>> panelActions_;
     std::string profile_ = "none";
     bool applyingProfile_ = false; // setting the Debug/Release choice from the project, not the user
-    TaskButton* continueButton_ = nullptr; // Continue while paused, Pause while the program runs
-    TaskButton* devServerButton_ = nullptr;
-    std::vector<Gtk::Button*> stepButtons_; // only while paused in the debugger
+    std::unique_ptr<TaskButton> continueTask_; // Continue while paused, Pause while the program runs
+    std::unique_ptr<TaskButton> devServerTask_;
 
     BuildRunner build_;
     Task buildTask_ = Task::None;   // which button started the running build
@@ -367,12 +362,7 @@ private:
     std::unique_ptr<DevServer> devServer_;
     bool serverWasReady_ = false; // tells a failed start from a server that stopped later
     WebProject web_;              // the open web project's package.json, read when it opens
-    Glib::RefPtr<Gio::Menu> scriptsMenu_ = Gio::Menu::create(); // Project → Scripts and the web toolbar
-    // Menus refilled by updateMenus.
-    Glib::RefPtr<Gio::Menu> fileMenu_ = Gio::Menu::create(), viewToolbars_ = Gio::Menu::create(),
-                            viewPanels_ = Gio::Menu::create(),
-                            projectMenu_ = Gio::Menu::create(), executeMenu_ = Gio::Menu::create(),
-                            toolsMenu_ = Gio::Menu::create();
+    std::string installLabel_; // the design's label for Install Dependencies, naming npm
     std::string doneLabel_;       // see runCommands
     bool openBrowserWhenReady_ = false;
     Glib::RefPtr<DevServerPanel> serverPanel_ = DevServerPanel::create();
@@ -401,7 +391,6 @@ private:
 
     // Last member: destroyed first, so floating panel windows are emptied while the panels exist.
     std::unique_ptr<DockManager> docks_;
-    Gtk::Label status_;
 };
 
 } // namespace kevc

@@ -295,3 +295,89 @@ TEST(UiEdit, DescribesHowAnObjectIsHeld) {
     EXPECT_TRUE(isWithin(*byId(doc, "b"), *doc.topLevelObjects()[0]));
     EXPECT_FALSE(isWithin(*byId(doc, "h"), *byId(doc, "b")));
 }
+
+TEST(UiEdit, EditsMenus) {
+    auto doc = UiDocument::parse(R"(<interface>
+  <object class="GtkPopoverMenuBar" id="bar">
+    <property name="menu-model">menubar</property>
+  </object>
+  <menu id="menubar">
+    <submenu>
+      <attribute name="label" translatable="yes">_File</attribute>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Open</attribute>
+          <attribute name="action">win.open</attribute>
+        </item>
+      </section>
+    </submenu>
+  </menu>
+</interface>
+)");
+    Node* menu = doc.interface()->firstChild("menu");
+    ASSERT_NE(menu, nullptr);
+    EXPECT_EQ(menuPart(*menu), MenuPart::Menu);
+    Node* file = menuEntries(*menu).at(0);
+    EXPECT_EQ(menuPart(*file), MenuPart::Submenu);
+    EXPECT_EQ(menuAttribute(*file, "label"), "_File");
+    EXPECT_EQ(menuLabelText(*menuAttribute(*file, "label")), "File");
+    EXPECT_EQ(menuLabelText("Save __as"), "Save _as");
+    Node* section = menuEntries(*file).at(0);
+    Node* open = menuEntries(*section).at(0);
+    EXPECT_EQ(menuOf(*open), menu);
+    EXPECT_EQ(menuAttribute(*open, "action"), "win.open");
+    EXPECT_EQ(menuAttribute(*open, "icon"), std::nullopt);
+
+    // Attributes: changed in place, added after the others (a label marked translatable), removed.
+    setMenuAttribute(doc, *open, "action", "win.open-file");
+    setMenuAttribute(doc, *open, "accel", "<Control>o");
+    setMenuAttribute(doc, *file, "label", "_Document");
+    EXPECT_NE(doc.text().find(R"(          <attribute name="action">win.open-file</attribute>
+          <attribute name="accel">&lt;Control&gt;o</attribute>
+        </item>)"), std::string::npos) << doc.text();
+    EXPECT_NE(doc.text().find(R"(<attribute name="label" translatable="yes">_Document</attribute>)"), std::string::npos);
+    setMenuAttribute(doc, *open, "accel", "");
+    EXPECT_EQ(doc.text().find("accel"), std::string::npos);
+
+    // New entries: last, or at an index among the entries (not counting attributes).
+    Node* quit = addMenuPart(doc, *section, MenuPart::Item);
+    ASSERT_NE(quit, nullptr);
+    setMenuAttribute(doc, *quit, "label", "_Quit");
+    Node* recent = addMenuPart(doc, *file, MenuPart::Submenu, 0);
+    ASSERT_NE(recent, nullptr);
+    EXPECT_EQ(menuEntries(*file).front(), recent);
+    EXPECT_EQ(menuAttribute(*recent, "label"), "New Menu");
+    Node* inner = addMenuPart(doc, *recent, MenuPart::Section);
+    ASSERT_NE(inner, nullptr);
+    EXPECT_NE(addMenuPart(doc, *inner, MenuPart::Item), nullptr); // inside a section written <section/>
+    EXPECT_EQ(addMenuPart(doc, *quit, MenuPart::Item), nullptr);  // items hold no entries
+    EXPECT_NO_THROW(UiDocument::parse(doc.text()));
+    EXPECT_NE(doc.text().find(R"(    <submenu>
+      <attribute name="label" translatable="yes">_Document</attribute>
+      <submenu>
+        <attribute name="label" translatable="yes">New Menu</attribute>
+        <section>
+          <item>
+            <attribute name="label" translatable="yes">New Item</attribute>
+          </item>
+        </section>
+      </submenu>
+      <section>)"), std::string::npos) << doc.text();
+
+    // Moving among the entries.
+    Node* moved = shiftMenuPart(doc, *quit, -1);
+    ASSERT_NE(moved, nullptr);
+    section = menuEntries(*menuEntries(*menu).at(0)).at(1);
+    EXPECT_EQ(menuAttribute(*menuEntries(*section).at(0), "label"), "_Quit");
+    EXPECT_EQ(shiftMenuPart(doc, *menuEntries(*section).at(0), -1), nullptr);
+
+    // A new top-level menu gets an id no object or menu has; pasted parts too.
+    Node* added = addMenu(doc);
+    ASSERT_NE(added, nullptr);
+    EXPECT_EQ(added->attribute("id"), "menu1");
+    EXPECT_EQ(menuEntries(*added).size(), 1u);
+    const std::string pasted = menuPartWithUniqueIds(doc, R"(<menu id="menubar"><section id="menu1"/></menu>)");
+    EXPECT_NE(pasted.find(R"(<menu id="menubar1">)"), std::string::npos) << pasted;
+    EXPECT_NE(pasted.find(R"(<section id="menu2"/>)"), std::string::npos) << pasted;
+    EXPECT_EQ(freshId(doc, "Menubar"), "menubar1");
+}

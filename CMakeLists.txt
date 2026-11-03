@@ -89,9 +89,12 @@ add_executable(kev-cpp
   src/app/Application.cpp
   src/app/BuildInfo.cpp
   src/app/MainWindow.cpp
+  src/app/MainWindow.ui.cpp
   src/build/BuildRunner.cpp
   src/build/CompilerPanel.cpp
   src/build/CompilerPanel.ui.cpp
+  src/build/CompileLog.cpp
+  src/build/CompileLog.ui.cpp
   src/debug/DapClient.cpp
   src/debug/DapViews.cpp
   src/debug/DebugController.cpp
@@ -106,12 +109,14 @@ add_executable(kev-cpp
   src/devserver/DevServer.cpp
   src/designer/DesignerCode.cpp
   src/designer/DesignerEditing.cpp
+  src/designer/DesignerMenus.cpp
   src/designer/DesignerPage.cpp
   src/designer/DesignerTypes.cpp
   src/editor/CodeFormatter.cpp
   src/editor/CppIndenter.cpp
   src/editor/EditorTab.cpp
   src/editor/ProjectTree.cpp
+  src/editor/ProjectTree.ui.cpp
   src/editor/RoutesPanel.cpp
   src/editor/RoutesPanel.ui.cpp
   src/editor/SymbolsPanel.cpp
@@ -124,6 +129,7 @@ add_executable(kev-cpp
   src/process/ManagedProcess.cpp
   src/project/SourceWatcher.cpp
   src/terminal/TerminalPane.cpp
+  src/terminal/TerminalPane.ui.cpp
   src/ui/AboutWindow.cpp
   src/ui/AboutWindow.ui.cpp
   src/ui/Dialogs.cpp

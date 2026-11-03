@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkTextTagTable" id="tags_">
+    <child type="tag">
+      <object class="GtkTextTag">
+        <property name="name">command</property>
+        <property name="weight">700</property>
+      </object>
+    </child>
+    <child type="tag">
+      <object class="GtkTextTag">
+        <property name="name">summary</property>
+        <property name="weight">700</property>
+      </object>
+    </child>
+    <child type="tag">
+      <object class="GtkTextTag">
+        <property name="name">error</property>
+        <property name="foreground">#ff6b6b</property>
+      </object>
+    </child>
+    <child type="tag">
+      <object class="GtkTextTag">
+        <property name="name">warning</property>
+        <property name="foreground">#f0c050</property>
+      </object>
+    </child>
+    <child type="tag">
+      <object class="GtkTextTag">
+        <property name="name">success</property>
+        <property name="foreground">#7bd88f</property>
+      </object>
+    </child>
+  </object>
+  <object class="GtkTextBuffer" id="buffer_">
+    <property name="tag-table">tags_</property>
+  </object>
+  <object class="GtkScrolledWindow" id="CompileLog">
+    <child>
+      <object class="GtkTextView" id="view_">
+        <property name="buffer">buffer_</property>
+        <property name="editable">false</property>
+        <property name="cursor-visible">false</property>
+        <property name="monospace">true</property>
+        <style>
+          <class name="kevc-log"/>
+        </style>
+      </object>
+    </child>
+  </object>
+</interface>

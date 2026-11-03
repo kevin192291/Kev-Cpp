@@ -1,6 +1,6 @@
 # Important to-dos
 
-Done items say where to find them. Last updated 2026-11-03.
+Done items say where to find them. Last updated 2026-11-04.
 
 ## Done
 
@@ -31,6 +31,9 @@ Done items say where to find them. Last updated 2026-11-03.
 - ✅ **The .kevc holds the project's settings**: toolbars and panels shown or hidden and the Debug /
   Release choice (`"ui"`). Web folders have no .kevc by design, so theirs are kept with the project's
   remembered state (`~/.local/state/kev-cpp/projects.json`).
+- ✅ **Ctrl+I indented C/C++ by 2 spaces** in projects without a .clang-format: it used the one in the
+  home folder (LLVM style). Only a .clang-format in the project or its git repository counts now;
+  otherwise Kev-C++'s layout (4 spaces) applies (core/Format's clangFormatConfig).
 
 ## Partly done
 
@@ -39,9 +42,13 @@ Done items say where to find them. Last updated 2026-11-03.
   with F10 and debugs it with F5.
   **In progress: milestone G4** (docs/ROADMAP.md) moves Kev-C++'s windows to `.ui` files so the
   visual designer edits them. Done: the splash, every dialog (About, Toolchain, the message boxes,
-  New Project, Project Options, npm Packages) and the panels (Search, Classes, Routes, Compiler,
-  Debug, Watches, Environment, Tests, Traces, Dependencies, Dev Server, Welcome): change one on the
-  Design page, save, F9, and F10 runs Kev-C++ with the change. Next: the main window.
+  New Project, Project Options, npm Packages), the panels (Project, Search, Classes, Routes,
+  Compiler, Compile Log, Run, Terminal, Debug, Watches, Environment, Tests, Traces, Dependencies, Dev
+  Server, Welcome) and the main window with all its menus: change one on the Design page, save, F9,
+  and F10 runs Kev-C++ with the change. Next: step 5, the designer gaps this showed (Kev-C++'s own
+  look in the preview, C++-only widgets shown by name, a design wider than the canvas). Still built in
+  code: the designer's page, the editor tab, the menu bar's search field and the floating panel
+  windows.
 
 ## Not done
 

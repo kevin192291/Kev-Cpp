@@ -1,0 +1,1229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkApplicationWindow" id="MainWindow">
+    <property name="title">Kev-C++</property>
+    <property name="default-width">1280</property>
+    <property name="default-height">800</property>
+    <child>
+      <object class="GtkBox" id="root_">
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkCenterBox">
+            <property name="start-widget">
+              <object class="GtkPopoverMenuBar" id="menuBar_">
+                <property name="menu-model">menubar_</property>
+              </object>
+            </property>
+            <property name="center-widget">
+              <object class="GtkBox" id="quickSearchSlot_"/>
+            </property>
+            <style>
+              <class name="kevc-menubar-row"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="toolbar_">
+            <property name="orientation">vertical</property>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">1</property>
+                <child>
+                  <object class="GtkSeparator" id="fileSeparator_">
+                    <property name="orientation">vertical</property>
+                    <property name="margin-start">4</property>
+                    <property name="margin-end">4</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="fileGroup_">
+                    <property name="spacing">1</property>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.new-project</property>
+                        <property name="icon-name">kevc-classic-new-project</property>
+                        <property name="tooltip-text">New Project (Ctrl+Shift+N)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.new-file</property>
+                        <property name="icon-name">kevc-classic-new-file</property>
+                        <property name="tooltip-text">New Source File (Ctrl+N)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.open-project</property>
+                        <property name="icon-name">kevc-classic-open-file</property>
+                        <property name="tooltip-text">Open Project or Folder (Ctrl+O)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.save</property>
+                        <property name="icon-name">kevc-classic-save</property>
+                        <property name="tooltip-text">Save (Ctrl+S)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.save-all</property>
+                        <property name="icon-name">kevc-classic-save-all</property>
+                        <property name="tooltip-text">Save All (Ctrl+Shift+S)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.close-tab</property>
+                        <property name="icon-name">kevc-classic-close-file</property>
+                        <property name="tooltip-text">Close File (Ctrl+W)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkSeparator" id="editSeparator_">
+                    <property name="orientation">vertical</property>
+                    <property name="margin-start">4</property>
+                    <property name="margin-end">4</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="editGroup_">
+                    <property name="spacing">1</property>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.undo</property>
+                        <property name="icon-name">kevc-classic-undo</property>
+                        <property name="tooltip-text">Undo (Ctrl+Z)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.redo</property>
+                        <property name="icon-name">kevc-classic-redo</property>
+                        <property name="tooltip-text">Redo (Ctrl+Shift+Z)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.find</property>
+                        <property name="icon-name">kevc-classic-find</property>
+                        <property name="tooltip-text">Find (Ctrl+F)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.replace</property>
+                        <property name="icon-name">kevc-classic-replace</property>
+                        <property name="tooltip-text">Replace (Ctrl+R)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.find-in-files</property>
+                        <property name="icon-name">kevc-find-in-files</property>
+                        <property name="tooltip-text">Find in Files (Ctrl+Shift+F)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.goto-line</property>
+                        <property name="icon-name">kevc-classic-go-to-line</property>
+                        <property name="tooltip-text">Go to Line (Ctrl+G)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkSeparator" id="buildSeparator_">
+                    <property name="orientation">vertical</property>
+                    <property name="margin-start">4</property>
+                    <property name="margin-end">4</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="buildGroup_">
+                    <property name="spacing">1</property>
+                    <child>
+                      <object class="GtkButton" id="compileButton_">
+                        <property name="icon-name">kevc-classic-compile</property>
+                        <property name="tooltip-text">Compile (F9)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="runButton_">
+                        <property name="icon-name">kevc-classic-run</property>
+                        <property name="tooltip-text">Run (F10)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="compileRunButton_">
+                        <property name="icon-name">kevc-classic-compile-and-run</property>
+                        <property name="tooltip-text">Compile &amp; Run (F11)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="rebuildButton_">
+                        <property name="icon-name">kevc-classic-rebuild-all</property>
+                        <property name="tooltip-text">Rebuild All (F12)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="cleanButton_">
+                        <property name="icon-name">kevc-clean</property>
+                        <property name="tooltip-text">Clean</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkDropDown" id="configDrop_">
+                        <property name="tooltip-text">Build configuration</property>
+                        <property name="valign">center</property>
+                        <property name="margin-start">4</property>
+                        <property name="model">
+                          <object class="GtkStringList">
+                            <items>
+                              <item>Debug</item>
+                              <item>Release</item>
+                            </items>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkSeparator">
+                <style>
+                  <class name="kevc-toolbar-rule"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">1</property>
+                <child>
+                  <object class="GtkSeparator" id="debugSeparator_">
+                    <property name="orientation">vertical</property>
+                    <property name="margin-start">4</property>
+                    <property name="margin-end">4</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="debugGroup_">
+                    <property name="spacing">1</property>
+                    <child>
+                      <object class="GtkButton" id="debugButton_">
+                        <property name="icon-name">kevc-classic-debug</property>
+                        <property name="tooltip-text">Debug (F5)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="continueButton_">
+                        <property name="icon-name">kevc-continue</property>
+                        <property name="tooltip-text">Continue (F8)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.step-over</property>
+                        <property name="icon-name">kevc-step-over</property>
+                        <property name="tooltip-text">Step Over (F6)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.step-into</property>
+                        <property name="icon-name">kevc-step-into</property>
+                        <property name="tooltip-text">Step Into (F7)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.step-out</property>
+                        <property name="icon-name">kevc-step-out</property>
+                        <property name="tooltip-text">Step Out (Shift+F7)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.toggle-breakpoint</property>
+                        <property name="icon-name">kevc-classic-toggle</property>
+                        <property name="tooltip-text">Toggle Breakpoint (Ctrl+F5)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.add-watch</property>
+                        <property name="icon-name">kevc-watch</property>
+                        <property name="tooltip-text">Add Watch</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkSeparator" id="projectSeparator_">
+                    <property name="orientation">vertical</property>
+                    <property name="margin-start">4</property>
+                    <property name="margin-end">4</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="projectGroup_">
+                    <property name="spacing">1</property>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.project-options</property>
+                        <property name="icon-name">kevc-classic-project-options</property>
+                        <property name="tooltip-text">Project Options (Alt+P)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkSeparator" id="webSeparator_">
+                    <property name="orientation">vertical</property>
+                    <property name="margin-start">4</property>
+                    <property name="margin-end">4</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="webGroup_">
+                    <property name="spacing">1</property>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.web-install</property>
+                        <property name="icon-name">kevc-workspace</property>
+                        <property name="tooltip-text">Install Dependencies (npm install)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.packages</property>
+                        <property name="icon-name">kevc-settings</property>
+                        <property name="tooltip-text">Packages: versions, locking and where they come from</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">win.web-tests</property>
+                        <property name="icon-name">kevc-bool-variable</property>
+                        <property name="tooltip-text">Run Tests (Vitest or Playwright)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuButton">
+                        <property name="icon-name">kevc-terminal</property>
+                        <property name="tooltip-text">Run a package.json script</property>
+                        <property name="has-frame">false</property>
+                        <property name="menu-model">scriptsMenu_</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="devServerButton_">
+                        <property name="icon-name">kevc-globe</property>
+                        <property name="tooltip-text">Start the dev server (Vite, or the bundled one)</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <style>
+              <class name="kevc-toolbar"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkPaned" id="hpaned_">
+            <property name="position">290</property>
+            <property name="resize-start-child">false</property>
+            <property name="shrink-end-child">false</property>
+            <property name="vexpand">true</property>
+            <property name="start-child">
+              <object class="GtkNotebook" id="leftDock_">
+                <property name="scrollable">true</property>
+                <property name="width-request">180</property>
+                <child>
+                  <object class="GtkNotebookPage">
+                    <property name="child">
+                      <object class="GtkBox" id="projectPage_">
+                        <property name="orientation">vertical</property>
+                      </object>
+                    </property>
+                    <property name="tab">
+                      <object class="GtkBox">
+                        <property name="spacing">5</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="icon-name">kevc-project</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Project</property>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkNotebookPage">
+                    <property name="child">
+                      <object class="GtkBox" id="searchPage_">
+                        <property name="orientation">vertical</property>
+                      </object>
+                    </property>
+                    <property name="tab">
+                      <object class="GtkBox">
+                        <property name="spacing">5</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="icon-name">kevc-find-in-files</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Search</property>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkNotebookPage">
+                    <property name="child">
+                      <object class="GtkBox" id="classesPage_">
+                        <property name="orientation">vertical</property>
+                      </object>
+                    </property>
+                    <property name="tab">
+                      <object class="GtkBox">
+                        <property name="spacing">5</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="icon-name">kevc-class</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Classes</property>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkNotebookPage">
+                    <property name="child">
+                      <object class="GtkBox" id="watchesPage_">
+                        <property name="orientation">vertical</property>
+                      </object>
+                    </property>
+                    <property name="tab">
+                      <object class="GtkBox">
+                        <property name="spacing">5</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="icon-name">kevc-watch</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Debug</property>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkNotebookPage">
+                    <property name="child">
+                      <object class="GtkBox" id="routesPage_">
+                        <property name="orientation">vertical</property>
+                      </object>
+                    </property>
+                    <property name="tab">
+                      <object class="GtkBox">
+                        <property name="spacing">5</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="icon-name">kevc-svelte-file</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Routes</property>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <style>
+                  <class name="kevc-compact-tabs"/>
+                </style>
+              </object>
+            </property>
+            <property name="end-child">
+              <object class="GtkPaned" id="rightPaned_">
+                <property name="resize-end-child">false</property>
+                <property name="shrink-start-child">false</property>
+                <property name="shrink-end-child">false</property>
+                <property name="start-child">
+                  <object class="GtkPaned" id="vpaned_">
+                    <property name="orientation">vertical</property>
+                    <property name="position">560</property>
+                    <property name="resize-end-child">false</property>
+                    <property name="start-child">
+                      <object class="GtkBox" id="editorArea_">
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkSearchBar" id="findBar_">
+                            <property name="show-close-button">true</property>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">4</property>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">6</property>
+                                    <child>
+                                      <object class="GtkSearchEntry" id="findEntry_">
+                                        <property name="width-chars">32</property>
+                                        <signal name="search-changed" handler="on_find_changed"/>
+                                        <signal name="activate" handler="on_find_activate"/>
+                                        <signal name="next-match" handler="on_find_next_match"/>
+                                        <signal name="previous-match" handler="on_find_previous_match"/>
+                                        <signal name="stop-search" handler="on_find_stop_search"/>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="findPrevious_">
+                                        <property name="icon-name">go-up-symbolic</property>
+                                        <property name="tooltip-text">Previous match (Shift+Enter)</property>
+                                        <signal name="clicked" handler="on_find_previous_clicked"/>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="findNext_">
+                                        <property name="icon-name">go-down-symbolic</property>
+                                        <property name="tooltip-text">Next match (Enter)</property>
+                                        <signal name="clicked" handler="on_find_next_clicked"/>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkCheckButton" id="findCase_">
+                                        <property name="label">Match case</property>
+                                        <signal name="toggled" handler="on_find_case_toggled"/>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="findEverywhere_">
+                                        <property name="icon-name">kevc-find-in-files</property>
+                                        <property name="tooltip-text">Find this in all files (Ctrl+Shift+F)</property>
+                                        <signal name="clicked" handler="on_find_everywhere_clicked"/>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkToggleButton" id="replaceToggle_">
+                                        <property name="icon-name">kevc-replace</property>
+                                        <property name="tooltip-text">Replace (Ctrl+R)</property>
+                                        <signal name="toggled" handler="on_replace_toggled"/>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="findCount_">
+                                        <style>
+                                          <class name="dim-label"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox" id="replaceRow_">
+                                    <property name="visible">false</property>
+                                    <property name="spacing">6</property>
+                                    <child>
+                                      <object class="GtkEntry" id="replaceEntry_">
+                                        <property name="placeholder-text">Replace with…</property>
+                                        <property name="width-chars">32</property>
+                                        <signal name="activate" handler="on_replace_activate"/>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="replaceOne_">
+                                        <property name="label">Replace</property>
+                                        <property name="tooltip-text">Replace this match and go to the next (Enter)</property>
+                                        <signal name="clicked" handler="on_replace_clicked"/>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="replaceEvery_">
+                                        <property name="label">Replace All</property>
+                                        <property name="tooltip-text">Replace every match in this file (one Ctrl+Z undoes it)</property>
+                                        <signal name="clicked" handler="on_replace_all_clicked"/>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkNotebook" id="editors_">
+                            <property name="scrollable">true</property>
+                            <property name="vexpand">true</property>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                    <property name="end-child">
+                      <object class="GtkNotebook" id="bottomDock_">
+                        <property name="height-request">120</property>
+                      </object>
+                    </property>
+                  </object>
+                </property>
+                <property name="end-child">
+                  <object class="GtkNotebook" id="rightDock_">
+                    <property name="width-request">140</property>
+                  </object>
+                </property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="status_">
+            <property name="label">Ready</property>
+            <property name="xalign">0</property>
+            <property name="ellipsize">end</property>
+            <property name="margin-start">8</property>
+            <property name="margin-end">8</property>
+            <property name="margin-top">2</property>
+            <property name="margin-bottom">2</property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+  <menu id="menubar_">
+    <submenu>
+      <attribute name="label" translatable="yes">_File</attribute>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">New _Project…</attribute>
+          <attribute name="action">win.new-project</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_New Source File…</attribute>
+          <attribute name="action">win.new-file</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Open Project or Folder…</attribute>
+          <attribute name="action">win.open-project</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Close P_roject</attribute>
+          <attribute name="action">win.close-project</attribute>
+          <attribute name="hidden-when">action-disabled</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Close _Folder</attribute>
+          <attribute name="action">win.close-folder</attribute>
+          <attribute name="hidden-when">action-disabled</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Save</attribute>
+          <attribute name="action">win.save</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Save _All</attribute>
+          <attribute name="action">win.save-all</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Close</attribute>
+          <attribute name="action">win.close-tab</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Quit</attribute>
+          <attribute name="action">app.quit</attribute>
+        </item>
+      </section>
+    </submenu>
+    <submenu>
+      <attribute name="label" translatable="yes">_Edit</attribute>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Undo</attribute>
+          <attribute name="action">win.undo</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Redo</attribute>
+          <attribute name="action">win.redo</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Cu_t</attribute>
+          <attribute name="action">win.cut</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Copy</attribute>
+          <attribute name="action">win.copy</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Paste</attribute>
+          <attribute name="action">win.paste</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Select _All</attribute>
+          <attribute name="action">win.select-all</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Auto _Format</attribute>
+          <attribute name="action">win.format</attribute>
+        </item>
+      </section>
+    </submenu>
+    <submenu>
+      <attribute name="label" translatable="yes">_Search</attribute>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Find…</attribute>
+          <attribute name="action">win.find</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Replace…</attribute>
+          <attribute name="action">win.replace</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Search Files and _Text…</attribute>
+          <attribute name="action">win.quick-search</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Find in F_iles…</attribute>
+          <attribute name="action">win.find-in-files</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Go to Line…</attribute>
+          <attribute name="action">win.goto-line</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Go to _Definition (Ctrl+Click)</attribute>
+          <attribute name="action">win.goto-definition</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Go to _Implementation</attribute>
+          <attribute name="action">win.goto-implementation</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Go to T_ype Definition</attribute>
+          <attribute name="action">win.goto-type-definition</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Find All _References</attribute>
+          <attribute name="action">win.find-references</attribute>
+        </item>
+      </section>
+    </submenu>
+    <submenu>
+      <attribute name="label" translatable="yes">_View</attribute>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Project Panel</attribute>
+          <attribute name="action">win.toggle-left-dock</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Bottom Panel</attribute>
+          <attribute name="action">win.toggle-bottom-dock</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Right Panel</attribute>
+          <attribute name="action">win.toggle-right-dock</attribute>
+        </item>
+      </section>
+      <section>
+        <submenu>
+          <attribute name="label" translatable="yes">_Toolbars</attribute>
+          <section>
+            <item>
+              <attribute name="label" translatable="yes">_File</attribute>
+              <attribute name="action">win.toolbar-file</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">_Edit</attribute>
+              <attribute name="action">win.toolbar-edit</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">_Build</attribute>
+              <attribute name="action">win.toolbar-build</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">_Debug</attribute>
+              <attribute name="action">win.toolbar-debug</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">_Project</attribute>
+              <attribute name="action">win.toolbar-project</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">_Web</attribute>
+              <attribute name="action">win.toolbar-web</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+          </section>
+        </submenu>
+        <submenu>
+          <attribute name="label" translatable="yes">P_anels</attribute>
+          <section>
+            <item>
+              <attribute name="label" translatable="yes">_Compiler</attribute>
+              <attribute name="action">win.panel-compiler</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">Compile _Log</attribute>
+              <attribute name="action">win.panel-compile-log</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">_Run</attribute>
+              <attribute name="action">win.panel-run</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">_Debug</attribute>
+              <attribute name="action">win.panel-debug</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">_Terminal</attribute>
+              <attribute name="action">win.panel-terminal</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">Dev _Server</attribute>
+              <attribute name="action">win.panel-dev-server</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">_Environment (SvelteKit)</attribute>
+              <attribute name="action">win.panel-env</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">Te_sts</attribute>
+              <attribute name="action">win.panel-tests</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">Tr_aces</attribute>
+              <attribute name="action">win.panel-traces</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+            <item>
+              <attribute name="label" translatable="yes">De_pendencies</attribute>
+              <attribute name="action">win.panel-deps</attribute>
+              <attribute name="hidden-when">action-disabled</attribute>
+            </item>
+          </section>
+        </submenu>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Reset Panel _Layout</attribute>
+          <attribute name="action">win.reset-panels</attribute>
+        </item>
+      </section>
+    </submenu>
+    <submenu id="projectMenu_">
+      <attribute name="label" translatable="yes">P_roject</attribute>
+      <section id="projectFileSection_">
+        <item>
+          <attribute name="label" translatable="yes">_New File in Project…</attribute>
+          <attribute name="action">win.project-add-file</attribute>
+        </item>
+      </section>
+      <section id="projectWebSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Install Dependencies (npm install)</attribute>
+          <attribute name="action">win.web-install</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Run _Tests</attribute>
+          <attribute name="action">win.web-tests</attribute>
+        </item>
+        <submenu id="scriptsMenu_">
+          <attribute name="label" translatable="yes">_Scripts</attribute>
+        </submenu>
+      </section>
+      <section id="projectNativeSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Packages…</attribute>
+          <attribute name="action">win.packages</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Project _Options…</attribute>
+          <attribute name="action">win.project-options</attribute>
+        </item>
+      </section>
+      <section id="projectOwnCMakeSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Program to Run and Debug…</attribute>
+          <attribute name="action">win.project-options</attribute>
+        </item>
+      </section>
+      <section id="projectWebPackagesSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Packages (Versions, Locking, Source)…</attribute>
+          <attribute name="action">win.packages</attribute>
+        </item>
+      </section>
+    </submenu>
+    <submenu id="executeMenu_">
+      <attribute name="label" translatable="yes">E_xecute</attribute>
+      <section id="executeNativeSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Compile</attribute>
+          <attribute name="action">win.compile</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Run</attribute>
+          <attribute name="action">win.run</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Compile &amp; R_un</attribute>
+          <attribute name="action">win.compile-run</attribute>
+        </item>
+      </section>
+      <section id="executeNativeBuildSection_">
+        <item>
+          <attribute name="label" translatable="yes">Rebuild _All</attribute>
+          <attribute name="action">win.rebuild</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">C_lean</attribute>
+          <attribute name="action">win.clean</attribute>
+        </item>
+      </section>
+      <section id="executeWebSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Check Types</attribute>
+          <attribute name="action">win.compile</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Run (Dev Server and Browser)</attribute>
+          <attribute name="action">win.run</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Check &amp; R_un</attribute>
+          <attribute name="action">win.compile-run</attribute>
+        </item>
+      </section>
+      <section id="executeWebBuildSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Production Build</attribute>
+          <attribute name="action">win.rebuild</attribute>
+        </item>
+      </section>
+      <section id="executeStopSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Stop Build or Program</attribute>
+          <attribute name="action">win.stop</attribute>
+        </item>
+      </section>
+    </submenu>
+    <submenu>
+      <attribute name="label" translatable="yes">_Debug</attribute>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Debug</attribute>
+          <attribute name="action">win.debug</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Continue</attribute>
+          <attribute name="action">win.debug-continue</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Pause</attribute>
+          <attribute name="action">win.debug-pause</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Stop</attribute>
+          <attribute name="action">win.debug-stop</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Step _Over</attribute>
+          <attribute name="action">win.step-over</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Step _Into</attribute>
+          <attribute name="action">win.step-into</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Step O_ut</attribute>
+          <attribute name="action">win.step-out</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Toggle _Breakpoint</attribute>
+          <attribute name="action">win.toggle-breakpoint</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">I_F Breakpoint…</attribute>
+          <attribute name="action">win.if-breakpoint</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Live Breakpoint…</attribute>
+          <attribute name="action">win.live-breakpoint</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Break When Value C_hanges…</attribute>
+          <attribute name="action">win.value-watch</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Add _Watch…</attribute>
+          <attribute name="action">win.add-watch</attribute>
+        </item>
+      </section>
+    </submenu>
+    <submenu id="toolsMenu_">
+      <attribute name="label" translatable="yes">_Tools</attribute>
+      <section id="toolsWebSection_">
+        <item>
+          <attribute name="label" translatable="yes">Start/Stop the _Dev Server</attribute>
+          <attribute name="action">win.dev-server</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Open Dev Server in Browser</attribute>
+          <attribute name="action">win.dev-server-open</attribute>
+        </item>
+      </section>
+      <section id="toolsSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Toolchain Info</attribute>
+          <attribute name="action">win.toolchain-info</attribute>
+        </item>
+      </section>
+    </submenu>
+    <submenu>
+      <attribute name="label" translatable="yes">_Help</attribute>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Check for _Updates…</attribute>
+          <attribute name="action">win.check-updates</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_About Kev-C++</attribute>
+          <attribute name="action">win.about</attribute>
+        </item>
+      </section>
+    </submenu>
+  </menu>
+  <menu id="editorMenu_">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Go to _Definition</attribute>
+        <attribute name="action">win.goto-definition</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Go to _Implementation</attribute>
+        <attribute name="action">win.goto-implementation</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Go to T_ype Definition</attribute>
+        <attribute name="action">win.goto-type-definition</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Find All _References</attribute>
+        <attribute name="action">win.find-references</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Auto F_ormat</attribute>
+        <attribute name="action">win.format</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Toggle _Breakpoint</attribute>
+        <attribute name="action">win.toggle-breakpoint</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">I_F Breakpoint…</attribute>
+        <attribute name="action">win.if-breakpoint</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Live Breakpoint…</attribute>
+        <attribute name="action">win.live-breakpoint</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Break When Value C_hanges…</attribute>
+        <attribute name="action">win.value-watch</attribute>
+      </item>
+    </section>
+  </menu>
+  <menu id="cppEditorMenu_">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Go to _Definition</attribute>
+        <attribute name="action">win.goto-definition</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Go to D_eclaration</attribute>
+        <attribute name="action">win.goto-declaration</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Go to _Implementation</attribute>
+        <attribute name="action">win.goto-implementation</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Go to T_ype Definition</attribute>
+        <attribute name="action">win.goto-type-definition</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Find All _References</attribute>
+        <attribute name="action">win.find-references</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Auto F_ormat</attribute>
+        <attribute name="action">win.format</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Toggle _Breakpoint</attribute>
+        <attribute name="action">win.toggle-breakpoint</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">I_F Breakpoint…</attribute>
+        <attribute name="action">win.if-breakpoint</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Live Breakpoint…</attribute>
+        <attribute name="action">win.live-breakpoint</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Break When Value C_hanges…</attribute>
+        <attribute name="action">win.value-watch</attribute>
+      </item>
+    </section>
+  </menu>
+  <menu id="gutterMenu_">
+    <item>
+      <attribute name="label" translatable="yes">Toggle _Breakpoint</attribute>
+      <attribute name="action">win.toggle-breakpoint</attribute>
+    </item>
+    <item>
+      <attribute name="label" translatable="yes">I_F Breakpoint…</attribute>
+      <attribute name="action">win.if-breakpoint</attribute>
+    </item>
+    <item>
+      <attribute name="label" translatable="yes">_Live Breakpoint…</attribute>
+      <attribute name="action">win.live-breakpoint</attribute>
+    </item>
+    <item>
+      <attribute name="label" translatable="yes">Break When Value C_hanges…</attribute>
+      <attribute name="action">win.value-watch</attribute>
+    </item>
+  </menu>
+</interface>

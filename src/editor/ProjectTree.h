@@ -1,5 +1,7 @@
 #pragma once
 
+#include "editor/ProjectTree.ui.h"
+
 #include "core/GitStatus.h"
 #include "process/BackgroundJob.h"
 
@@ -16,10 +18,12 @@ namespace kevc {
 // The Project tab: a live file tree of the project root (updates itself as files change on disk),
 // with a search field on top that lists the files matching what's typed (Ctrl+P). Its context menu
 // and drag and drop only ask for file operations; MainWindow does them, since it knows which files
-// are open in editors.
-class ProjectTree : public Gtk::Box {
+// are open in editors. The layout and the right-click menu are ProjectTree.ui (edit them on Kev-C++'s
+// Design page); the tree's rows are made here.
+class ProjectTree : public ProjectTreeUi {
 public:
-    ProjectTree();
+    static Glib::RefPtr<ProjectTree> create() { return ProjectTreeUi::create<ProjectTree>(); }
+    ProjectTree(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder);
     ~ProjectTree() override;
 
     // An empty path shows the "no project" placeholder.
@@ -44,6 +48,11 @@ public:
     // Files with changes git hasn't committed (absolute paths as the tree spells them), and the
     // folders that hold one: each gets an icon after its name. Empty for a folder outside git.
     void setGitChanges(std::map<std::string, git::FileState> files, std::set<std::string> folders);
+
+protected:
+    void on_search_changed() override { onSearchChanged(); }
+    void on_search_activate() override { openSelectedResult(); }
+    void on_search_stop_search() override;
 
 private:
     struct BoundRow {
@@ -78,20 +87,12 @@ private:
     bool openSelectedResult();
 
     std::filesystem::path root_;
-    Gtk::SearchEntry search_;
-    Gtk::ScrolledWindow resultsScroller_;
-    Gtk::ListBox results_;
-    Gtk::Label resultsMessage_;
     std::map<Gtk::ListBoxRow*, std::string> resultPaths_;
     std::vector<std::string> files_; // relative to root_
     bool filesListed_ = false;
     bool searching_ = false; // the field has text; a new search lists the files again
     BackgroundJob lister_;
     sigc::signal<void()> searchDone_;
-    Gtk::Label placeholder_;
-    Gtk::Stack stack_;
-    Gtk::ScrolledWindow scroller_;
-    Gtk::ListView list_;
     Glib::RefPtr<Gtk::TreeListModel> tree_;
     Glib::RefPtr<Gtk::SingleSelection> selection_;
     Glib::RefPtr<Gtk::Filter> filter_;
@@ -106,7 +107,7 @@ private:
     std::map<std::string, git::FileState> gitFiles_;
     std::set<std::string> gitFolders_;
 
-    Gtk::PopoverMenu menu_;
+    Gtk::PopoverMenu menu_; // shows the design's contextMenu_
     Glib::RefPtr<Gio::SimpleActionGroup> actions_;
     std::optional<BoundRow> menuRow_;              // empty: the root
     Glib::RefPtr<Gtk::TreeListRow> menuTreeRow_;   // to expand a folder that gets a new file

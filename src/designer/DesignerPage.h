@@ -118,6 +118,15 @@ private:
     void wrapSelected(const std::string& cls);
     void shiftSelected(int delta);
 
+    // Menus (DesignerMenus.cpp): <menu>s in the outline, a menu part's properties, adding entries.
+    bool selectedIsMenuPart() const;
+    void addMenuRows(const ui::Node& part, int depth);
+    void rebuildMenuProperties(ui::Node& part);
+    void addMenuEntry(ui::MenuPart what); // into the selected menu part, or beside a selected item
+    void addTopLevelMenu();
+    bool pasteMenuPart(const ui::UiDocument& pasted); // false if it holds no menu part
+    int shownFor(int uid) const; // the preview widget to outline: the node's own, or what shows its menu
+
     // Code from the design (DesignerCode.cpp): "gtkmm" or "c".
     std::optional<std::string> codeLanguage() const; // the one already written, if any
     void writeCode(const ui::UiDocument& doc, const std::string& language, bool quiet);

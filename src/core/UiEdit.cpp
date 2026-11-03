@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <cctype>
 #include <stdexcept>
 
@@ -30,11 +31,23 @@ std::string normalized(std::string s) {
     return s;
 }
 
+bool isMenuElement(const Node& n) {
+    return n.isElement("menu") || n.isElement("submenu") || n.isElement("section") || n.isElement("link");
+}
+
+// The ids GtkBuilder knows: objects', and menus' (with their submenus and sections).
 std::set<std::string> idsIn(const UiDocument& doc) {
     std::set<std::string> ids;
     for (Node* o : doc.objects())
         if (o->name == "object")
             if (auto id = UiDocument::objectId(*o); !id.empty()) ids.insert(id);
+    std::function<void(const Node&)> menus = [&](const Node& n) {
+        if (isMenuElement(n))
+            if (auto id = n.attribute("id"); !id.empty()) ids.insert(id);
+        for (const Node* c : n.childElements()) menus(*c);
+    };
+    if (const Node* iface = doc.interface())
+        for (const Node* m : iface->childElements("menu")) menus(*m);
     return ids;
 }
 
@@ -132,6 +145,10 @@ std::string freshId(const UiDocument& doc, const std::string& cls, const std::se
     auto ids = idsIn(doc);
     ids.insert(taken.begin(), taken.end());
     return nextFree(base, ids);
+}
+
+std::set<std::string> usedIds(const UiDocument& doc) {
+    return idsIn(doc);
 }
 
 std::string newObjectXml(const UiDocument& doc, const std::string& cls, const ClassInfo* info) {
@@ -380,6 +397,151 @@ void setSignalHandler(UiDocument& doc, Node& object, const std::string& signal, 
     }
     doc.insertElement(object, "<signal name=\"" + escape(signal, true) + "\" handler=\"" + escape(handler, true) + "\"/>",
                       afterProperties(object, true));
+}
+
+// ---- menus
+
+MenuPart menuPart(const Node& node) {
+    if (!node.isElement()) return MenuPart::None;
+    if (node.name == "menu") return MenuPart::Menu;
+    if (node.name == "submenu") return MenuPart::Submenu;
+    if (node.name == "section") return MenuPart::Section;
+    if (node.name == "item") return MenuPart::Item;
+    if (node.name == "link") {
+        const std::string name = node.attribute("name");
+        if (name == "submenu") return MenuPart::Submenu;
+        if (name == "section") return MenuPart::Section;
+    }
+    return MenuPart::None;
+}
+
+std::vector<Node*> menuEntries(const Node& part) {
+    std::vector<Node*> out;
+    for (Node* c : part.childElements()) {
+        const MenuPart kind = menuPart(*c);
+        if (kind == MenuPart::Item || kind == MenuPart::Section || kind == MenuPart::Submenu) out.push_back(c);
+    }
+    return out;
+}
+
+Node* menuOf(const Node& part) {
+    for (const Node* n = &part; n; n = n->parent)
+        if (n->isElement("menu")) return const_cast<Node*>(n);
+    return nullptr;
+}
+
+namespace {
+
+Node* attributeNode(const Node& part, std::string_view name) {
+    for (Node* a : part.childElements("attribute"))
+        if (a->attribute("name") == name) return a;
+    return nullptr;
+}
+
+// An entry's index among all of `parent`'s elements (insertElement counts those).
+int elementIndexOfEntry(const Node& parent, int entryIndex) {
+    const auto entries = menuEntries(parent);
+    if (entryIndex < 0 || size_t(entryIndex) >= entries.size()) return -1;
+    return indexAmongElements(parent, *entries[size_t(entryIndex)]);
+}
+
+} // namespace
+
+std::optional<std::string> menuAttribute(const Node& part, std::string_view name) {
+    if (const Node* a = attributeNode(part, name)) return a->innerText();
+    return std::nullopt;
+}
+
+void setMenuAttribute(UiDocument& doc, Node& part, std::string_view name, std::string_view value) {
+    Node* a = attributeNode(part, name);
+    if (value.empty()) {
+        if (a) doc.removeElement(*a);
+        return;
+    }
+    if (a) {
+        doc.setText(*a, value);
+        return;
+    }
+    // After the other attributes, before the entries.
+    int index = 0, i = 0;
+    for (Node* e : part.childElements()) {
+        ++i;
+        if (e->name == "attribute") index = i;
+    }
+    const std::string translatable = name == "label" ? " translatable=\"yes\"" : "";
+    doc.insertElement(
+        part, "<attribute name=\"" + escape(name, true) + "\"" + translatable + ">" + escape(value) + "</attribute>",
+        index);
+}
+
+Node* addMenuPart(UiDocument& doc, Node& into, MenuPart what, int index) {
+    const MenuPart kind = menuPart(into);
+    if (kind != MenuPart::Menu && kind != MenuPart::Submenu && kind != MenuPart::Section) return nullptr;
+    std::string xml;
+    if (what == MenuPart::Item)
+        xml = "<item><attribute name=\"label\" translatable=\"yes\">New Item</attribute></item>";
+    else if (what == MenuPart::Section) xml = "<section/>";
+    else if (what == MenuPart::Submenu)
+        xml = "<submenu><attribute name=\"label\" translatable=\"yes\">New Menu</attribute></submenu>";
+    else return nullptr;
+    return doc.insertElement(into, xml, elementIndexOfEntry(into, index));
+}
+
+Node* addMenu(UiDocument& doc) {
+    Node* iface = doc.interface();
+    if (!iface) return nullptr;
+    const std::string id = nextFree("menu", idsIn(doc));
+    return doc.insertElement(
+        *iface, "<menu id=\"" + id +
+                    "\"><item><attribute name=\"label\" translatable=\"yes\">New Item</attribute></item></menu>");
+}
+
+Node* shiftMenuPart(UiDocument& doc, Node& part, int delta) {
+    Node* parent = part.parent;
+    if (!parent || delta == 0) return nullptr;
+    const auto siblings = menuEntries(*parent);
+    const auto it = std::find(siblings.begin(), siblings.end(), &part);
+    const long i = it - siblings.begin(), j = i + delta;
+    if (it == siblings.end() || j < 0 || j >= long(siblings.size())) return nullptr;
+    Node* other = siblings[size_t(j)];
+    const std::string text = UiDocument::textOf(part);
+    doc.removeElement(part);
+    const int at = indexAmongElements(*parent, *other);
+    return doc.insertElement(*parent, text, delta < 0 ? at : at + 1);
+}
+
+std::string menuLabelText(std::string_view label) {
+    std::string out;
+    for (size_t i = 0; i < label.size(); ++i) {
+        if (label[i] == '_') {
+            if (i + 1 < label.size() && label[i + 1] == '_') out += '_', ++i;
+            continue;
+        }
+        out += label[i];
+    }
+    return out;
+}
+
+std::string menuPartWithUniqueIds(const UiDocument& doc, std::string_view xml) {
+    UiDocument fragment = UiDocument::parse(xml);
+    std::set<std::string> taken = idsIn(doc);
+    std::function<void(Node&)> visit = [&](Node& n) {
+        if (isMenuElement(n))
+            if (const std::string id = n.attribute("id"); !id.empty()) {
+                if (taken.count(id)) {
+                    std::string base = id;
+                    while (!base.empty() && std::isdigit(static_cast<unsigned char>(base.back()))) base.pop_back();
+                    const std::string fresh = nextFree(base.empty() ? id : base, taken);
+                    fragment.setAttribute(n, "id", fresh);
+                    taken.insert(fresh);
+                } else {
+                    taken.insert(id);
+                }
+            }
+        for (Node* c : n.childElements()) visit(*c);
+    };
+    visit(fragment.root());
+    return fragment.text();
 }
 
 } // namespace kevc::ui

@@ -26,7 +26,7 @@ protected:
     // The objects with an id.
     Gtk::Label* status_ = nullptr;
     Gtk::Button* open_ = nullptr;
-    Gtk::Box* toggleSlot_ = nullptr;
+    Gtk::Button* toggle_ = nullptr;
     Gtk::TextView* log_ = nullptr;
 
     // The signal handlers named in the design: override them in DevServerPanel.

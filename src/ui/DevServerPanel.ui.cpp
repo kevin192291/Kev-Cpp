@@ -31,7 +31,24 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
           </object>
         </child>
         <child>
-          <object class="GtkBox" id="toggleSlot_"/>
+          <object class="GtkButton" id="toggle_">
+            <property name="tooltip-text">Start the dev server</property>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="icon-name">kevc-globe</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label">Start</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
         </child>
       </object>
     </child>
@@ -67,7 +84,7 @@ DevServerPanelUi::DevServerPanelUi(BaseObjectType* object, const Glib::RefPtr<Gt
     : Gtk::Box(object) {
     status_ = builder->get_widget<Gtk::Label>("status_");
     open_ = builder->get_widget<Gtk::Button>("open_");
-    toggleSlot_ = builder->get_widget<Gtk::Box>("toggleSlot_");
+    toggle_ = builder->get_widget<Gtk::Button>("toggle_");
     log_ = builder->get_widget<Gtk::TextView>("log_");
     g_signal_connect_data(open_->gobj(), "clicked",
                           G_CALLBACK(+[](DevServerPanelUi* self) { self->on_open_clicked(); }), this, nullptr,

@@ -162,8 +162,9 @@ These facts shape the STM32 track.
 
 ## Milestones (each builds, runs and ships on its own)
 
-**Status (2026-11-03):** M0, W1–W5 and G1–G3 are done. G4 (Kev-C++'s own windows in its designer)
-is under way; S1 follows it.
+**Status (2026-11-04):** M0, W1–W5 and G1–G3 are done. G4 (Kev-C++'s own windows in its designer)
+has steps 1–4 done (every window, dialog and panel is a design, the main window included); step 5,
+the designer gaps they showed, is next. S1 follows it.
 
 **Also done along the way** (not milestones):
 - **Versions and updates:** a build's version is its commit's UTC date and time plus its hash. Every
@@ -351,13 +352,33 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
      and fixed: a top-level container showed at its natural size, a few pixels for a panel; it now
      shows at 640×420. Not converted: the Project tab (ProjectTree), the Compile Log and the two
      terminals, which are one custom widget each with little layout; they go with step 4.
-  4. **The main window:** its frame (menu row, toolbar rows, the three docks, status bar) and its
-     menus as `<menu>`s in the design. What changes while it runs (which toolbar groups and panels
-     show, the docks' contents) stays in code, which fills named places in the design.
+  4. **The main window** (done 2026-11-04): `src/app/MainWindow.ui` holds the frame (the menu row
+     with the search field's place, both toolbar rows and their named groups, the left dock's five
+     pages with a place for each panel, the editor area with the find bar, the bottom and right docks,
+     the status bar) and every menu: the menu bar, the editors' and the line numbers' right-click
+     menus, and Project → Scripts, which the web toolbar's button shares. Toolbar buttons name their
+     `win.*` action and icon in the design; the Start/Stop ones (Compile, Run, Debug, Continue, the dev
+     server) are designed buttons that `TaskButton` turns into Stop while their task runs. What depends
+     on what's open is in the design as alternatives that code picks from: the Project, Execute and
+     Tools menus have a section with an id for each case (`executeNativeSection_`,
+     `executeWebSection_`…), View → Toolbars/Panels and File → Close Project/Close Folder list every item
+     with `hidden-when="action-disabled"`, and code disables the actions that don't apply. The step 3
+     leftovers are designs too: `ProjectTree.ui` (the Project tab, with its right-click menu),
+     `CompileLog.ui` (its text styles are GtkTextTags in the design) and `TerminalPane.ui` (the Run and
+     Terminal tabs: a VteTerminal and its scrollbar). The generator gives a window's class the menus,
+     submenus and sections with an id, and the top-level objects it names (a menu button's popover, a
+     text view's buffer), with their handlers. The designer edits menus: the outline lists them, an
+     item's label, action, target, accel, icon and hidden-when are its properties, entries are added,
+     moved, copied and deleted from the properties or the right-click menu, and selecting one outlines
+     the widget that shows its menu. Checked in Xephyr: C++, C and SvelteKit-shaped projects (menus per
+     profile, toolbar groups hidden and shown, find and replace, a build's Stop button, a debug
+     session, Alt+P, the Project tab's search and menu, the Compile Log's colours, the Run and Terminal
+     tabs, quitting), the toolbar pixel for pixel as before, and the loop (a menu item renamed on the
+     Design page of `MainWindow.ui` in a copy of the repository, saved, F9, and F10's Kev-C++ had it).
   5. **Designer gaps** these turn up, fixed as found. Expected: Kev-C++'s own look in the preview of
      its own designs (Slate rather than GTK's default), widgets GtkBuilder can't make (Kev-C++'s
      C++-only classes) shown as named placeholders, editing `<menu>`s, CSS classes in the properties.
-- **Picking it up again** (steps 2 and 3 finished 2026-11-03; step 4, the main window, is next):
+- **Picking it up again** (steps 2 and 3 finished 2026-11-03, step 4 2026-11-04; step 5 is next):
   - **Moving one window, the recipe the splash followed:** write `src/ui/<Class>.ui` with the window's
     layout (top-level id = the class name, so the designer leaves the existing `<Class>.h/.cpp` alone;
     ids that code needs end in `_`); open it in Kev-C++, Code → Write gtkmm Code; add
@@ -377,17 +398,33 @@ The toolbar group appears on its own for STM32 projects and can be toggled from 
     RefPtr. A signal whose handler needs its arguments (`row-activated`'s row) stays connected in
     code: designed gtkmm handlers take none. Kev-C++'s own C++ widgets (TaskButton) go into an empty
     Box in the design (`toggleSlot_`).
-  - **Step 4 needs:** `<menu>` editing in the designer, the main window's toolbar rows, docks and
-    status bar as a design with named places for what code fills, and the Project tab, the Compile
-    Log and the terminals.
-  - **Testing it:** in a copy of the repository (rsync without `build/` and `.git`) pre-built with
+  - **What step 4 settled:** menus live in the design as top-level `<menu>`s; what code changes in
+    them gets an id (a section to pick, a submenu to fill) and becomes a member. A choice between
+    alternatives is in the design as every alternative, and code picks (sections) or hides (an item
+    with `hidden-when="action-disabled"` whose action it disables); a label code adjusts keeps the
+    design's text as its pattern (Install Dependencies' "npm" becomes the project's package manager).
+    A panel that's a design of its own goes into a page of the main window's design holding an empty
+    box for it. Buttons made in C++ for their behaviour (TaskButton) became behaviour attached to a
+    designed button, so the design shows them. A GtkTextTag is a `<child type="tag">` of its table
+    (a plain `<child>` is silently dropped). A class from another library (VteTerminal) can be in a
+    design: `g_type_ensure` it before building, and the generated member is a `Gtk::Widget*`. Toolbar
+    icons are 24 px through the theme (`.kevc-toolbar button.image-button`), not per button.
+  - **Not designs yet** (no step planned them; they're custom widgets more than layouts): the
+    designer's own page (DesignerPage), the editor tab (EditorTab and its gutter popover), the menu
+    bar's search field (QuickSearch, in the main window's `quickSearchSlot_`), DockManager's floating
+    windows and dock tab labels, and the Go to… locations popover.
+  - **Testing it:** in a copy of the repository (`rsync -a --no-times --delete --exclude /build
+    --exclude /.git`: without `--no-times` the copied sources keep their old times, and ninja keeps
+    objects an earlier test built from edited sources) pre-built with
     `cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug` and `cmake --build build/debug -- -k 0`,
     opened in Kev-C++ on Xephyr. Then the designer writes the code, F9 builds only what changed, and
     F10/F11 runs the new Kev-C++ on the same display. The copy has no git history, so its version
     reads "unknown".
   - **Known gaps** for step 5: the preview shows windows as boxes, so `window.<class>` CSS doesn't
     apply there; lists filled at run time and slots for C++-only widgets show as empty boxes; a
-    design wider than the canvas is cut (it scrolls).
+    design wider than the canvas is cut (it scrolls; the main window is 1280 px wide); a menu can't be
+    seen open in the preview (it's edited in the outline); in a design as long as the main window's,
+    finding a menu item means scrolling a long outline (a filter would help).
 - **Done when** every Kev-C++ window and panel has a `.ui` file, a change made on the Design page
   shows in the next F10 run, and the tests pass.
 - **Risks:** converting the main window touches docking, focus and key handling, which are checked

@@ -98,14 +98,75 @@ struct Window {
     std::vector<const Handler*> declared; // one per handler name
 };
 
+// The class name members for <menu>, <submenu> and <section> ids get (not a GType name).
+const char* const kMenuClass = "GMenu";
+
+// The ids an object and those inside it give in properties: the objects and menus they name.
+std::set<std::string> namesIn(const UiDocument& doc, const Node& top) {
+    std::set<std::string> out;
+    for (Node* o : doc.objects())
+        if (isWithin(*o, top))
+            for (Node* p : o->childElements("property"))
+                if (p->childElements().empty()) out.insert(p->innerText());
+    return out;
+}
+
+// What else in the file a code root's class holds: the top-level <menu>s and objects beside the
+// roots that it names (a menu bar's menu-model, a menu button's popover), directly or through
+// something it names, and those nothing names, which go to every root. A top-level widget that
+// nothing names isn't one of them: it's a root of its own, or (not GTK's) nothing would keep it alive.
+std::vector<const Node*> satellites(const UiDocument& doc, const Node& root, const TypeInfo& types) {
+    const Node* iface = doc.interface();
+    if (!iface) return {};
+    const auto roots = codeRoots(doc, types);
+    std::vector<const Node*> candidates;
+    for (const Node* e : iface->childElements())
+        if (e->name == "menu" || (e->name == "object" && std::find(roots.begin(), roots.end(), e) == roots.end()))
+            candidates.push_back(e);
+    auto idOf = [](const Node* n) { return n->name == "menu" ? n->attribute("id") : UiDocument::objectId(*n); };
+    auto reachedFrom = [&](const Node& from) {
+        std::set<const Node*> reached;
+        std::set<std::string> names = namesIn(doc, from);
+        for (bool more = true; more;) {
+            more = false;
+            for (const Node* c : candidates) {
+                const std::string id = idOf(c);
+                if (reached.count(c) || id.empty() || !names.count(id)) continue;
+                reached.insert(c);
+                const auto further = namesIn(doc, *c);
+                names.insert(further.begin(), further.end());
+                more = true;
+            }
+        }
+        return reached;
+    };
+    std::set<const Node*> named, mine;
+    for (const Node* r : roots) {
+        const auto reached = reachedFrom(*r);
+        named.insert(reached.begin(), reached.end());
+        if (r == &root) mine = reached;
+    }
+    std::vector<const Node*> out;
+    for (const Node* c : candidates) {
+        const bool widget = c->name == "object" && types.isWidget(UiDocument::className(*c));
+        if (mine.count(c) || (!named.count(c) && !widget)) out.push_back(c);
+    }
+    return out;
+}
+
 Window describe(const UiDocument& doc, const Node& root, const TypeInfo& types, bool cpp, std::vector<std::string>& warnings) {
     Window w;
     w.root = &root;
     w.id = UiDocument::objectId(root);
     w.name = identifier(w.id);
     w.cls = UiDocument::className(root);
+    std::vector<const Node*> tops{&root};
+    for (const Node* s : satellites(doc, root, types)) tops.push_back(s);
+    auto held = [&tops](const Node& n) {
+        return std::any_of(tops.begin(), tops.end(), [&n](const Node* t) { return isWithin(n, *t); });
+    };
     for (Node* o : doc.objects()) {
-        if (o == &root || !isWithin(*o, root) || o->name != "object") continue;
+        if (o == &root || !held(*o) || o->name != "object") continue;
         const std::string id = UiDocument::objectId(*o);
         if (id.empty()) continue;
         const std::string cls = UiDocument::className(*o);
@@ -113,9 +174,19 @@ Window describe(const UiDocument& doc, const Node& root, const TypeInfo& types, 
         const bool widget = types.isWidget(cls) || (!types.inGtk(cls) && o->parent && o->parent->isElement("child"));
         w.members.push_back({id, identifier(id), cls, widget});
     }
+    // Menus, and the submenus and sections in them with an id, which code fills or changes.
+    for (const Node* t : tops) {
+        if (t->name != "menu") continue;
+        std::function<void(const Node&)> add = [&](const Node& n) {
+            if (const std::string id = n.attribute("id"); !id.empty())
+                w.members.push_back({id, identifier(id), kMenuClass, false});
+            for (const Node* c : n.childElements()) add(*c);
+        };
+        add(*t);
+    }
     std::map<std::string, std::string> returnTypes;
     for (Node* o : doc.objects()) {
-        if (!isWithin(*o, root) || o->name != "object") continue;
+        if (!held(*o) || o->name != "object") continue;
         const std::string id = UiDocument::objectId(*o), cls = UiDocument::className(*o);
         for (Node* s : o->childElements("signal")) {
             Handler h;
@@ -160,6 +231,7 @@ Window describe(const UiDocument& doc, const Node& root, const TypeInfo& types, 
 std::string gtkmmClass(const std::string& cls) { return "Gtk::" + cls.substr(3); }
 
 std::string memberType(const Member& m, const TypeInfo& types) {
+    if (m.cls == kMenuClass) return "Glib::RefPtr<Gio::Menu>";
     const bool known = types.gtkmmHas(m.cls);
     if (m.widget) return (known ? gtkmmClass(m.cls) : std::string("Gtk::Widget")) + "*";
     return "Glib::RefPtr<" + (known ? gtkmmClass(m.cls) : std::string("Glib::Object")) + ">";
@@ -169,7 +241,7 @@ std::string cppReturn(const SignalSignature& s) { return s.returnType == "gboole
 
 // C
 std::string cType(const std::string& cls, const TypeInfo& types, bool widget) {
-    if (types.inGtk(cls)) return cls;
+    if (types.inGtk(cls) || cls == kMenuClass) return cls;
     return widget || types.isWidget(cls) ? "GtkWidget" : "GObject";
 }
 
@@ -385,6 +457,8 @@ Code generateGtkmm(const UiDocument& doc, const std::string& uiFile, const TypeI
             if (m.widget)
                 cpp << "    " << m.name << " = builder->get_widget<" << (known ? gtkmmClass(m.cls) : "Gtk::Widget") << ">(\""
                     << cString(m.id) << "\");\n";
+            else if (m.cls == kMenuClass)
+                cpp << "    " << m.name << " = builder->get_object<Gio::Menu>(\"" << cString(m.id) << "\");\n";
             else if (known)
                 cpp << "    " << m.name << " = builder->get_object<" << gtkmmClass(m.cls) << ">(\"" << cString(m.id) << "\");\n";
             else
@@ -523,10 +597,18 @@ Code generateC(const UiDocument& doc, const std::string& uiFile, const TypeInfo&
 
 std::optional<HandlerStub> handlerStub(const UiDocument& doc, const Node& object, const std::string& signal, bool cpp,
                                        const TypeInfo& types) {
-    const Node* root = &object;
-    while (const Node* up = UiDocument::parentObject(*root)) root = up;
-    const auto roots = codeRoots(doc, types);
-    if (std::find(roots.begin(), roots.end(), root) == roots.end()) return std::nullopt;
+    const Node* top = &object;
+    while (const Node* up = UiDocument::parentObject(*top)) top = up;
+    // The class it's in: its own top-level object's, or that of the root that holds that one.
+    const Node* root = nullptr;
+    for (const Node* r : codeRoots(doc, types)) {
+        const auto held = satellites(doc, *r, types);
+        if (r == top || std::find(held.begin(), held.end(), top) != held.end()) {
+            root = r;
+            break;
+        }
+    }
+    if (!root) return std::nullopt;
     std::vector<std::string> warnings;
     const Window w = describe(doc, *root, types, cpp, warnings);
     const std::string handlerName = [&] {

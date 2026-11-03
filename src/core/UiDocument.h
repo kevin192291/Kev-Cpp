@@ -95,6 +95,8 @@ public:
     void removeProperty(Node& object, std::string_view name);
     // Sets an attribute ("" removes it).
     void setAttribute(Node& element, std::string_view key, std::string_view value);
+    // Replaces what's inside an element with `text` (<property>, a menu's <attribute>).
+    void setText(Node& element, std::string_view text);
 
     // Inserts the element written in `xml` as the `index`th element inside `parent` (-1: last),
     // indented like the elements around it. Returns it.

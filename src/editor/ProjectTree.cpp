@@ -59,12 +59,8 @@ Glib::RefPtr<Gio::FileInfo> infoOf(Gtk::ListItem* item) {
 
 } // namespace
 
-ProjectTree::ProjectTree() : Gtk::Box(Gtk::Orientation::VERTICAL) {
-    placeholder_.set_text("No project open.\n\nFile → New Project or Open Project.");
-    placeholder_.add_css_class("dim-label");
-    placeholder_.set_wrap(true);
-    placeholder_.set_justify(Gtk::Justification::CENTER);
-
+ProjectTree::ProjectTree(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder)
+    : ProjectTreeUi(object, builder) {
     filter_ = Glib::wrap(GTK_FILTER(gtk_custom_filter_new(&keepEntry, nullptr, nullptr)));
     sorter_ = Glib::wrap(GTK_SORTER(gtk_custom_sorter_new(&compareEntries, nullptr, nullptr)));
 
@@ -75,27 +71,15 @@ ProjectTree::ProjectTree() : Gtk::Box(Gtk::Orientation::VERTICAL) {
     factory->signal_teardown().connect([this](const Glib::RefPtr<Gtk::ListItem>& item) {
         std::erase_if(rowItems_, [&item](const auto& entry) { return entry.second == item.get(); });
     });
-    list_.set_factory(factory);
-    list_.add_css_class("kevc-project-list");
-    list_.signal_activate().connect(sigc::mem_fun(*this, &ProjectTree::onActivate));
-    scroller_.set_child(list_);
-    scroller_.set_vexpand(true);
-
-    search_.set_placeholder_text("Search files by name");
-    search_.set_margin(4);
-    search_.set_visible(false);
-    search_.signal_search_changed().connect(sigc::mem_fun(*this, &ProjectTree::onSearchChanged));
-    search_.signal_activate().connect([this] { openSelectedResult(); });
-    search_.signal_stop_search().connect([this] {
-        if (search_.get_text().empty()) searchDone_.emit();
-        else search_.set_text("");
-    });
+    list_->set_factory(factory);
+    list_->signal_activate().connect(sigc::mem_fun(*this, &ProjectTree::onActivate));
+    search_->set_visible(false); // until a project is open
     // Up and Down move through the results while typing goes on in the field.
     auto searchKeys = Gtk::EventControllerKey::create();
     searchKeys->set_propagation_phase(Gtk::PropagationPhase::CAPTURE);
     searchKeys->signal_key_pressed().connect(
         [this](guint keyval, guint, Gdk::ModifierType) {
-            if (search_.get_text().empty()) return false;
+            if (search_->get_text().empty()) return false;
             if (keyval == GDK_KEY_Down || keyval == GDK_KEY_KP_Down) moveResultSelection(1);
             else if (keyval == GDK_KEY_Up || keyval == GDK_KEY_KP_Up) moveResultSelection(-1);
             else if (keyval == GDK_KEY_Page_Down) moveResultSelection(10);
@@ -104,27 +88,10 @@ ProjectTree::ProjectTree() : Gtk::Box(Gtk::Orientation::VERTICAL) {
             return true;
         },
         false);
-    search_.add_controller(searchKeys);
-    append(search_);
-
-    results_.set_selection_mode(Gtk::SelectionMode::BROWSE);
-    results_.signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
+    search_->add_controller(searchKeys);
+    results_->signal_row_activated().connect([this](Gtk::ListBoxRow* row) {
         if (auto it = resultPaths_.find(row); it != resultPaths_.end()) fileActivated_.emit(root_ / it->second);
     });
-    resultsMessage_.add_css_class("dim-label");
-    resultsMessage_.set_valign(Gtk::Align::START);
-    resultsMessage_.set_wrap(true);
-    resultsMessage_.set_margin(12);
-    results_.set_placeholder(resultsMessage_);
-    resultsScroller_.set_child(results_);
-    resultsScroller_.set_vexpand(true);
-
-    stack_.add(placeholder_, "empty");
-    stack_.add(scroller_, "tree");
-    stack_.add(resultsScroller_, "results");
-    stack_.set_visible_child("empty");
-    stack_.set_vexpand(true);
-    append(stack_);
 
     setupContextMenu();
 
@@ -132,7 +99,12 @@ ProjectTree::ProjectTree() : Gtk::Box(Gtk::Orientation::VERTICAL) {
     auto rootDrop = Gtk::DropTarget::create(Gio::FileInfo::get_base_type(), Gdk::DragAction::MOVE);
     rootDrop->signal_drop().connect(
         [this](const Glib::ValueBase& value, double, double) { return !root_.empty() && dropOn(value, root_); }, false);
-    list_.add_controller(rootDrop);
+    list_->add_controller(rootDrop);
+}
+
+void ProjectTree::on_search_stop_search() {
+    if (search_->get_text().empty()) searchDone_.emit();
+    else search_->set_text("");
 }
 
 ProjectTree::~ProjectTree() {
@@ -147,13 +119,13 @@ void ProjectTree::setRoot(const fs::path& root) {
     files_.clear();
     filesListed_ = false;
     searching_ = false;
-    search_.set_text("");
-    search_.set_visible(!root.empty());
+    search_->set_text("");
+    search_->set_visible(!root.empty());
     if (root.empty()) {
-        gtk_list_view_set_model(list_.gobj(), nullptr);
+        gtk_list_view_set_model(list_->gobj(), nullptr);
         tree_.reset();
         selection_.reset();
-        stack_.set_visible_child("empty");
+        stack_->set_visible_child("empty");
         return;
     }
     auto rootModel = directoryModel(Gio::File::create_for_path(root.string()));
@@ -163,8 +135,8 @@ void ProjectTree::setRoot(const fs::path& root) {
         return directoryModel(Glib::wrap(fileOf(info), true));
     });
     selection_ = Gtk::SingleSelection::create(tree_);
-    list_.set_model(selection_);
-    stack_.set_visible_child("tree");
+    list_->set_model(selection_);
+    stack_->set_visible_child("tree");
 }
 
 Glib::RefPtr<Gio::ListModel> ProjectTree::directoryModel(const Glib::RefPtr<Gio::File>& dir) {
@@ -273,15 +245,15 @@ void ProjectTree::onActivate(guint position) {
 
 void ProjectTree::focusSearch() {
     if (root_.empty()) return;
-    search_.grab_focus();
-    search_.select_region(0, -1);
+    search_->grab_focus();
+    search_->select_region(0, -1);
 }
 
 void ProjectTree::onSearchChanged() {
     if (root_.empty()) return;
-    if (search_.get_text().empty()) {
+    if (search_->get_text().empty()) {
         searching_ = false;
-        stack_.set_visible_child("tree");
+        stack_->set_visible_child("tree");
         return;
     }
     // A new search lists the files again, so it finds what was added since the last one.
@@ -290,7 +262,7 @@ void ProjectTree::onSearchChanged() {
         listFiles();
     }
     showResults();
-    stack_.set_visible_child("results");
+    stack_->set_visible_child("results");
 }
 
 void ProjectTree::listFiles() {
@@ -299,20 +271,20 @@ void ProjectTree::listFiles() {
         post([this, files = std::move(files)]() mutable {
             files_ = std::move(files);
             filesListed_ = true;
-            if (!search_.get_text().empty()) showResults();
+            if (!search_->get_text().empty()) showResults();
         });
     });
 }
 
 void ProjectTree::showResults() {
-    const std::string query = search_.get_text();
+    const std::string query = search_->get_text();
     resultPaths_.clear();
-    while (auto* row = results_.get_row_at_index(0)) results_.remove(*row);
+    while (auto* row = results_->get_row_at_index(0)) results_->remove(*row);
     if (!filesListed_) {
-        resultsMessage_.set_text("Listing files…");
+        resultsMessage_->set_text("Listing files…");
         return;
     }
-    resultsMessage_.set_text("No file names match \u201c" + query + "\u201d.");
+    resultsMessage_->set_text("No file names match \u201c" + query + "\u201d.");
     for (const auto& match : search::rankFiles(files_, query, 200)) {
         const std::set<size_t> positions(match.positions.begin(), match.positions.end());
         const size_t slash = match.path.rfind('/');
@@ -342,23 +314,23 @@ void ProjectTree::showResults() {
         auto* row = Gtk::make_managed<Gtk::ListBoxRow>();
         row->set_child(*box);
         row->set_tooltip_text(match.path);
-        results_.append(*row);
+        results_->append(*row);
         resultPaths_[row] = match.path;
     }
-    if (auto* first = results_.get_row_at_index(0)) results_.select_row(*first);
+    if (auto* first = results_->get_row_at_index(0)) results_->select_row(*first);
 }
 
 void ProjectTree::moveResultSelection(int step) {
     const int count = static_cast<int>(resultPaths_.size());
     if (count == 0) return;
-    Gtk::ListBoxRow* selected = results_.get_selected_row();
+    Gtk::ListBoxRow* selected = results_->get_selected_row();
     const int index = std::clamp((selected ? selected->get_index() : -1) + step, 0, count - 1);
-    if (auto* row = results_.get_row_at_index(index)) {
-        results_.select_row(*row);
+    if (auto* row = results_->get_row_at_index(index)) {
+        results_->select_row(*row);
         // Keep it in view: scroll the row's area into the scroller's window.
-        auto adjustment = resultsScroller_.get_vadjustment();
+        auto adjustment = resultsScroller_->get_vadjustment();
         graphene_rect_t bounds;
-        if (gtk_widget_compute_bounds(GTK_WIDGET(row->gobj()), GTK_WIDGET(results_.gobj()), &bounds)) {
+        if (gtk_widget_compute_bounds(GTK_WIDGET(row->gobj()), GTK_WIDGET(results_->gobj()), &bounds)) {
             const double top = bounds.origin.y, bottom = top + bounds.size.height;
             if (top < adjustment->get_value()) adjustment->set_value(top);
             else if (bottom > adjustment->get_value() + adjustment->get_page_size())
@@ -368,8 +340,8 @@ void ProjectTree::moveResultSelection(int step) {
 }
 
 bool ProjectTree::openSelectedResult() {
-    Gtk::ListBoxRow* row = results_.get_selected_row();
-    if (!row) row = results_.get_row_at_index(0);
+    Gtk::ListBoxRow* row = results_->get_selected_row();
+    if (!row) row = results_->get_row_at_index(0);
     auto it = row ? resultPaths_.find(row) : resultPaths_.end();
     if (it == resultPaths_.end()) return false;
     fileActivated_.emit(root_ / it->second);
@@ -408,28 +380,7 @@ void ProjectTree::setupContextMenu() {
     });
     insert_action_group("tree", actions_);
 
-    auto withAccel = [](const char* label, const char* action, const char* accel) {
-        auto item = Gio::MenuItem::create(label, action);
-        item->set_attribute_value("accel", Glib::Variant<Glib::ustring>::create(accel));
-        return item;
-    };
-    auto menu = Gio::Menu::create();
-    auto open = Gio::Menu::create();
-    open->append("_Open", "tree.open");
-    menu->append_section(open);
-    auto create = Gio::Menu::create();
-    create->append("New _File…", "tree.new-file");
-    create->append("New Fol_der…", "tree.new-folder");
-    menu->append_section(create);
-    auto change = Gio::Menu::create();
-    change->append_item(withAccel("_Rename…", "tree.rename", "F2"));
-    change->append_item(withAccel("_Delete", "tree.delete", "Delete"));
-    menu->append_section(change);
-    auto copy = Gio::Menu::create();
-    copy->append("Copy _Path", "tree.copy-path");
-    copy->append("Copy Relati_ve Path", "tree.copy-relative-path");
-    menu->append_section(copy);
-    menu_.set_menu_model(menu);
+    menu_.set_menu_model(contextMenu_);
     menu_.set_has_arrow(false);
     menu_.set_halign(Gtk::Align::START);
     menu_.set_parent(*this);
@@ -442,7 +393,7 @@ void ProjectTree::setupContextMenu() {
         if (item && selection_) selection_->set_selected(item->get_position());
         showContextMenu(item, x, y);
     });
-    list_.add_controller(rightClick);
+    list_->add_controller(rightClick);
 
     // F2 and Delete act on the selected row, as in file managers.
     auto keys = Gtk::EventControllerKey::create();
@@ -460,11 +411,11 @@ void ProjectTree::setupContextMenu() {
             return true;
         },
         false);
-    list_.add_controller(keys);
+    list_->add_controller(keys);
 }
 
 Gtk::ListItem* ProjectTree::itemAt(double x, double y) {
-    for (Gtk::Widget* w = list_.pick(x, y, Gtk::PickFlags::DEFAULT); w && w != &list_; w = w->get_parent())
+    for (Gtk::Widget* w = list_->pick(x, y, Gtk::PickFlags::DEFAULT); w && w != list_; w = w->get_parent())
         if (auto it = rowItems_.find(w); it != rowItems_.end()) return it->second;
     return nullptr;
 }
@@ -486,7 +437,7 @@ void ProjectTree::showContextMenu(Gtk::ListItem* item, double x, double y) {
     enable("delete", menuRow_.has_value());
 
     graphene_point_t point = GRAPHENE_POINT_INIT(float(x), float(y)), inTree;
-    if (!gtk_widget_compute_point(GTK_WIDGET(list_.gobj()), GTK_WIDGET(gobj()), &point, &inTree)) return;
+    if (!gtk_widget_compute_point(GTK_WIDGET(list_->gobj()), GTK_WIDGET(gobj()), &point, &inTree)) return;
     menu_.set_pointing_to(Gdk::Rectangle(int(inTree.x), int(inTree.y), 1, 1));
     menu_.popup();
 }

@@ -88,6 +88,19 @@ void DesignerPage::buildPalette() {
             palette_.append(*item);
         }
     }
+    // Menus aren't widgets: a new one goes beside the objects, and a menu bar or menu button shows it.
+    auto* title = Gtk::make_managed<Gtk::Label>("Menus");
+    title->set_xalign(0);
+    title->add_css_class("kevc-palette-group");
+    palette_.append(*title);
+    auto* menu = Gtk::make_managed<Gtk::Button>("Menu");
+    menu->set_has_frame(false);
+    menu->add_css_class("kevc-palette-item");
+    if (auto* label = dynamic_cast<Gtk::Label*>(menu->get_child())) label->set_xalign(0);
+    menu->set_tooltip_text("<menu>: click to add one. Its items are added from its properties or its right-click "
+                           "menu in the outline; a GtkPopoverMenuBar or GtkMenuButton shows it");
+    menu->signal_clicked().connect([this] { addTopLevelMenu(); });
+    palette_.append(*menu);
 }
 
 // ---- dragging and dropping
@@ -377,6 +390,11 @@ bool DesignerPage::textFieldFocused() {
 void DesignerPage::copySelected() {
     Node* object = doc_.find(selected_);
     if (!object) return;
+    if (selectedIsMenuPart()) {
+        get_clipboard()->set_text(UiDocument::textOf(*object));
+        status_.emit("Copied the menu " + object->name);
+        return;
+    }
     get_clipboard()->set_text(ui::objectXml(*object));
     status_.emit("Copied " + UiDocument::className(*object));
 }
@@ -389,6 +407,14 @@ void DesignerPage::cutSelected() {
 void DesignerPage::deleteSelected() {
     Node* object = doc_.find(selected_);
     if (!object) return;
+    if (selectedIsMenuPart()) {
+        // The submenu, section or menu around it is selected next.
+        Node* holder = object->parent && ui::menuPart(*object->parent) != ui::MenuPart::None ? object->parent : nullptr;
+        const int holderUid = holder ? holder->uid : 0;
+        edit([&] { doc_.removeElement(*object); });
+        select(holderUid);
+        return;
+    }
     Node* parent = UiDocument::parentObject(*object);
     const int parentUid = parent ? parent->uid : 0;
     edit([&] { ui::removeObject(doc_, *object); });
@@ -406,6 +432,7 @@ void DesignerPage::paste() {
             }
             try {
                 const UiDocument pasted = UiDocument::parse(text);
+                if (pasteMenuPart(pasted)) return;
                 for (const auto& n : pasted.root().children)
                     if (n->isElement("object")) {
                         const std::string cls = UiDocument::className(*n);
@@ -433,16 +460,25 @@ void DesignerPage::shiftSelected(int delta) {
     Node* object = doc_.find(selected_);
     if (!object) return;
     int moved = 0;
+    const bool menu = selectedIsMenuPart();
     edit([&] {
-        if (Node* n = ui::shiftObject(doc_, *object, delta)) moved = n->uid;
+        if (Node* n = menu ? ui::shiftMenuPart(doc_, *object, delta) : ui::shiftObject(doc_, *object, delta))
+            moved = n->uid;
     });
     if (moved) select(moved);
 }
 
 void DesignerPage::updateEditActions() {
     Node* object = doc_.find(selected_);
-    const bool inside = object && UiDocument::parentObject(*object);
+    const bool menu = selectedIsMenuPart();
+    const bool inside = object && !menu && UiDocument::parentObject(*object);
     bool up = false, down = false;
+    if (menu && object->parent) {
+        const auto siblings = ui::menuEntries(*object->parent);
+        const auto it = std::find(siblings.begin(), siblings.end(), object);
+        up = it != siblings.end() && it != siblings.begin();
+        down = it != siblings.end() && it + 1 != siblings.end();
+    }
     if (inside && object->parent && object->parent->isElement("child")) {
         const auto siblings = ui::childObjectsOfType(*UiDocument::parentObject(*object), object->parent->attribute("type"));
         const auto it = std::find(siblings.begin(), siblings.end(), object);
@@ -458,6 +494,7 @@ void DesignerPage::updateEditActions() {
     enable("wrap", inside);
     enable("move-up", up);
     enable("move-down", down);
+    for (const char* name : {"add-menu-item", "add-menu-section", "add-submenu"}) enable(name, menu);
 }
 
 void DesignerPage::showContextMenu(Gtk::Widget& over, double x, double y) {
@@ -476,6 +513,9 @@ void DesignerPage::setupEditing() {
     editActions_->add_action("delete", [this] { deleteSelected(); });
     editActions_->add_action("move-up", [this] { shiftSelected(-1); });
     editActions_->add_action("move-down", [this] { shiftSelected(1); });
+    editActions_->add_action("add-menu-item", [this] { addMenuEntry(ui::MenuPart::Item); });
+    editActions_->add_action("add-menu-section", [this] { addMenuEntry(ui::MenuPart::Section); });
+    editActions_->add_action("add-submenu", [this] { addMenuEntry(ui::MenuPart::Submenu); });
     editActions_->add_action_with_parameter("wrap", Glib::VariantType("s"), [this](const Glib::VariantBase& v) {
         wrapSelected(Glib::VariantBase::cast_dynamic<Glib::Variant<Glib::ustring>>(v).get());
     });
@@ -496,6 +536,16 @@ void DesignerPage::setupEditing() {
     clipboard->append("_Paste", "design.paste");
     clipboard->append("_Delete", "design.delete");
     menu->append_section(clipboard);
+    // Shown only for a menu part (a GMenu item is hidden while its action is disabled).
+    auto entries = Gio::Menu::create();
+    for (const auto& [label, action] : {std::pair{"Add _Item", "design.add-menu-item"},
+                                        {"Add _Section", "design.add-menu-section"},
+                                        {"Add Sub_menu", "design.add-submenu"}}) {
+        auto item = Gio::MenuItem::create(label, action);
+        item->set_attribute_value("hidden-when", Glib::Variant<Glib::ustring>::create("action-disabled"));
+        entries->append_item(item);
+    }
+    menu->append_section(entries);
     auto wrap = Gio::Menu::create();
     for (const auto& [label, cls] : {std::pair{"Wrap in _Box", "GtkBox"}, {"Wrap in _Grid", "GtkGrid"},
                                      {"Wrap in _Scrolled Window", "GtkScrolledWindow"}, {"Wrap in _Frame", "GtkFrame"}}) {

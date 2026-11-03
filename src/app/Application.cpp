@@ -139,7 +139,7 @@ void Application::on_activate() {
     }
     const bool starting = !window_;
     if (starting) {
-        window_ = new MainWindow(*this);
+        window_ = MainWindow::create(*this);
         add_window(*window_);
     }
     window_->present();

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "terminal/TerminalPane.ui.h"
+
 #include <gtkmm.h>
 #include <vte/vte.h>
 
@@ -12,14 +14,20 @@
 
 namespace kevc {
 
-// A VTE terminal that runs either the user's shell or a program the IDE launched.
-// Only one child runs at a time: starting another stops the current one first and launches the
-// new one once the old child has really exited, so exit notifications never get mixed up.
-class TerminalPane : public Gtk::Box {
+// A VTE terminal that runs either the user's shell or a program the IDE launched (the Terminal and
+// Run tabs). Only one child runs at a time: starting another stops the current one first and launches
+// the new one once the old child has really exited, so exit notifications never get mixed up. The
+// terminal and its scrollbar are TerminalPane.ui; the font and colours are set here, since VTE takes
+// its palette through a call rather than properties.
+class TerminalPane : public TerminalPaneUi {
 public:
     using ExitHandler = std::function<void(const std::string& outcome)>;
 
-    TerminalPane();
+    static Glib::RefPtr<TerminalPane> create() {
+        g_type_ensure(VTE_TYPE_TERMINAL); // so GtkBuilder finds the class the design names
+        return TerminalPaneUi::create<TerminalPane>();
+    }
+    TerminalPane(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder);
     ~TerminalPane() override;
 
     // Starts $SHELL in `cwd`, restarting it automatically whenever it exits.

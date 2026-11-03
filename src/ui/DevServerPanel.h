@@ -10,8 +10,7 @@ namespace kevc {
 
 // The bottom "Dev Server" tab: what the server (the bundled one or the project's Vite) is doing,
 // Open in Browser, Start/Stop, and its output. Its layout is DevServerPanel.ui (edit it on Kev-C++'s
-// Design page); the Start/Stop button is a TaskButton, which a design can't make, so this class puts
-// it in the design's toggleSlot_.
+// Design page); the Start/Stop button (toggle_) works as a TaskButton.
 class DevServerPanel : public DevServerPanelUi {
 public:
     static Glib::RefPtr<DevServerPanel> create() { return DevServerPanelUi::create<DevServerPanel>(); }
@@ -25,15 +24,15 @@ public:
     void appendLog(const std::string& text);
     void clearLog();
 
-    sigc::signal<void()>& signalStart() { return toggle_.signalStart(); }
-    sigc::signal<void()>& signalStop() { return toggle_.signalStop(); }
+    sigc::signal<void()>& signalStart() { return task_.signalStart(); }
+    sigc::signal<void()>& signalStop() { return task_.signalStop(); }
     sigc::signal<void()>& signalOpen() { return openClicked_; }
 
 protected:
     void on_open_clicked() override;
 
 private:
-    TaskButton toggle_{"kevc-globe", "Start the dev server", "kevc-stop", "Stop the dev server", 16};
+    TaskButton task_{*toggle_, "kevc-stop", "Stop the dev server", "Stop"};
     sigc::signal<void()> openClicked_;
 };
 

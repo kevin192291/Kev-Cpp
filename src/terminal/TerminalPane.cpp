@@ -43,8 +43,9 @@ std::string describeStatus(int status) {
 
 } // namespace
 
-TerminalPane::TerminalPane() : self_(std::make_shared<TerminalPane*>(this)) {
-    terminal_ = VTE_TERMINAL(vte_terminal_new());
+TerminalPane::TerminalPane(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder)
+    : TerminalPaneUi(object, builder), terminal_(VTE_TERMINAL(vte_->gobj())),
+      self_(std::make_shared<TerminalPane*>(this)) {
     PangoFontDescription* font = pango_font_description_from_string("DejaVu Sans Mono 10");
     vte_terminal_set_font(terminal_, font);
     pango_font_description_free(font);
@@ -60,17 +61,8 @@ TerminalPane::TerminalPane() : self_(std::make_shared<TerminalPane*>(this)) {
     gdk_rgba_parse(&fg, "#eeedf0");
     gdk_rgba_parse(&bg, "#012456");
     vte_terminal_set_colors(terminal_, &fg, &bg, palette, 16);
-    vte_terminal_set_scrollback_lines(terminal_, 10000);
-    vte_terminal_set_scroll_on_output(terminal_, TRUE);
     g_signal_connect(terminal_, "child-exited", G_CALLBACK(&TerminalPane::onChildExited), this);
-
-    auto* widget = Gtk::manage(Glib::wrap(GTK_WIDGET(terminal_)));
-    widget->set_hexpand(true);
-    widget->set_vexpand(true);
-    auto adjustment = Glib::wrap(gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(terminal_)), true);
-    auto* scrollbar = Gtk::make_managed<Gtk::Scrollbar>(adjustment, Gtk::Orientation::VERTICAL);
-    append(*widget);
-    append(*scrollbar);
+    scrollbar_->set_adjustment(Glib::wrap(gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(terminal_)), true));
 }
 
 TerminalPane::~TerminalPane() {

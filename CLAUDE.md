@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 234 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 238 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -51,7 +51,8 @@ verified by driving the real app (see "GUI testing").
   a .clang-format), `Format` (Auto Format: which tool formats a file, LSP TextEdits, the small edits
   between old and new text, the nearest .clang-format, the project's prettier).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon, the splash), `MainWindow`
-  (everything wired together: menus, actions, build/run, debugging, IntelliSense, dev server).
+  (everything wired together: actions, build/run, debugging, IntelliSense, dev server; its frame and
+  menus are `MainWindow.ui`).
 - `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), CppIndenter (the
   GtkSourceIndenter for C/C++ files, using core/CppStyle), CodeFormatter (Edit → Auto Format),
   ProjectTree (with Go to File search, context menu, drag and drop), SymbolsPanel, and DocumentPage,
@@ -71,12 +72,14 @@ verified by driving the real app (see "GUI testing").
   every descendant that left it), Capture (run + collect stdout; a form that feeds stdin, for prettier) and
   BackgroundJob (one worker thread at a time, results posted to the main loop, cancelled and joined
   before a new one starts or its owner goes; used by the searches).
-- `src/build/` BuildRunner (sequential subprocesses, line streaming), CompilerPanel.
+- `src/build/` BuildRunner (sequential subprocesses, line streaming), CompilerPanel, CompileLog.
+- `src/terminal/` TerminalPane (the Run and Terminal tabs: a VteTerminal running the shell or a
+  program, one child at a time).
 - `src/ui/` Dialogs (promptText/askChoice/showError/showInfo on MessageDialog, Kev-C++'s one message
   box; closeOnEscape, deleteWhenHidden), AboutWindow, ToolchainWindow, NewProjectDialog,
   ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
-  bottom/right/floating or closed; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton,
-  icon tab labels), QuickSearch (the menu bar's search field), SearchPanel (the left dock's Search
+  bottom/right/floating or closed; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton: makes a
+  designed button show Stop while its task runs; icon tab labels), QuickSearch (the menu bar's search field), SearchPanel (the left dock's Search
   tab: Find in Files), SearchMarkup (their shared highlighting), NpmPackagesDialog (a web project's
   Project → Packages), SplashWindow (start-up splash), WelcomePage (the Welcome tab), DevServerPanel,
   and the web panels EnvPanel, TestsPanel, TracesPanel, DependenciesPanel (`src/editor/RoutesPanel`
@@ -152,9 +155,12 @@ verified by driving the real app (see "GUI testing").
   module, exits code 2 if the port is taken, and exits when its stdin pipe closes (IDE crash).
 - **Keys GTK steals**: F10 opens the menubar and Alt+letter triggers mnemonics, so MainWindow claims
   F10 and Alt+P in a capture-phase key controller.
-- **Toolbar**: buttons activate the `win.*` actions (not bound to them) so `updateToolbar()` owns their
-  enabled state. A `Task` records which button started the running build (`buildTask_`) or program
-  (`programTask_`); that button shows Stop until it ends. Call `updateToolbar()` after anything that
+- **Toolbar** (`MainWindow.ui`): plain buttons name their `win.*` action, so they grey out with it.
+  The Start/Stop ones (Compile, Run, Compile & Run, Rebuild, Clean, Debug, Continue, the dev server)
+  aren't bound: a `TaskButton` over each starts the task or stops it, and `updateToolbar()` owns their
+  enabled state (Stop must work while the action is off). A `Task` records which button started the
+  running build (`buildTask_`) or program (`programTask_`); that button shows Stop until it ends.
+  Icons are 24 px through the theme (`.kevc-toolbar button.image-button`). Call `updateToolbar()` after anything that
   starts or ends a build, program, debug session (or changes its state) or the dev server.
 - **Slate theme** (colours of Embarcadero Dev-C++ 6's dark style): `Application` switches the app to
   GTK's built-in "Default" dark theme whatever the desktop uses and layers `kevc-theme.css` on top,
@@ -183,8 +189,12 @@ verified by driving the real app (see "GUI testing").
   by default (`toolbarGroupApplies`, `panelApplies`, `usesNativeTools`/`usesWebTools`): C/C++ hide the
   web group, web panels, npm menu items and dev-server Tools items; web hides the project group,
   Debug/Release, Clean, Packages/Project Options; env/traces need SvelteKit. Such items are also left
-  out of View → Toolbars/Panels. `updateMenus()` refills the View lists and the Project, Execute and
-  Tools menus (web names: Check Types, Production Build) on every applyProfile.
+  out of View → Toolbars/Panels. `updateMenus()` runs on every applyProfile: the design's Project,
+  Execute and Tools menus have a section with an id for each case (web names: Check Types,
+  Production Build) and it picks the ones that apply; View → Toolbars/Panels and File → Close
+  Project/Close Folder list every item with `hidden-when="action-disabled"`, and it (or
+  updateToolbar) disables the actions that don't apply. Install Dependencies' label is the design's
+  with "npm" replaced by the project's package manager.
 - **JS debugging**: js-debug's `dapDebugServer.js` on a free port; the root `pwa-node` session launches
   Vite; js-debug's `startDebugging` reverse requests each get a new TCP session; once Vite prints its
   URL a `pwa-chrome` session opens it if a Chromium-based browser is found (`/web/chrome`), else the
@@ -216,9 +226,14 @@ verified by driving the real app (see "GUI testing").
   target only sees the data on drop. Notebooks and stacks in the preview show the page holding the
   selection (a click on a tab selects its label, which turns to its page) and keep their pages
   across the rebuild that follows every edit (`revealSelection`, `notebookPages_`). A top-level
-  container (a panel) previews at 640×420, not its natural size. Rebuilding the property list
-  destroys the focused field, whose focus-out would commit stale text: every commit returns while
-  `syncing_` is set.
+  container (a panel) previews at 640×420, not its natural size. A search bar previews open.
+  Rebuilding the property list destroys the focused field, whose focus-out would commit stale text:
+  every commit returns while `syncing_` is set. Menus (DesignerMenus.cpp, core/UiEdit's menu
+  functions): the outline lists top-level `<menu>`s with their submenus, sections and items; a part's
+  properties are its id and its `<attribute>`s (label, action, target, accel, icon, hidden-when);
+  entries are added (Add Item/Section/Submenu, into the selection or after a selected item), moved,
+  copied, pasted and deleted; ids are unique across objects and menus; selecting a part outlines the
+  widget whose property names its menu. The palette's "Menu" adds a top-level menu.
 - **Designer code**: generated files (`x.ui.h/.cpp` gtkmm, `x-ui.h/.c` C) are rewritten on every save
   once they exist (that's the opt-in); the user's files are only created when missing. gtkmm windows
   come from `Gtk::Builder::get_widget_derived`, and signals connect with `g_signal_connect_data`
@@ -234,19 +249,27 @@ verified by driving the real app (see "GUI testing").
   the only one, so it would die with the builder, and deleting a gtkmm wrapper of a builder-made
   widget doesn't release it; dropping the last reference does, and gtkmm then deletes the wrapper.
   In C a widget comes back with a new widget's floating reference (`g_object_force_floating`).
+  A root's class also gets the top-level objects and menus beside the roots that it names, directly
+  or through one it names (a menu bar's menu-model, a menu button's popover, a text view's buffer),
+  and those nothing names; their handlers connect too. Menus, submenus and sections with an id are
+  `Glib::RefPtr<Gio::Menu>` members (`GMenu *` in C).
 - **Kev-C++'s own windows (G4)**: each gets a `.ui` beside its class (`src/ui/SplashWindow.ui`),
   handled exactly like a user's gtkmm design: the designer writes `SplashWindow.ui.h/.ui.cpp` on save
   (base class `SplashWindowUi`, global namespace; ids end in `_` so members follow our convention),
   the class derives from it and adds behaviour, `create(…)` builds it. Generated files are committed
   and listed in CMakeLists.txt by hand; `UiCodegen.KevCppsOwnDesignsMatchTheirCode` fails when a .ui
   changed outside the designer. Done: the splash, every dialog (step 2: About, Toolchain,
-  MessageDialog, New Project, Project Options, npm Packages) and the panels (step 3: Compiler,
+  MessageDialog, New Project, Project Options, npm Packages), the panels (step 3: Compiler,
   Classes, Search, Routes, Environment, Tests, Traces, Dependencies, Debug, Watches, Dev Server,
-  Welcome; MainWindow holds them as `Glib::RefPtr`s). Next: the main window (step 4), with the
-  Project tab, Compile Log and terminals. A designed widget is held only by its parent: never take
-  one out of its container to re-add it later (show/hide it instead). Signals whose handlers need
-  arguments (`row-activated`) stay connected in code; C++-only widgets (TaskButton) go into an
-  empty Box in the design. A list's empty message is its `<child type="placeholder">`. Lists, rows
+  Welcome; MainWindow holds them as `Glib::RefPtr`s) and the main window (step 4: `MainWindow.ui`
+  with every menu, plus ProjectTree, CompileLog and TerminalPane). Next: step 5, the designer gaps
+  (docs/ROADMAP.md). Not designs: DesignerPage, EditorTab, QuickSearch (in `quickSearchSlot_`),
+  DockManager's floating windows. A designed widget is held only by its parent: never take
+  one out of its container to re-add it later (show/hide it, as the Routes page is). Signals whose
+  handlers need arguments (`row-activated`) stay connected in code; a widget made in C++ goes into
+  an empty Box in the design (the left dock's pages hold the panels that way), and a button made in
+  C++ for its behaviour becomes behaviour over a designed button (TaskButton). A GtkTextTag must
+  be a `<child type="tag">` of its table; a VteTerminal is fine in a design once its type is ensured. A list's empty message is its `<child type="placeholder">`. Lists, rows
   and drop-down choices that come from data stay in code, under headings and frames from the
   design; the design shows every optional part (a prompt's entry, an error line) and the class
   hides what a case doesn't use.
@@ -367,7 +390,8 @@ verified by driving the real app (see "GUI testing").
 - Stop test instances by their command line (the test project path), never by name (`pkill kev-cpp`,
   `pgrep -x gdb`): the user may have their own Kev-C++ or gdb running.
 - Kev-C++-in-Kev-C++ tests (G4): use a copy of the repository, never the real one (the designer
-  writes files and F9 builds there). docs/ROADMAP.md's G4 section has the recipe.
+  writes files and F9 builds there). docs/ROADMAP.md's G4 section has the recipe; refresh the copy
+  with `rsync --no-times`, or ninja keeps objects built from an earlier test's edits.
 - JavaScript debugging tests: delete `$XDG_CACHE_HOME/kev-cpp/debug-browser-profile` before a run.
   Chromium restores the tabs of a session it didn't close, and a restored page whose Vite still runs
   hits the same breakpoints (live counts double).
@@ -377,8 +401,8 @@ verified by driving the real app (see "GUI testing").
 All seven planned milestones are done (projects, build/run, options & packages, IntelliSense,
 debugger, dev server) plus docking panels. Not done yet: the bundled TypeScript dev server (projects
 without Vite) can't resolve npm packages; floating panel window positions aren't remembered (GTK 4 can't
-position windows; the user doesn't mind); most of Kev-C++'s own windows are still built in code, so
-the GTK designer can't edit them yet (G4 is moving them to .ui files; the splash is done).
+position windows; the user doesn't mind); G4 step 5 (designer gaps its own windows showed). Every
+window, dialog and panel of Kev-C++ is a .ui file now, the main window included.
 
 Roadmap: docs/ROADMAP.md. Done: M0 (foundations), W1–W5 (web/SvelteKit, including server and
 browser debugging, checked end to end) G1–G3 (GTK designer: model, preview, properties; palette, drag and

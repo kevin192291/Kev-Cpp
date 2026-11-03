@@ -61,6 +61,13 @@ popover modelbutton:selected {
 .kevc-toolbar button.flat:hover {
   background-color: alpha(white, 0.18);
 }
+/* Toolbar buttons are designed with an icon-name (MainWindow.ui): 24 px icons, and a button's usual
+   padding rather than the narrower one GTK gives icon-only buttons. */
+.kevc-toolbar button.image-button {
+  -gtk-icon-size: 24px;
+  padding-left: 9px;
+  padding-right: 9px;
+}
 
 /* Tabs */
 notebook > header {
