@@ -41,8 +41,15 @@ std::vector<TextEdit> diffEdits(std::string_view before, std::string_view after)
 // --range-start and --range-end take.
 int utf16Offset(std::string_view text, int line, int utf16Column);
 
-// The .clang-format (or _clang-format) clang-format uses for `file`: the nearest in its folder or one above.
-std::optional<std::filesystem::path> clangFormatConfig(const std::filesystem::path& file);
+// The .clang-format (or _clang-format) Auto Format uses for `file`: the nearest in its folder or one
+// above, up to the top of the project folder or of the git repository holding the file, whichever is
+// higher (only its own folder for a file in neither). One further up isn't the project's, and the
+// home folder's never counts: clang-format itself would take a ~/.clang-format made once for something
+// else, and lay out every project in the home folder that has none with it (LLVM's 2-space indents
+// in place of Kev-C++'s 4). Where this finds none, Kev-C++'s own layout applies.
+std::optional<std::filesystem::path> clangFormatConfig(const std::filesystem::path& file,
+                                                       const std::filesystem::path& projectFolder,
+                                                       const std::filesystem::path& home);
 
 // prettier as the project installed it: the script `node` runs, and the folder whose node_modules has it,
 // looked for from the file's folder up. Empty `script` if there's none.

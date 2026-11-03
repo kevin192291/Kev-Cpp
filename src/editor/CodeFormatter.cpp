@@ -51,7 +51,7 @@ fs::path CodeFormatter::styleFolder() {
     return dir;
 }
 
-void CodeFormatter::format(EditorTab& tab) {
+void CodeFormatter::format(EditorTab& tab, const fs::path& projectFolder) {
     const fs::path file = tab.path();
     const std::string name = file.filename().string();
     GtkTextBuffer* buffer = GTK_TEXT_BUFFER(tab.buffer());
@@ -110,8 +110,10 @@ void CodeFormatter::format(EditorTab& tab) {
         return;
     }
 
-    // clangd uses the project's .clang-format; without one, a stand-in in our style folder.
-    const bool ownStyle = formatter == format::Formatter::Clangd && !format::clangFormatConfig(file);
+    // clangd uses the project's .clang-format; without one, a stand-in in our style folder, whose
+    // .clang-format is nearer than any clangd would otherwise find further up.
+    const bool ownStyle = formatter == format::Formatter::Clangd &&
+                          !format::clangFormatConfig(file, projectFolder, Glib::get_home_dir());
     const fs::path standIns = ownStyle ? styleFolder() : fs::path();
     const bool wanted = selection.has_value();
     lsp_.format(&tab, selection, standIns,

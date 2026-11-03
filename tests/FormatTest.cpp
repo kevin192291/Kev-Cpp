@@ -151,15 +151,47 @@ TEST(Format, DiffEditsAreSmallSoMarksStayOnTheirLines) {
         EXPECT_EQ(lineOf(after, moveMark(before, lineStart(before, from), edits)), to) << "line " << from;
 }
 
-TEST(Format, FindsTheNearestClangFormatFile) {
-    const fs::path dir = scratch("config");
-    fs::create_directories(dir / "app/src/deep");
-    EXPECT_EQ(clangFormatConfig(dir / "app/src/deep/main.cpp"), std::nullopt);
-    std::ofstream(dir / "_clang-format") << "BasedOnStyle: LLVM\n";
-    EXPECT_EQ(clangFormatConfig(dir / "app/src/deep/main.cpp"), dir / "_clang-format");
-    std::ofstream(dir / "app/.clang-format") << "BasedOnStyle: Google\n";
-    EXPECT_EQ(clangFormatConfig(dir / "app/src/deep/main.cpp"), dir / "app/.clang-format");
-    fs::remove_all(dir);
+TEST(Format, FindsTheProjectsClangFormatFile) {
+    const fs::path home = scratch("config");
+    const fs::path project = home / "repos/app";
+    const fs::path file = project / "src/deep/main.cpp";
+    fs::create_directories(project / "src/deep");
+    EXPECT_EQ(clangFormatConfig(file, project, home), std::nullopt);
+    // One in the home folder, or between it and the project, isn't the project's.
+    std::ofstream(home / ".clang-format") << "BasedOnStyle: LLVM\n";
+    std::ofstream(home / "repos/.clang-format") << "BasedOnStyle: LLVM\n";
+    EXPECT_EQ(clangFormatConfig(file, project, home), std::nullopt);
+    // The nearest of the project's, however the project folder is spelled.
+    std::ofstream(project / "_clang-format") << "BasedOnStyle: LLVM\n";
+    EXPECT_EQ(clangFormatConfig(file, project, home), project / "_clang-format");
+    EXPECT_EQ(clangFormatConfig(file, project.string() + "/", home.string() + "/"), project / "_clang-format");
+    std::ofstream(project / "src/.clang-format") << "BasedOnStyle: Google\n";
+    EXPECT_EQ(clangFormatConfig(file, project, home), project / "src/.clang-format");
+    fs::remove(project / "_clang-format");
+    fs::remove(project / "src/.clang-format");
+
+    // A project inside a git repository has the repository's.
+    fs::create_directories(home / "repos/.git");
+    EXPECT_EQ(clangFormatConfig(file, project, home), home / "repos/.clang-format");
+    EXPECT_EQ(clangFormatConfig(file, {}, home), home / "repos/.clang-format");
+    fs::remove_all(home / "repos/.git");
+
+    // A file in no project or repository has only its own folder's.
+    fs::create_directories(home / "notes/loose");
+    std::ofstream(home / "notes/.clang-format") << "BasedOnStyle: LLVM\n";
+    EXPECT_EQ(clangFormatConfig(home / "notes/loose/a.cpp", project, home), std::nullopt);
+    std::ofstream(home / "notes/loose/.clang-format") << "BasedOnStyle: LLVM\n";
+    EXPECT_EQ(clangFormatConfig(home / "notes/loose/a.cpp", project, home), home / "notes/loose/.clang-format");
+
+    // The home folder never counts, not even as a repository's top (dotfiles kept in git) or as the
+    // folder a file is in.
+    fs::create_directories(home / ".git");
+    EXPECT_EQ(clangFormatConfig(file, project, home), std::nullopt);
+    EXPECT_EQ(clangFormatConfig(home / "a.cpp", {}, home), std::nullopt);
+    // Without a home folder, the folders up to the project's top count, all of them.
+    fs::remove(home / "repos/.clang-format");
+    EXPECT_EQ(clangFormatConfig(file, home, {}), home / ".clang-format");
+    fs::remove_all(home);
 }
 
 TEST(Format, FindsTheProjectsPrettier) {

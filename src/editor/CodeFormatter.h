@@ -13,7 +13,8 @@ class Toolchain;
 
 // Edit → Auto Format (Ctrl+I): formats an editor's file, or the lines selected in it, the way its
 // project would. C and C++ go to clangd, which uses the project's .clang-format, or Kev-C++'s own
-// layout (cppstyle::clangFormatStyle) where there's none. Web files go to the project's prettier when
+// layout (cppstyle::clangFormatStyle) where there's none (format::clangFormatConfig says which
+// .clang-format files are the project's). Web files go to the project's prettier when
 // it has one installed, else to the TypeScript or Svelte language server. The answer goes in as one
 // undo step of small edits (format::diffEdits), so breakpoints stay on their lines; if the text
 // changed while the tool worked, nothing is applied.
@@ -22,7 +23,8 @@ public:
     using Report = std::function<void(const std::string& status)>;
     CodeFormatter(LspManager& lsp, const Toolchain& toolchain, Report report);
 
-    void format(EditorTab& tab);
+    // `projectFolder`: the open project's (empty when none is open).
+    void format(EditorTab& tab, const std::filesystem::path& projectFolder);
 
 private:
     // The folder whose .clang-format holds Kev-C++'s layout (written there when it isn't yet), for

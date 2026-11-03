@@ -281,12 +281,32 @@ int utf16Offset(std::string_view text, int line, int utf16Column) {
     return utf16Length(text.substr(0, offsetOf(text, lines, line, utf16Column)));
 }
 
-std::optional<fs::path> clangFormatConfig(const fs::path& file) {
+std::optional<fs::path> clangFormatConfig(const fs::path& file, const fs::path& projectFolder,
+                                          const fs::path& home) {
+    // Without a trailing separator, so folders compare equal however they were spelled.
+    auto tidy = [](const fs::path& p) {
+        fs::path out = p.lexically_normal();
+        if (!out.has_filename() && out.has_relative_path()) out = out.parent_path();
+        return out;
+    };
+    const fs::path start = tidy(file).parent_path(), project = tidy(projectFolder), homeDir = tidy(home);
+    // The home folder or one above it.
+    auto homeOrAbove = [&homeDir](const fs::path& dir) {
+        if (homeDir.empty()) return false;
+        const fs::path rel = homeDir.lexically_relative(dir);
+        return !rel.empty() && *rel.begin() != "..";
+    };
     std::error_code ec;
-    for (fs::path dir = file.parent_path(); !dir.empty(); dir = dir.parent_path()) {
+    // The highest folder below the home folder that is the project's or a git repository's top.
+    fs::path top = start;
+    for (fs::path dir = start; !dir.empty() && !homeOrAbove(dir); dir = dir.parent_path()) {
+        if ((!project.empty() && dir == project) || fs::exists(dir / ".git", ec)) top = dir;
+        if (dir == dir.parent_path()) break;
+    }
+    for (fs::path dir = start; !dir.empty() && !homeOrAbove(dir); dir = dir.parent_path()) {
         for (const char* name : {".clang-format", "_clang-format"})
             if (fs::is_regular_file(dir / name, ec)) return dir / name;
-        if (dir == dir.parent_path()) break;
+        if (dir == top || dir == dir.parent_path()) break;
     }
     return std::nullopt;
 }

@@ -371,7 +371,7 @@ void MainWindow::buildActions() {
     add_action("paste", [this] { forwardToEditor("clipboard.paste"); });
     add_action("select-all", [this] { forwardToEditor("selection.select-all"); });
     add_action("format", [this] {
-        if (auto* tab = currentEditor()) formatter_->format(*tab);
+        if (auto* tab = currentEditor()) formatter_->format(*tab, folder_);
         else setStatus("Auto Format works on a source file: open one first");
     });
     // Search

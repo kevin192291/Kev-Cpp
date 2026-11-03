@@ -264,7 +264,9 @@ verified by driving the real app (see "GUI testing").
   inserted exactly that character). Triggers: Return, '{', '}', ':'. Decisions are in core/CppStyle
   (Allman braces, access specifiers at the class's indentation, ';' after a class body).
 - **Auto Format** (Ctrl+I; Edit menu, editor right-click menu): the file, or the selected lines.
-  C/C++ = clangd's textDocument/(range)formatting. A project's .clang-format applies; without one,
+  C/C++ = clangd's textDocument/(range)formatting. A project's .clang-format applies: the nearest one
+  up to the top of the project folder or of its git repository, never the home folder's or above
+  (`format::clangFormatConfig`; the user's old ~/.clang-format gave every project LLVM's 2-space indents). Without one,
   clangd's --fallback-style only takes built-in names (none matches CppStyle), so clangd formats a
   stand-in copy opened under `$XDG_CACHE_HOME/kev-cpp/format/` beside a .clang-format holding
   `cppstyle::clangFormatStyle()` (ColumnLimit 120, not 0: without a limit clang-format 18 garbles a
