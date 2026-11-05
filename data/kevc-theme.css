@@ -237,6 +237,16 @@ scrollbar slider:hover {
 .kevc-designer-bar label.error {
   color: #ff8a80;
 }
+/* Running Servers: whether each server answers, in the Tests panel's green and red */
+.kevc-servers label.success {
+  color: #7bd88f;
+}
+.kevc-servers label.warning {
+  color: #f5c26b;
+}
+.kevc-servers label.error {
+  color: #ff6b6b;
+}
 .kevc-palette-group {
   font-weight: bold;
   margin: 10px 8px 2px 8px;

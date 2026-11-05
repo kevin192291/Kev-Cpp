@@ -46,6 +46,7 @@ protected:
     Gtk::Separator* webSeparator_ = nullptr;
     Gtk::Box* webGroup_ = nullptr;
     Gtk::Button* devServerButton_ = nullptr;
+    Gtk::Button* serversButton_ = nullptr;
     Gtk::Paned* hpaned_ = nullptr;
     Gtk::Notebook* leftDock_ = nullptr;
     Gtk::Box* projectPage_ = nullptr;

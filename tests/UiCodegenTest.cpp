@@ -585,5 +585,5 @@ TEST(UiCodegen, KevCppsOwnDesignsMatchTheirCode) {
             << code.filename() << " is older than " << entry.path().filename() << ": open the .ui in Kev-C++ and save it";
         ++checked;
     }
-    EXPECT_GE(checked, 23); // G4: the splash, the dialogs (step 2), the panels (step 3) and the main window (step 4)
+    EXPECT_GE(checked, 24); // G4: the splash, dialogs, panels and main window (steps 1-4); Running Servers
 }

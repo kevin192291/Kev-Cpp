@@ -246,6 +246,12 @@ Svelte and Vite apps apart (the title bar says which) and which package manager 
   (`OTEL_EXPORTER_OTLP_ENDPOINT` points at a local collector) and draws each request as a waterfall of
   hooks, loads and fetches. The panel explains the three steps to turn SvelteKit's tracing on.
 - **Dependencies** panel: outdated packages and known vulnerabilities (`npm outdated`, `npm audit`).
+- **Running Servers** (SvelteKit apps: Tools menu, and the globe with a red square on the web toolbar):
+  every port your programs listen on, with the program (`vite dev`, the folder it runs in, its PID) and
+  whether it answers: Yes, Yes with errors (a 500), Not a web server, No: stuck?, or No: suspended (a
+  server stopped with Ctrl+Z still holds its port). **Kill** asks the program to stop and forces it
+  after 3 seconds if it doesn't; the message says whether the port is free. Kev-C++'s own helpers (the
+  traces collector, js-debug) say what they are.
 
 ### Settings
 

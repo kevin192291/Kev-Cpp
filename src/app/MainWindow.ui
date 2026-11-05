@@ -387,6 +387,15 @@
                         <property name="focus-on-click">false</property>
                       </object>
                     </child>
+                    <child>
+                      <object class="GtkButton" id="serversButton_">
+                        <property name="action-name">win.running-servers</property>
+                        <property name="icon-name">kevc-servers</property>
+                        <property name="tooltip-text">Running Servers: what's listening on each port, and Kill for one that's stuck</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
@@ -1095,6 +1104,11 @@
         <item>
           <attribute name="label" translatable="yes">_Open Dev Server in Browser</attribute>
           <attribute name="action">win.dev-server-open</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">Running _Servers…</attribute>
+          <attribute name="action">win.running-servers</attribute>
+          <attribute name="hidden-when">action-disabled</attribute>
         </item>
       </section>
       <section id="toolsSection_">

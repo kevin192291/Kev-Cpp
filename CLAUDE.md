@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 253 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 263 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -50,7 +50,9 @@ verified by driving the real app (see "GUI testing").
   package.json edits, .npmrc registries), `CppStyle` (the C/C++ layout kept while typing, and the same as
   a .clang-format), `Format` (Auto Format: which tool formats a file, LSP TextEdits, the small edits
   between old and new text, the nearest .clang-format, the project's prettier), `Comments` (Toggle
-  Comment: a file's comment style, the script/style sections of HTML and Svelte, the edits).
+  Comment: a file's comment style, the script/style sections of HTML and Svelte, the edits), `Servers`
+  (Running Servers: listening sockets from /proc/net/tcp(6) and the processes holding them, command
+  summaries, the HTTP probe).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon, the splash), `MainWindow`
   (everything wired together: actions, build/run, debugging, IntelliSense, dev server; its frame and
   menus are `MainWindow.ui`).
@@ -77,8 +79,8 @@ verified by driving the real app (see "GUI testing").
 - `src/terminal/` TerminalPane (the Run and Terminal tabs: a VteTerminal running the shell or a
   program, one child at a time).
 - `src/ui/` Dialogs (promptText/askChoice/showError/showInfo on MessageDialog, Kev-C++'s one message
-  box; closeOnEscape, deleteWhenHidden), AboutWindow, ToolchainWindow, NewProjectDialog,
-  ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
+  box; closeOnEscape, deleteWhenHidden), AboutWindow, ToolchainWindow, ServersWindow (Tools → Running
+  Servers), NewProjectDialog, ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
   bottom/right/floating or closed; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton: makes a
   designed button show Stop while its task runs; icon tab labels), QuickSearch (the menu bar's search field), SearchPanel (the left dock's Search
   tab: Find in Files), SearchMarkup (their shared highlighting), NpmPackagesDialog (a web project's
@@ -294,6 +296,15 @@ verified by driving the real app (see "GUI testing").
   2026-11). FolderListing reads the folder on a high-priority idle (GtkTreeListModel makes and drops a
   folder's model just to ask whether it can expand) and skips files already gone. A file saved over
   keeps its row (a new one would close an open folder).
+- **Running Servers** (`win.running-servers`; Tools menu and `serversButton_` on the web toolbar, both
+  SvelteKit only, as the user asked): the user's listening TCP sockets (uid from /proc/net/tcp), their
+  processes found through /proc/<pid>/fd socket links. Each is probed with `GET /@vite/client` (Vite
+  answers it without running the app's routes; other servers 404 it), all at once on a BackgroundJob,
+  3 s each, cancellable in 100 ms slices. Silence from a node/python/… process is "No: stuck?", from
+  anything else "No answer" (it may not speak HTTP); state 'T' is "suspended". Kill re-checks the PID
+  still holds the socket, sends SIGTERM + SIGCONT, SIGKILL after 3 s, on a timer the window doesn't
+  own. A killed row stays in place ("Stopped") until Refresh: rows closing up under the pointer put
+  the next program's Kill button there.
 - **Toggle Comment** (Ctrl+/, `win.toggle-comment`; also Ctrl+KP_Divide): core/Comments decides,
   EditorTab::toggleComment applies through applyEdits (one undo step) and selects several lines with
   their markers so pressing it again undoes it. Styles come from GtkSourceView's language metadata

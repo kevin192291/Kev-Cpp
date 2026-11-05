@@ -337,6 +337,7 @@ def build(sheet):
         icons["breakpoint-" + kind] = square(draw_breakpoint_kind(kind), min_side=0)
     icons["warning"] = square(draw_warning(), min_side=0)
     icons["globe"] = square(draw_globe(), min_side=0)
+    icons["servers"] = with_badge(draw_globe(), get("stop"), 0.5)  # Running Servers: the dev server's globe, Stop
     icons["terminal"] = square(draw_terminal(), min_side=0)
     icons["exec-arrow"] = square(draw_exec_arrow(), min_side=0)
     pin = draw_pin()

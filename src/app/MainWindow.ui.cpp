@@ -393,6 +393,15 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
                         <property name="focus-on-click">false</property>
                       </object>
                     </child>
+                    <child>
+                      <object class="GtkButton" id="serversButton_">
+                        <property name="action-name">win.running-servers</property>
+                        <property name="icon-name">kevc-servers</property>
+                        <property name="tooltip-text">Running Servers: what's listening on each port, and Kill for one that's stuck</property>
+                        <property name="has-frame">false</property>
+                        <property name="focus-on-click">false</property>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
@@ -1089,6 +1098,11 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
           <attribute name="label" translatable="yes">_Open Dev Server in Browser</attribute>
           <attribute name="action">win.dev-server-open</attribute>
         </item>
+        <item>
+          <attribute name="label" translatable="yes">Running _Servers…</attribute>
+          <attribute name="action">win.running-servers</attribute>
+          <attribute name="hidden-when">action-disabled</attribute>
+        </item>
       </section>
       <section id="toolsSection_">
         <item>
@@ -1267,6 +1281,7 @@ MainWindowUi::MainWindowUi(BaseObjectType* object, const Glib::RefPtr<Gtk::Build
     webSeparator_ = builder->get_widget<Gtk::Separator>("webSeparator_");
     webGroup_ = builder->get_widget<Gtk::Box>("webGroup_");
     devServerButton_ = builder->get_widget<Gtk::Button>("devServerButton_");
+    serversButton_ = builder->get_widget<Gtk::Button>("serversButton_");
     hpaned_ = builder->get_widget<Gtk::Paned>("hpaned_");
     leftDock_ = builder->get_widget<Gtk::Notebook>("leftDock_");
     projectPage_ = builder->get_widget<Gtk::Box>("projectPage_");

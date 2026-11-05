@@ -23,6 +23,7 @@ add_executable(kevc_tests
   ProjectStateTest.cpp
   RecentProjectsTest.cpp
   SearchTest.cpp
+  ServersTest.cpp
   SettingsTest.cpp
   SvelteKitTest.cpp
   ToolLocatorTest.cpp

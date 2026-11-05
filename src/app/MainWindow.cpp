@@ -19,6 +19,7 @@
 #include "ui/NewProjectDialog.h"
 #include "ui/NpmPackagesDialog.h"
 #include "ui/ProjectOptionsDialog.h"
+#include "ui/ServersWindow.h"
 #include "ui/ToolchainWindow.h"
 
 #include <cstdlib>
@@ -443,6 +444,7 @@ void MainWindow::buildActions() {
     // Tools
     add_action("dev-server", [this] { toggleDevServer(); });
     add_action("dev-server-open", [this] { openInBrowser(); });
+    add_action("running-servers", [this] { ServersWindow::create(*this)->present(); });
     add_action("toolchain-info", [this] { showToolchainInfo(); });
     add_action("about", [this] { showAbout(); });
     add_action("check-updates", [this] { checkForUpdates(); });
@@ -523,6 +525,7 @@ void MainWindow::applyProfile() {
     // and what the build buttons mean in a web project.
     const bool native = usesNativeTools(profile_), web = profile_ == "web";
     configDrop_->set_visible(native);
+    serversButton_->set_visible(web && kit); // Running Servers is for SvelteKit projects
     applyingProfile_ = true;
     configDrop_->set_selected(session_ && session_->project().ui.buildConfig == "Release" ? 1 : 0);
     applyingProfile_ = false;
@@ -1910,6 +1913,7 @@ void MainWindow::updateToolbar() {
     enable("close-project", session_ != nullptr);
     enable("close-folder", !session_ && !folder_.empty());
     for (const char* name : {"web-install", "web-tests", "dev-server", "dev-server-open"}) enable(name, web);
+    enable("running-servers", web && web_.flavor == WebFlavor::SvelteKit); // the user's choice: SvelteKit only
 }
 
 // ---------------------------------------------------------------------------------------------

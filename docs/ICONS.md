@@ -142,6 +142,7 @@ Watch and the web group) keep the icons from `icon-sprite-sheet.png`, as do the 
 | `breakpoint-change` | Break when a value changes | Drawn: amber circle with Δ |
 | `warning` | Compiler warnings | Drawn: yellow triangle with ! |
 | `globe` | Dev server | Drawn |
+| `servers` | Running Servers (web toolbar, SvelteKit) | The globe with the Stop square as a badge |
 | `terminal` | Terminal and GDB Console tabs | Drawn |
 | `exec-arrow` | Current line while debugging | Drawn: green arrow |
 | `pinned`, `unpinned` | Welcome tab: pinned and not pinned projects | Drawn: red pushpin, and the same in light grey |

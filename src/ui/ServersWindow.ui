@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkWindow" id="ServersWindow">
+    <property name="title">Running Servers</property>
+    <property name="modal">true</property>
+    <property name="default-width">820</property>
+    <style>
+      <class name="kevc-servers"/>
+    </style>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="spacing">12</property>
+        <property name="margin-start">16</property>
+        <property name="margin-end">16</property>
+        <property name="margin-top">16</property>
+        <property name="margin-bottom">16</property>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">Your programs that are listening on a port: dev servers, web servers and anything else. A server that's stuck still holds its port, so the next one can't have it. Kill ends the program and frees its port.</property>
+            <property name="wrap">true</property>
+            <property name="xalign">0</property>
+            <property name="max-width-chars">90</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow">
+            <property name="hscrollbar-policy">never</property>
+            <property name="propagate-natural-height">true</property>
+            <property name="min-content-height">120</property>
+            <property name="max-content-height">460</property>
+            <property name="vexpand">true</property>
+            <style>
+              <class name="kevc-plain"/>
+            </style>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">12</property>
+                <child>
+                  <object class="GtkGrid" id="servers_">
+                    <property name="row-spacing">8</property>
+                    <property name="column-spacing">16</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Port</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                        <layout>
+                          <property name="column">0</property>
+                          <property name="row">0</property>
+                        </layout>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Program</property>
+                        <property name="xalign">0</property>
+                        <property name="hexpand">true</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                        <layout>
+                          <property name="column">1</property>
+                          <property name="row">0</property>
+                        </layout>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Does it answer?</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                        <layout>
+                          <property name="column">2</property>
+                          <property name="row">0</property>
+                        </layout>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="empty_">
+                    <property name="label">None of your programs is listening on a port.</property>
+                    <property name="xalign">0</property>
+                    <style>
+                      <class name="dim-label"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="message_">
+            <property name="label">Killed vite dev (PID 4242): port 5173 is free.</property>
+            <property name="wrap">true</property>
+            <property name="xalign">0</property>
+            <property name="selectable">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="spacing">8</property>
+            <child>
+              <object class="GtkButton" id="refresh_">
+                <property name="label">_Refresh</property>
+                <property name="use-underline">true</property>
+                <property name="tooltip-text">List the ports again and ask each server whether it answers</property>
+                <signal name="clicked" handler="on_refresh_clicked"/>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="close_">
+                <property name="label">Close</property>
+                <property name="halign">end</property>
+                <property name="hexpand">true</property>
+                <signal name="clicked" handler="on_close_clicked"/>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

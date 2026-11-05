@@ -44,6 +44,7 @@ add_library(kevc_core STATIC
   src/core/ProjectState.cpp
   src/core/RecentProjects.cpp
   src/core/Search.cpp
+  src/core/Servers.cpp
   src/core/Settings.cpp
   src/core/SvelteKit.cpp
   src/core/TestReport.cpp
@@ -154,6 +155,8 @@ add_executable(kev-cpp
   src/ui/SearchMarkup.cpp
   src/ui/SearchPanel.cpp
   src/ui/SearchPanel.ui.cpp
+  src/ui/ServersWindow.cpp
+  src/ui/ServersWindow.ui.cpp
   src/ui/SplashWindow.cpp
   src/ui/SplashWindow.ui.cpp
   src/ui/TestsPanel.cpp

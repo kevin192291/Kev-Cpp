@@ -104,6 +104,7 @@
     <file>icons/hicolor/16x16/actions/kevc-run.png</file>
     <file>icons/hicolor/16x16/actions/kevc-save.png</file>
     <file>icons/hicolor/16x16/actions/kevc-save-all.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-servers.png</file>
     <file>icons/hicolor/16x16/actions/kevc-settings.png</file>
     <file>icons/hicolor/16x16/actions/kevc-shared-library.png</file>
     <file>icons/hicolor/16x16/actions/kevc-static-library.png</file>
@@ -226,6 +227,7 @@
     <file>icons/hicolor/24x24/actions/kevc-run.png</file>
     <file>icons/hicolor/24x24/actions/kevc-save.png</file>
     <file>icons/hicolor/24x24/actions/kevc-save-all.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-servers.png</file>
     <file>icons/hicolor/24x24/actions/kevc-settings.png</file>
     <file>icons/hicolor/24x24/actions/kevc-shared-library.png</file>
     <file>icons/hicolor/24x24/actions/kevc-static-library.png</file>
@@ -348,6 +350,7 @@
     <file>icons/hicolor/32x32/actions/kevc-run.png</file>
     <file>icons/hicolor/32x32/actions/kevc-save.png</file>
     <file>icons/hicolor/32x32/actions/kevc-save-all.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-servers.png</file>
     <file>icons/hicolor/32x32/actions/kevc-settings.png</file>
     <file>icons/hicolor/32x32/actions/kevc-shared-library.png</file>
     <file>icons/hicolor/32x32/actions/kevc-static-library.png</file>
@@ -470,6 +473,7 @@
     <file>icons/hicolor/48x48/actions/kevc-run.png</file>
     <file>icons/hicolor/48x48/actions/kevc-save.png</file>
     <file>icons/hicolor/48x48/actions/kevc-save-all.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-servers.png</file>
     <file>icons/hicolor/48x48/actions/kevc-settings.png</file>
     <file>icons/hicolor/48x48/actions/kevc-shared-library.png</file>
     <file>icons/hicolor/48x48/actions/kevc-static-library.png</file>
