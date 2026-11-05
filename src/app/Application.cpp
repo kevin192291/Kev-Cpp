@@ -206,6 +206,7 @@ void Application::setupAccelerators() {
         {"win.replace", {"<Control>r"}},
         {"win.goto-line", {"<Control>g"}},
         {"win.format", {"<Control>i"}},
+        {"win.toggle-comment", {"<Control>slash", "<Control>KP_Divide"}}, // a text view's Select All otherwise
         {"win.goto-definition", {"<Control>F12"}},
         {"win.project-options", {"<Alt>p"}},
         {"win.compile", {"F9"}},

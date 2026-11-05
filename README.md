@@ -91,6 +91,8 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   folder onto another folder to move it there (drop it on a file to use that file's folder, or on the
   empty space below the list for the project folder); a folder you hold it over opens. Files open in
   an editor follow a rename or move, unsaved changes included, and C/C++ build files are updated.
+  The tree follows the folders on disk: files made, renamed or deleted anywhere (File → New Source
+  File, a terminal, git) show at once.
 - **git status in the Project tab**: a file with changes that aren't committed has an amber dot
   after its name (a green plus if it's new, a red ! for a merge conflict), and so does each folder
   holding one. They update when you save, and when you commit or stage in any terminal. Kev-C++ only
@@ -130,6 +132,13 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   and otherwise in the layout above (lines up to 120 columns, short member functions inside a class on
   one line). Web projects use their own prettier when it's installed, with its config; otherwise the
   TypeScript or Svelte language server formats. It's one undo step, and breakpoints stay on their lines.
+- **Toggle Comment** (Ctrl+/, in the Edit menu and the editor's right-click menu): comments out the
+  line the cursor is on, or puts one block comment around the selected lines (`/*` and `*/` on lines of
+  their own); pressing it again takes the comment off. Each language gets its own comments: `//` and
+  `/* */` in C, C++, JavaScript and TypeScript, `/* */` in CSS, `<!-- -->` in HTML, `#` in Python, CMake
+  and shell scripts, and inside HTML and Svelte files the `<script>` and `<style>` parts comment as
+  JavaScript and CSS. Selected lines that already hold a `*/` get a `//` each instead, since a block
+  comment would end at it.
 - **Build & run**: errors and warnings are listed in the Compiler tab (double-click to jump); programs run in
   the Run tab; the Terminal tab is a shell in the project folder.
 - **Slate colours**: the dark slate palette of Embarcadero Dev-C++ 6, for the window and the editor,
@@ -263,5 +272,6 @@ project instead.
 | Ctrl+F | Find in the current file | F2 / Delete | Rename / delete in the Project tab |
 | Ctrl+R | Replace in the current file | Right-click | Go to Definition / Implementation / References |
 | Ctrl+I | Auto Format (file or selected lines) | Right-click a line number | Breakpoint, IF, Live, Break When Value Changes |
+| Ctrl+/ | Toggle comment (the line, or a block around selected lines) | | |
 
 Logs from the language servers are in `~/.cache/kev-cpp/logs/`.

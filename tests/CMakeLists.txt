@@ -5,6 +5,7 @@ add_executable(kevc_tests
   BreakpointsTest.cpp
   BuildFilesTest.cpp
   BuildPlanTest.cpp
+  CommentsTest.cpp
   CppStyleTest.cpp
   DapTest.cpp
   DiagnosticsTest.cpp

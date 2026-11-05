@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 238 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 253 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -49,7 +49,8 @@ verified by driving the real app (see "GUI testing").
   `$XDG_STATE_HOME/kev-cpp/projects.json`), `NpmPackages` (version rules in words, text-preserving
   package.json edits, .npmrc registries), `CppStyle` (the C/C++ layout kept while typing, and the same as
   a .clang-format), `Format` (Auto Format: which tool formats a file, LSP TextEdits, the small edits
-  between old and new text, the nearest .clang-format, the project's prettier).
+  between old and new text, the nearest .clang-format, the project's prettier), `Comments` (Toggle
+  Comment: a file's comment style, the script/style sections of HTML and Svelte, the edits).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon, the splash), `MainWindow`
   (everything wired together: actions, build/run, debugging, IntelliSense, dev server; its frame and
   menus are `MainWindow.ui`).
@@ -286,6 +287,19 @@ verified by driving the real app (see "GUI testing").
   and breakpoints move with them. Delete uses the trash (`g_file_trash`), with a permanent-delete
   fallback. Drags carry the row's GFileInfo, which no other program can read, so rows never leave
   the tree. GUI tests set `XDG_DATA_HOME` so test deletions don't land in the user's real trash.
+- **The Project tab's folders are `FolderListing`s (ProjectTree.cpp), not GtkDirectoryList**: that one
+  handles its monitor's events in order and waits forever for a file it can't read, so once a file is
+  created and gone before it looks (every save: `g_file_set_contents` writes `name.XXXXXX` and renames
+  it over the file), the folder never updates again (GTK 4.14.5; GTK's main branch still did in
+  2026-11). FolderListing reads the folder on a high-priority idle (GtkTreeListModel makes and drops a
+  folder's model just to ask whether it can expand) and skips files already gone. A file saved over
+  keeps its row (a new one would close an open folder).
+- **Toggle Comment** (Ctrl+/, `win.toggle-comment`; also Ctrl+KP_Divide): core/Comments decides,
+  EditorTab::toggleComment applies through applyEdits (one undo step) and selects several lines with
+  their markers so pressing it again undoes it. Styles come from GtkSourceView's language metadata
+  (`line-comment-start`, `block-comment-start/end`), with HTML/Svelte `<script>`/`<style>` sections
+  found by scanning the text. GtkTextView binds Ctrl+/ to Select All; the application accelerator runs
+  first. A block's `/*` line goes in at the end of the line above, so breakpoint marks stay put.
 - **Search is visible without knowing it's there** (the user's rule: a first-time user must find it at
   a glance, no instructions): `QuickSearch` sits in the middle of the menu bar's row (a CenterBox
   around the PopoverMenuBar, like Visual Studio's and VS Code's) and drops down file-name matches

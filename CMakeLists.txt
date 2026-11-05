@@ -24,6 +24,7 @@ add_library(kevc_core STATIC
   src/core/Breakpoints.cpp
   src/core/BuildFiles.cpp
   src/core/BuildPlan.cpp
+  src/core/Comments.cpp
   src/core/CppStyle.cpp
   src/core/Dap.cpp
   src/core/Diagnostics.cpp

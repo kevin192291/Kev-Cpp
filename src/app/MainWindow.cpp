@@ -328,6 +328,13 @@ void MainWindow::buildActions() {
         if (auto* tab = currentEditor()) formatter_->format(*tab, folder_);
         else setStatus("Auto Format works on a source file: open one first");
     });
+    add_action("toggle-comment", [this] {
+        if (auto* tab = currentEditor()) {
+            if (const std::string why = tab->toggleComment(); !why.empty()) setStatus(why);
+        } else {
+            setStatus("Toggle Comment works on a source file: open one first");
+        }
+    });
     // Search
     add_action("find", [this] {
         replaceToggle_->set_active(false);

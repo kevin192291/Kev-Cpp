@@ -80,6 +80,11 @@ public:
     // Edits whose ranges are in the current text (Auto Format's), as one undo step. Marks outside the
     // edited ranges, breakpoints among them, stay where they are.
     void applyEdits(const std::vector<format::TextEdit>& edits);
+    // Edit → Toggle Comment (Ctrl+/): the cursor's line or the selected lines commented out, or back
+    // in, the way the file's language writes comments (core/Comments), as one undo step. Several lines
+    // stay selected with their comment markers, so pressing it again takes them off. Returns why
+    // nothing changed, or nothing.
+    std::string toggleComment();
 
     sigc::signal<void()>& signalCloseRequested() override { return closeRequested_; }
     sigc::signal<void(bool)>& signalModifiedChanged() { return modifiedChanged_; }

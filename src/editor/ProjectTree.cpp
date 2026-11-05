@@ -57,6 +57,128 @@ Glib::RefPtr<Gio::FileInfo> infoOf(Gtk::ListItem* item) {
     return row ? std::dynamic_pointer_cast<Gio::FileInfo>(row->get_item()) : nullptr;
 }
 
+// A folder's entries, kept up to date: the GFileInfos of what's in it, each with its standard::file,
+// as GtkDirectoryList lists them. That stops following its folder for good once a file it was told
+// about is gone before it reads it (GTK 4.14.5, and GTK's main branch in November 2026: it applies
+// changes in order and waits for that one forever), and saving does exactly that: g_file_set_contents writes a temporary file
+// and renames it over the file. So after a save, new files in that folder (File → New Source File)
+// didn't show until the folder was closed and opened again. This one skips what's already gone.
+class FolderListing {
+public:
+    // The listing lives as long as the list it fills.
+    static Glib::RefPtr<Gio::ListModel> create(const Glib::RefPtr<Gio::File>& dir) {
+        GListStore* store = g_list_store_new(G_TYPE_FILE_INFO);
+        g_object_set_data_full(G_OBJECT(store), "kevc-folder-listing", new FolderListing(store, dir),
+                               [](gpointer listing) { delete static_cast<FolderListing*>(listing); });
+        return Glib::wrap(G_LIST_MODEL(store));
+    }
+
+    ~FolderListing() {
+        loading_.disconnect();
+        changed_.disconnect();
+        if (monitor_) monitor_->cancel();
+    }
+
+private:
+    FolderListing(GListStore* store, Glib::RefPtr<Gio::File> dir) : store_(store), dir_(std::move(dir)) {
+        // Not straight away: GtkTreeListModel also makes a folder's list just to see whether it can be
+        // expanded, and drops it at once. Before the next frame, so an opened folder never shows empty.
+        loading_ = Glib::signal_idle().connect(
+            [this] {
+                load();
+                return false;
+            },
+            Glib::PRIORITY_HIGH_IDLE);
+    }
+
+    void load() {
+        // Watched first, so nothing made while the folder is read is missed (what's listed twice is
+        // found the second time).
+        try {
+            monitor_ = dir_->monitor_directory(Gio::FileMonitorFlags::WATCH_MOVES);
+            changed_ = monitor_->signal_changed().connect(sigc::mem_fun(*this, &FolderListing::onChanged));
+        } catch (const Glib::Error&) {
+            // Unwatched, it still shows what's there now.
+        }
+        std::vector<Glib::RefPtr<Gio::FileInfo>> infos;
+        try {
+            auto children = dir_->enumerate_children(kAttributes);
+            while (auto info = children->next_file()) {
+                setFile(info, children->get_child(info));
+                infos.push_back(info);
+            }
+        } catch (const Glib::Error&) {
+            // Gone, or not readable: whatever was read.
+        }
+        std::vector<gpointer> items;
+        for (const auto& info : infos) items.push_back(info->gobj());
+        g_list_store_splice(store_, 0, 0, items.data(), static_cast<guint>(items.size()));
+    }
+
+    void onChanged(const Glib::RefPtr<Gio::File>& file, const Glib::RefPtr<Gio::File>& other,
+                   Gio::FileMonitor::Event event) {
+        using E = Gio::FileMonitor::Event;
+        switch (event) {
+        case E::CREATED:
+        case E::MOVED_IN: add(file); break;
+        case E::DELETED:
+        case E::MOVED_OUT: remove(file); break;
+        case E::RENAMED:
+            remove(file);
+            if (other) add(other);
+            break;
+        default: break; // contents and attributes: the tree shows neither
+        }
+    }
+
+    void add(const Glib::RefPtr<Gio::File>& file) {
+        Glib::RefPtr<Gio::FileInfo> info;
+        try {
+            info = file->query_info(kAttributes);
+        } catch (const Glib::Error&) {
+            return; // gone already: a temporary file
+        }
+        setFile(info, file);
+        if (const auto at = find(info->get_name())) {
+            // Listed already (saved over, or seen while the folder was read). Only a file turned folder
+            // matters to the tree; a new row would close the folder's row if it was open.
+            GFileInfo* listed = G_FILE_INFO(g_list_model_get_item(G_LIST_MODEL(store_), *at));
+            const bool same = g_file_info_get_file_type(listed) == g_file_info_get_file_type(info->gobj());
+            g_object_unref(listed);
+            if (!same) {
+                gpointer replacement = info->gobj();
+                g_list_store_splice(store_, *at, 1, &replacement, 1);
+            }
+            return;
+        }
+        g_list_store_append(store_, info->gobj());
+    }
+
+    void remove(const Glib::RefPtr<Gio::File>& file) {
+        if (const auto at = find(file->get_basename())) g_list_store_remove(store_, *at);
+    }
+
+    std::optional<guint> find(const std::string& name) const {
+        const guint n = g_list_model_get_n_items(G_LIST_MODEL(store_));
+        for (guint i = 0; i < n; ++i) {
+            GFileInfo* info = G_FILE_INFO(g_list_model_get_item(G_LIST_MODEL(store_), i));
+            const bool match = name == g_file_info_get_name(info);
+            g_object_unref(info);
+            if (match) return i;
+        }
+        return std::nullopt;
+    }
+
+    static void setFile(const Glib::RefPtr<Gio::FileInfo>& info, const Glib::RefPtr<Gio::File>& file) {
+        g_file_info_set_attribute_object(info->gobj(), "standard::file", G_OBJECT(file->gobj()));
+    }
+
+    GListStore* store_; // owns this listing
+    Glib::RefPtr<Gio::File> dir_;
+    Glib::RefPtr<Gio::FileMonitor> monitor_;
+    sigc::connection loading_, changed_;
+};
+
 } // namespace
 
 ProjectTree::ProjectTree(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder)
@@ -140,9 +262,7 @@ void ProjectTree::setRoot(const fs::path& root) {
 }
 
 Glib::RefPtr<Gio::ListModel> ProjectTree::directoryModel(const Glib::RefPtr<Gio::File>& dir) {
-    auto listing = Gtk::DirectoryList::create(kAttributes, dir);
-    listing->set_monitored(true);
-    auto filtered = Gtk::FilterListModel::create(listing, filter_);
+    auto filtered = Gtk::FilterListModel::create(FolderListing::create(dir), filter_);
     return Gtk::SortListModel::create(filtered, sorter_);
 }
 

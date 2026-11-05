@@ -1,5 +1,7 @@
 #include "editor/EditorTab.h"
 
+#include "core/Comments.h"
+
 #include "editor/CppIndenter.h"
 
 #include "lsp/LspManager.h"
@@ -291,6 +293,54 @@ void EditorTab::applyEdits(const std::vector<format::TextEdit>& edits) {
     }
     gtk_text_buffer_end_user_action(text);
     gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(view_), gtk_text_buffer_get_insert(text));
+}
+
+std::string EditorTab::toggleComment() {
+    GtkTextBuffer* text = GTK_TEXT_BUFFER(buffer_);
+    GtkTextIter from, to, cursor;
+    const bool selected = gtk_text_buffer_get_selection_bounds(text, &from, &to);
+    gtk_text_buffer_get_iter_at_mark(text, &cursor, gtk_text_buffer_get_insert(text));
+    const bool cursorAtEnd = !selected || gtk_text_iter_equal(&cursor, &to);
+    const int first = gtk_text_iter_get_line(&from);
+    int last = gtk_text_iter_get_line(&to);
+    // Lines selected with Shift+Down end at the start of the line below, which isn't one of them.
+    const bool toLineStart = selected && last > first && gtk_text_iter_starts_line(&to);
+    if (toLineStart) --last;
+
+    std::string languageId;
+    comments::Style declared;
+    if (GtkSourceLanguage* language = gtk_source_buffer_get_language(buffer_)) {
+        languageId = gtk_source_language_get_id(language);
+        auto metadata = [language](const char* name) {
+            const char* value = gtk_source_language_get_metadata(language, name);
+            return std::string(value ? value : "");
+        };
+        declared = {metadata("line-comment-start"), metadata("block-comment-start"), metadata("block-comment-end")};
+        for (std::string* token : {&declared.line, &declared.blockStart, &declared.blockEnd}) {
+            token->erase(0, token->find_first_not_of(" \t"));
+            token->erase(token->find_last_not_of(" \t") + 1);
+        }
+    }
+    GtkTextIter start, end;
+    gtk_text_buffer_get_bounds(text, &start, &end);
+    char* contents = gtk_text_buffer_get_text(text, &start, &end, TRUE);
+    const std::string all(contents);
+    g_free(contents);
+
+    const comments::Toggle result =
+        comments::toggle(all, first, last, languageId, comments::fileStyle(path_, languageId, declared));
+    if (result.edits.empty()) return result.message;
+    applyEdits(result.edits);
+    if (result.select) {
+        GtkTextIter top, bottom;
+        gtk_text_buffer_get_iter_at_line(text, &top, result.select->first);
+        gtk_text_buffer_get_iter_at_line(text, &bottom, result.select->second);
+        if (toLineStart) gtk_text_iter_forward_line(&bottom); // the selection's own shape: up to the line below
+        else if (!gtk_text_iter_ends_line(&bottom)) gtk_text_iter_forward_to_line_end(&bottom);
+        if (cursorAtEnd) gtk_text_buffer_select_range(text, &bottom, &top);
+        else gtk_text_buffer_select_range(text, &top, &bottom);
+    }
+    return {};
 }
 
 void EditorTab::focusEditor() {

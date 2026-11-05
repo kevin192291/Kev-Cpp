@@ -756,6 +756,10 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
           <attribute name="label" translatable="yes">Auto _Format</attribute>
           <attribute name="action">win.format</attribute>
         </item>
+        <item>
+          <attribute name="label" translatable="yes">Toggle Co_mment</attribute>
+          <attribute name="action">win.toggle-comment</attribute>
+        </item>
       </section>
     </submenu>
     <submenu>
@@ -1133,6 +1137,10 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
         <attribute name="label" translatable="yes">Auto F_ormat</attribute>
         <attribute name="action">win.format</attribute>
       </item>
+      <item>
+        <attribute name="label" translatable="yes">Toggle Co_mment</attribute>
+        <attribute name="action">win.toggle-comment</attribute>
+      </item>
     </section>
     <section>
       <item>
@@ -1180,6 +1188,10 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
       <item>
         <attribute name="label" translatable="yes">Auto F_ormat</attribute>
         <attribute name="action">win.format</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Toggle Co_mment</attribute>
+        <attribute name="action">win.toggle-comment</attribute>
       </item>
     </section>
     <section>

@@ -763,6 +763,10 @@
           <attribute name="label" translatable="yes">Auto _Format</attribute>
           <attribute name="action">win.format</attribute>
         </item>
+        <item>
+          <attribute name="label" translatable="yes">Toggle Co_mment</attribute>
+          <attribute name="action">win.toggle-comment</attribute>
+        </item>
       </section>
     </submenu>
     <submenu>
@@ -1140,6 +1144,10 @@
         <attribute name="label" translatable="yes">Auto F_ormat</attribute>
         <attribute name="action">win.format</attribute>
       </item>
+      <item>
+        <attribute name="label" translatable="yes">Toggle Co_mment</attribute>
+        <attribute name="action">win.toggle-comment</attribute>
+      </item>
     </section>
     <section>
       <item>
@@ -1187,6 +1195,10 @@
       <item>
         <attribute name="label" translatable="yes">Auto F_ormat</attribute>
         <attribute name="action">win.format</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Toggle Co_mment</attribute>
+        <attribute name="action">win.toggle-comment</attribute>
       </item>
     </section>
     <section>
