@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkWindow" id="PreferencesDialog">
+    <property name="title">Preferences</property>
+    <property name="modal">true</property>
+    <property name="resizable">false</property>
+    <property name="default-width">512</property>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="spacing">12</property>
+        <property name="margin-start">16</property>
+        <property name="margin-end">16</property>
+        <property name="margin-top">16</property>
+        <property name="margin-bottom">16</property>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">Editor</property>
+            <property name="xalign">0</property>
+            <style>
+              <class name="heading"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkGrid">
+            <property name="row-spacing">8</property>
+            <property name="column-spacing">12</property>
+            <child>
+              <object class="GtkLabel">
+                <property name="label">Font</property>
+                <property name="xalign">1</property>
+                <layout>
+                  <property name="column">0</property>
+                  <property name="row">0</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkDropDown" id="family_">
+                <property name="hexpand">true</property>
+                <property name="enable-search">true</property>
+                <signal name="notify::selected" handler="on_family_changed"/>
+                <layout>
+                  <property name="column">1</property>
+                  <property name="row">0</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkCheckButton" id="monospaceOnly_">
+                <property name="label">Fixed-width fonts only</property>
+                <property name="active">true</property>
+                <signal name="toggled" handler="on_monospace_only_toggled"/>
+                <layout>
+                  <property name="column">1</property>
+                  <property name="row">1</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label">Font style</property>
+                <property name="xalign">1</property>
+                <layout>
+                  <property name="column">0</property>
+                  <property name="row">2</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkDropDown" id="style_">
+                <property name="hexpand">true</property>
+                <signal name="notify::selected" handler="on_style_changed"/>
+                <layout>
+                  <property name="column">1</property>
+                  <property name="row">2</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label">Text size</property>
+                <property name="xalign">1</property>
+                <layout>
+                  <property name="column">0</property>
+                  <property name="row">3</property>
+                </layout>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <child>
+                  <object class="GtkSpinButton" id="size_">
+                    <property name="numeric">true</property>
+                    <property name="adjustment">
+                      <object class="GtkAdjustment">
+                        <property name="lower">6</property>
+                        <property name="upper">72</property>
+                        <property name="value">11</property>
+                        <property name="step-increment">1</property>
+                        <property name="page-increment">4</property>
+                      </object>
+                    </property>
+                    <signal name="value-changed" handler="on_size_changed"/>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label">points</property>
+                    <style>
+                      <class name="dim-label"/>
+                    </style>
+                  </object>
+                </child>
+                <layout>
+                  <property name="column">1</property>
+                  <property name="row">3</property>
+                </layout>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">Preview</property>
+            <property name="xalign">0</property>
+            <property name="margin-top">4</property>
+            <style>
+              <class name="heading"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkFrame">
+            <child>
+              <object class="GtkScrolledWindow">
+                <property name="min-content-height">130</property>
+                <style>
+                  <class name="kevc-plain"/>
+                </style>
+                <child>
+                  <object class="GtkLabel" id="preview_">
+                    <property name="label">int main()
+{
+    // 0O 1lI {}[]() == != -&gt; :: &amp;&amp;
+    return 0;
+}</property>
+                    <property name="xalign">0</property>
+                    <property name="yalign">0</property>
+                    <property name="margin-start">10</property>
+                    <property name="margin-end">10</property>
+                    <property name="margin-top">8</property>
+                    <property name="margin-bottom">8</property>
+                    <style>
+                      <class name="kevc-editor"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">Changes apply to every editor as you make them. Ctrl+Plus and Ctrl+Minus change the text size too (View → Larger Text, Smaller Text).</property>
+            <property name="wrap">true</property>
+            <property name="xalign">0</property>
+            <property name="max-width-chars">60</property>
+            <style>
+              <class name="dim-label"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="halign">end</property>
+            <property name="spacing">8</property>
+            <property name="margin-top">4</property>
+            <child>
+              <object class="GtkButton" id="reset_">
+                <property name="label">Reset to Defaults</property>
+                <signal name="clicked" handler="on_reset_clicked"/>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="close_">
+                <property name="label">Close</property>
+                <signal name="clicked" handler="on_close_clicked"/>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

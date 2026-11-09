@@ -28,6 +28,7 @@ add_library(kevc_core STATIC
   src/core/CppStyle.cpp
   src/core/Dap.cpp
   src/core/Diagnostics.cpp
+  src/core/EditorFont.cpp
   src/core/FileOps.cpp
   src/core/Format.cpp
   src/core/GitStatus.cpp
@@ -149,6 +150,8 @@ add_executable(kev-cpp
   src/ui/NewProjectDialog.ui.cpp
   src/ui/NpmPackagesDialog.cpp
   src/ui/NpmPackagesDialog.ui.cpp
+  src/ui/PreferencesDialog.cpp
+  src/ui/PreferencesDialog.ui.cpp
   src/ui/ProjectOptionsDialog.cpp
   src/ui/ProjectOptionsDialog.ui.cpp
   src/ui/QuickSearch.cpp

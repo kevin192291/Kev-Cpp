@@ -18,6 +18,7 @@
 #include "ui/Dialogs.h"
 #include "ui/NewProjectDialog.h"
 #include "ui/NpmPackagesDialog.h"
+#include "ui/PreferencesDialog.h"
 #include "ui/ProjectOptionsDialog.h"
 #include "ui/ServersWindow.h"
 #include "ui/ToolchainWindow.h"
@@ -358,6 +359,10 @@ void MainWindow::buildActions() {
         docks_->resetLayout();
         setStatus("Panels moved back to the bottom");
     });
+    add_action("zoom-in", [this] { zoomText(1); });
+    add_action("zoom-out", [this] { zoomText(-1); });
+    add_action("zoom-reset", [this] { zoomText(0); });
+    add_action("preferences", [this] { showPreferences(); });
     // View → Toolbars and View → Panels: shown or hidden for the current profile, remembered.
     for (const char* id : kToolbarGroups) {
         const std::string group = id;
@@ -3465,6 +3470,20 @@ void MainWindow::installUpdate(const Release& release) {
 
 void MainWindow::showAbout() {
     AboutWindow::create(*this, buildVersion().text)->present();
+}
+
+void MainWindow::showPreferences() {
+    // The application outlives the dialog's window either way; it saves the font and restyles.
+    Application& app = app_;
+    PreferencesDialog::create(*this, app.editorFont(), [&app](const EditorFont& font) { app.setEditorFont(font); })
+        ->present();
+}
+
+void MainWindow::zoomText(int steps) {
+    EditorFont font = app_.editorFont();
+    font.size = steps == 0 ? EditorFont::kDefaultSize : zoomedSize(font.size, steps);
+    app_.setEditorFont(font);
+    setStatus("Text size: " + std::to_string(font.size) + " points (View → Preferences sets the font)");
 }
 
 void MainWindow::showToolchainInfo() {

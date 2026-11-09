@@ -225,6 +225,10 @@ private:
     void checkForUpdates();
     void installUpdate(const Release& release);
     void showAbout();
+    // View → Preferences, and View → Larger/Smaller/Default Text Size (Ctrl+Plus, Ctrl+Minus, Ctrl+0):
+    // the editors' font, kept in settings for every project.
+    void showPreferences();
+    void zoomText(int steps); // 0: back to the default size
 
     // TypeScript dev server
     Gtk::Widget& buildServerPage();

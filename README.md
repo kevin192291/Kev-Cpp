@@ -139,6 +139,9 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   and shell scripts, and inside HTML and Svelte files the `<script>` and `<style>` parts comment as
   JavaScript and CSS. Selected lines that already hold a `*/` get a `//` each instead, since a block
   comment would end at it.
+- **Editor font** (View → Preferences): the font, its style (Regular, Bold, Italic…) and the text size,
+  with a preview; every editor changes as you pick. View → Larger Text and Smaller Text (Ctrl+Plus,
+  Ctrl+Minus) change the size from the keyboard, Ctrl+0 goes back to 11 points. Kept for every project.
 - **Build & run**: errors and warnings are listed in the Compiler tab (double-click to jump); programs run in
   the Run tab; the Terminal tab is a shell in the project folder.
 - **Slate colours**: the dark slate palette of Embarcadero Dev-C++ 6, for the window and the editor,
@@ -278,6 +281,6 @@ project instead.
 | Ctrl+F | Find in the current file | F2 / Delete | Rename / delete in the Project tab |
 | Ctrl+R | Replace in the current file | Right-click | Go to Definition / Implementation / References |
 | Ctrl+I | Auto Format (file or selected lines) | Right-click a line number | Breakpoint, IF, Live, Break When Value Changes |
-| Ctrl+/ | Toggle comment (the line, or a block around selected lines) | | |
+| Ctrl+/ | Toggle comment (the line, or a block around selected lines) | Ctrl+Plus / Ctrl+Minus | Larger / smaller editor text (Ctrl+0: default size) |
 
 Logs from the language servers are in `~/.cache/kev-cpp/logs/`.

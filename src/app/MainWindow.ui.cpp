@@ -820,6 +820,20 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
       <attribute name="label" translatable="yes">_View</attribute>
       <section>
         <item>
+          <attribute name="label" translatable="yes">Lar_ger Text</attribute>
+          <attribute name="action">win.zoom-in</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Smaller Text</attribute>
+          <attribute name="action">win.zoom-out</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Default Text Size</attribute>
+          <attribute name="action">win.zoom-reset</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
           <attribute name="label" translatable="yes">_Project Panel</attribute>
           <attribute name="action">win.toggle-left-dock</attribute>
         </item>
@@ -928,6 +942,12 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
         <item>
           <attribute name="label" translatable="yes">Reset Panel _Layout</attribute>
           <attribute name="action">win.reset-panels</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Pr_eferences…</attribute>
+          <attribute name="action">win.preferences</attribute>
         </item>
       </section>
     </submenu>

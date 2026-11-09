@@ -74,9 +74,7 @@ void Application::on_startup() {
 
     // Some desktop themes don't style GTK4's .monospace class, so set the editor font ourselves.
     auto css = Gtk::CssProvider::create();
-    css->load_from_data(".kevc-editor { font-family: \"DejaVu Sans Mono\", \"Liberation Mono\", monospace; "
-                        "font-size: 11pt; }\n"
-                        ".kevc-log { font-family: \"DejaVu Sans Mono\", monospace; font-size: 10pt; }\n"
+    css->load_from_data(".kevc-log { font-family: \"DejaVu Sans Mono\", monospace; font-size: 10pt; }\n"
                         ".kevc-error { color: #ff6b6b; }\n"
                         ".kevc-warning { color: #f0c050; }\n"
                         ".kevc-tab-menu { min-height: 0; min-width: 0; padding: 0 2px; }\n"
@@ -89,6 +87,12 @@ void Application::on_startup() {
     Gtk::IconTheme::get_for_display(Gdk::Display::get_default())->add_resource_path("/org/kevcpp/KevCpp/icons/hicolor");
     Gtk::Window::set_default_icon_name("org.kevcpp.KevCpp");
     settings_.load();
+    // The editors' font (View → Preferences, Ctrl+Plus/Minus) has a provider of its own, reloaded
+    // whenever it changes; nothing else styles .kevc-editor.
+    editorFontCss_ = Gtk::CssProvider::create();
+    editorFontCss_->load_from_data(editorFontCss(editorFont()));
+    Gtk::StyleContext::add_provider_for_display(Gdk::Display::get_default(), editorFontCss_,
+                                                GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     // Started from a menu or a file manager, PATH lacks what a terminal has (nvm's node, pnpm): use
     // what the terminal would, for the IDE and everything it runs (Vite, pnpm, the language servers).
     {
@@ -102,6 +106,11 @@ void Application::on_startup() {
     toolchain_ = Toolchain::detect();
     setupAccelerators();
     add_action("quit", [this] { quit(); });
+}
+
+void Application::setEditorFont(const EditorFont& font) {
+    saveEditorFont(settings_, font);
+    if (editorFontCss_) editorFontCss_->load_from_data(editorFontCss(font));
 }
 
 void Application::installStyleScheme() {
@@ -207,6 +216,10 @@ void Application::setupAccelerators() {
         {"win.goto-line", {"<Control>g"}},
         {"win.format", {"<Control>i"}},
         {"win.toggle-comment", {"<Control>slash", "<Control>KP_Divide"}}, // a text view's Select All otherwise
+        // Ctrl+= too: on most keyboards + is Shift+=, and people press it without Shift.
+        {"win.zoom-in", {"<Control>plus", "<Control>equal", "<Control>KP_Add"}},
+        {"win.zoom-out", {"<Control>minus", "<Control>KP_Subtract"}},
+        {"win.zoom-reset", {"<Control>0", "<Control>KP_0"}},
         {"win.goto-definition", {"<Control>F12"}},
         {"win.project-options", {"<Alt>p"}},
         {"win.compile", {"F9"}},

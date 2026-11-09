@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/EditorFont.h"
 #include "core/Settings.h"
 #include "core/Toolchain.h"
 
@@ -15,6 +16,10 @@ public:
 
     const Toolchain& toolchain() const { return toolchain_; }
     Settings& settings() { return settings_; }
+    // The editors' font (settings /editor/font). Setting it saves it and restyles every editor, and
+    // anything else with the kevc-editor CSS class, at once.
+    EditorFont editorFont() const { return loadEditorFont(settings_); }
+    void setEditorFont(const EditorFont& font);
 
 protected:
     Application();
@@ -31,6 +36,7 @@ private:
 
     Toolchain toolchain_;
     Settings settings_{Settings::defaultFile()};
+    Glib::RefPtr<Gtk::CssProvider> editorFontCss_;
     MainWindow* window_ = nullptr;
 };
 

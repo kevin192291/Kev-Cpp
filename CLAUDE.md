@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 263 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 272 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -46,8 +46,9 @@ verified by driving the real app (see "GUI testing").
   tab's rename/move checks, where open files go after a move), `Search` (project file listing, Go to
   File fuzzy ranking, Find in Files matching and replacing, include filters, result previews),
   `ProjectState` (breakpoints, watches and a web folder's look, per project, in
-  `$XDG_STATE_HOME/kev-cpp/projects.json`), `NpmPackages` (version rules in words, text-preserving
-  package.json edits, .npmrc registries), `CppStyle` (the C/C++ layout kept while typing, and the same as
+  `$XDG_STATE_HOME/kev-cpp/projects.json`), `EditorFont` (the editors' font in settings under
+  /editor/font, its CSS, the size steps, the Style list's faces), `NpmPackages` (version rules in
+  words, text-preserving package.json edits, .npmrc registries), `CppStyle` (the C/C++ layout kept while typing, and the same as
   a .clang-format), `Format` (Auto Format: which tool formats a file, LSP TextEdits, the small edits
   between old and new text, the nearest .clang-format, the project's prettier), `Comments` (Toggle
   Comment: a file's comment style, the script/style sections of HTML and Svelte, the edits), `Servers`
@@ -79,8 +80,8 @@ verified by driving the real app (see "GUI testing").
 - `src/terminal/` TerminalPane (the Run and Terminal tabs: a VteTerminal running the shell or a
   program, one child at a time).
 - `src/ui/` Dialogs (promptText/askChoice/showError/showInfo on MessageDialog, Kev-C++'s one message
-  box; closeOnEscape, deleteWhenHidden), AboutWindow, ToolchainWindow, ServersWindow (Tools → Running
-  Servers), NewProjectDialog, ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
+  box; closeOnEscape, deleteWhenHidden), AboutWindow, PreferencesDialog (View → Preferences: the
+  editors' font), ToolchainWindow, ServersWindow (Tools → Running Servers), NewProjectDialog, ProjectOptionsDialog (compiler/linker/packages), DockManager (panels docked
   bottom/right/floating or closed; layout in `~/.config/kev-cpp/layout.json`), IconWidgets (TaskButton: makes a
   designed button show Stop while its task runs; icon tab labels), QuickSearch (the menu bar's search field), SearchPanel (the left dock's Search
   tab: Find in Files), SearchMarkup (their shared highlighting), NpmPackagesDialog (a web project's
@@ -305,6 +306,16 @@ verified by driving the real app (see "GUI testing").
   still holds the socket, sends SIGTERM + SIGCONT, SIGKILL after 3 s, on a timer the window doesn't
   own. A killed row stays in place ("Stopped") until Refresh: rows closing up under the pointer put
   the next program's Kill button there.
+- **Editor font** (View → Preferences, `PreferencesDialog.ui`; View → Larger/Smaller/Default Text Size,
+  Ctrl+Plus or Ctrl+=, Ctrl+Minus, Ctrl+0): one setting, /editor/font (family, size in points, weight,
+  style), for every project. `Application` owns a CSS provider holding only the `.kevc-editor` rule
+  and reloads it on every change, so every editor, the designer's XML view and the dialog's preview
+  (a label with that class) restyle at once; the gutter's line numbers inherit it. The dialog
+  applies each change as it's made (no OK/Cancel). Its font and style lists come from Pango: fixed-width
+  families unless the box is unticked (the current family is always listed, a missing one as
+  "(not installed)"), a family's own faces before synthesized ones; changing family keeps the nearest
+  style (`closestFace`). The preview scrolls inside a fixed height, or large sizes would widen the
+  dialog past the screen.
 - **Toggle Comment** (Ctrl+/, `win.toggle-comment`; also Ctrl+KP_Divide): core/Comments decides,
   EditorTab::toggleComment applies through applyEdits (one undo step) and selects several lines with
   their markers so pressing it again undoes it. Styles come from GtkSourceView's language metadata
