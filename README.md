@@ -87,7 +87,10 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   the tree, the Routes tab one that filters its routes, and the Ctrl+F bar a button that searches
   every file for what's in it.
 - **Files in the Project tab**: right-click a file or folder to open, rename (F2) or delete it
-  (Delete; it goes to the trash), make a new file or folder in it, or copy its path. Drag a file or
+  (Delete; it goes to the trash), make a new file or folder in it, or copy its path. A file's menu
+  has **Open Containing Folder** (the file manager opens its folder with the file selected); a
+  folder's has **Open This Folder** (in the file manager) and **Open Terminal Here** (the Terminal
+  tab goes to that folder; if a program is running there, Kev-C++ asks before stopping it). Drag a file or
   folder onto another folder to move it there (drop it on a file to use that file's folder, or on the
   empty space below the list for the project folder); a folder you hold it over opens. Files open in
   an editor follow a rename or move, unsaved changes included, and C/C++ build files are updated.
@@ -119,8 +122,8 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   magic_enum, glm, googletest, Catch2, glfw, raylib, SDL3) or any Git repository via CMake
   FetchContent ("Detect Targets" finds what to link), or system libraries via pkg-config.
 - **IntelliSense**: completion, hover, live diagnostics and a symbol list, from clangd (C/C++) and
-  typescript-language-server (JS/TS). Right-click a name for **Go to Definition** (also Ctrl+click /
-  Ctrl+F12), Go to Implementation (from an interface or virtual method to the code that implements
+  typescript-language-server (JS/TS). Right-click a name for **Go to Definition** (also F12 /
+  Ctrl+click), Go to Implementation (from an interface or virtual method to the code that implements
   it), Go to Type Definition, Go to Declaration (C/C++) and Find All References; with several answers
   a list opens at the cursor. In TypeScript, Go to Definition of something from a library goes on to
   its JavaScript source instead of stopping at the `.d.ts` declarations.
@@ -227,7 +230,7 @@ Svelte and Vite apps apart (the title bar says which) and which package manager 
   package.json keeps its formatting.
 - **Run (F10)** starts the project's own Vite on 127.0.0.1, on the first free port from 5173, and opens
   the browser. **Compile (F9)** runs `svelte-kit sync` and `svelte-check`, with errors in the Compiler tab;
-  **Rebuild (F12)** runs the `build` script.
+  **Rebuild (Ctrl+F12)** runs the `build` script.
 - **Svelte IntelliSense**: completion, hover, go to definition and diagnostics in `.svelte` files
   (svelte-language-server, bundled), and `.ts` files understand Svelte components
   (typescript-svelte-plugin). `.svelte` files are highlighted.
@@ -272,11 +275,11 @@ project instead.
 | F9 | Compile (web: type-check / svelte-check) | F5 | Start debugging |
 | F10 | Run (web: serve or Vite + open browser) | F6 | Step over |
 | F11 | Compile & run | F7 | Step into |
-| F12 | Rebuild all | Shift+F7 | Step out |
+| Ctrl+F12 | Rebuild all | Shift+F7 | Step out |
 | | | F8 | Continue |
 | Ctrl+F2 | Stop build or program | Shift+F5 | Stop debugging |
 | Alt+P | Project Options | Ctrl+F5 | Toggle breakpoint |
-| Ctrl+Space | Completion | Ctrl+F12 | Go to definition |
+| Ctrl+Space | Completion | F12 | Go to definition |
 | Ctrl+P | Search files and text | Ctrl+Shift+F | Find in all files (Search tab) |
 | Ctrl+F | Find in the current file | F2 / Delete | Rename / delete in the Project tab |
 | Ctrl+R | Replace in the current file | Right-click | Go to Definition / Implementation / References |

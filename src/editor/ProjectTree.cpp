@@ -476,6 +476,11 @@ void ProjectTree::setupContextMenu() {
     actions_->add_action("open", [this] {
         if (menuRow_ && !menuRow_->folder) fileActivated_.emit(menuRow_->path);
     });
+    actions_->add_action("show-in-file-manager", [this] {
+        if (menuRow_ && !menuRow_->folder) showInFileManager_.emit(menuRow_->path);
+    });
+    actions_->add_action("open-in-file-manager", [this] { openInFileManager_.emit(menuFolder()); });
+    actions_->add_action("open-terminal", [this] { openTerminal_.emit(menuFolder()); });
     actions_->add_action("new-file", [this] {
         expandMenuRow();
         newFile_.emit(menuFolder());
@@ -552,7 +557,13 @@ void ProjectTree::showContextMenu(Gtk::ListItem* item, double x, double y) {
         if (auto action = std::dynamic_pointer_cast<Gio::SimpleAction>(actions_->lookup_action(name)))
             action->set_enabled(on);
     };
-    enable("open", menuRow_ && !menuRow_->folder);
+    // The design hides the items whose action is off: a file gets Open Containing Folder, a folder
+    // (or the empty space, meaning the project folder) Open This Folder and Open Terminal Here.
+    const bool file = menuRow_ && !menuRow_->folder;
+    enable("open", file);
+    enable("show-in-file-manager", file);
+    enable("open-in-file-manager", !file);
+    enable("open-terminal", !file);
     enable("rename", menuRow_.has_value());
     enable("delete", menuRow_.has_value());
 

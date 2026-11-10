@@ -1,11 +1,14 @@
 #include "terminal/TerminalPane.h"
 
+#include "core/FileOps.h"
 #include "core/Toolchain.h"
 
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <sys/wait.h>
+#include <unistd.h>
 
 namespace kevc {
 
@@ -29,6 +32,13 @@ std::vector<std::string> terminalEnvironment() {
     const std::string dir = exe.parent_path().string(), added = prependToPath(path, dir);
     if (added == path) return {};
     return {"PATH=" + added, "KEVC_TERMINAL_PATH_ADDED=" + dir};
+}
+
+std::string processName(pid_t pid) {
+    std::ifstream in("/proc/" + std::to_string(pid) + "/comm");
+    std::string name;
+    std::getline(in, name);
+    return name.empty() ? "a program" : name;
 }
 
 std::string describeStatus(int status) {
@@ -86,6 +96,34 @@ void TerminalPane::stopChild() {
     pending_.reset();
     shellMode_ = false; // a deliberately stopped shell is not restarted
     signalChild();
+}
+
+std::string TerminalPane::busyWith() const {
+    if (state_ != State::Running || pid_ <= 0) return {};
+    if (!childIsShell_) return processName(pid_);
+    // The shell is the terminal's foreground process group while it waits at its prompt; a command
+    // it runs gets a group of its own (interactive shells use job control).
+    VtePty* pty = vte_terminal_get_pty(terminal_);
+    const pid_t group = pty ? tcgetpgrp(vte_pty_get_fd(pty)) : -1;
+    if (group <= 0 || group == pid_) return {};
+    return processName(group);
+}
+
+void TerminalPane::enterDirectory(const std::filesystem::path& dir) {
+    if (state_ != State::Running || !childIsShell_) {
+        startShell(dir);
+        return;
+    }
+    // The shell's own idea of where it is resolves symlinks, so the target must too.
+    std::error_code ec;
+    const std::filesystem::path cwd = std::filesystem::read_symlink("/proc/" + std::to_string(pid_) + "/cwd", ec);
+    std::filesystem::path target = std::filesystem::weakly_canonical(dir, ec);
+    if (ec) target = dir;
+    const std::string command = fileops::cdCommand(target, cwd);
+    if (command.empty()) return;
+    // Ctrl+E Ctrl+U empty the line in bash, zsh and fish, and the tty's line editing drops it on ^U.
+    const std::string keys = "\x05\x15" + command + "\r";
+    vte_terminal_feed_child(terminal_, keys.data(), static_cast<gssize>(keys.size()));
 }
 
 void TerminalPane::request(Launch launch) {

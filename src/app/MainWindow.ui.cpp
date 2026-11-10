@@ -204,7 +204,7 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
                     <child>
                       <object class="GtkButton" id="rebuildButton_">
                         <property name="icon-name">kevc-classic-rebuild-all</property>
-                        <property name="tooltip-text">Rebuild All (F12)</property>
+                        <property name="tooltip-text">Rebuild All (Ctrl+F12)</property>
                         <property name="has-frame">false</property>
                         <property name="focus-on-click">false</property>
                       </object>

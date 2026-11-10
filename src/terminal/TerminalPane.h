@@ -36,6 +36,12 @@ public:
     void runProgram(const std::vector<std::string>& argv, const std::filesystem::path& cwd, ExitHandler onExit = {});
 
     bool childRunning() const { return state_ != State::Idle; }
+    // What a new shell would stop: the name of the program running in the shell's foreground ("vim"),
+    // or of the program run instead of a shell. "" while the shell waits at its prompt or nothing runs.
+    std::string busyWith() const;
+    // Open Terminal Here: types a cd to `dir` at the shell's prompt, first clearing anything half
+    // typed there, or starts the shell in `dir` when none runs. Only while busyWith() is "".
+    void enterDirectory(const std::filesystem::path& dir);
     // Clears the terminal and gives it a fresh pty for a program started by someone else (gdb).
     // Returns the pty's device path (e.g. /dev/pts/7), or empty on failure. No child may be running.
     std::string prepareForInferior();

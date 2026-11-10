@@ -1,5 +1,7 @@
 #include "core/FileOps.h"
 
+#include "core/BuildPlan.h"
+
 #include <cerrno>
 #include <system_error>
 
@@ -88,6 +90,16 @@ int stemLength(const std::string& name, bool folder) {
     for (size_t i = 0; i < bytes; ++i)
         if ((static_cast<unsigned char>(name[i]) & 0xC0) != 0x80) ++chars;
     return chars;
+}
+
+std::string cdCommand(const fs::path& dir, const fs::path& cwd) {
+    const fs::path target = normal(dir);
+    if (!cwd.empty()) {
+        const fs::path here = normal(cwd);
+        if (target == here) return {};
+        if (isInside(target, here)) return displayCommand({"cd", "./" + target.lexically_relative(here).string()});
+    }
+    return displayCommand({"cd", target.string()});
 }
 
 } // namespace kevc::fileops

@@ -129,6 +129,7 @@ add_executable(kev-cpp
   src/lsp/LspManager.cpp
   src/process/BackgroundJob.cpp
   src/process/Capture.cpp
+  src/process/FileManager.cpp
   src/process/ManagedProcess.cpp
   src/project/SourceWatcher.cpp
   src/terminal/TerminalPane.cpp

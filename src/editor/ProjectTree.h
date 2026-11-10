@@ -40,6 +40,11 @@ public:
     // The folder a new file or folder goes in.
     sigc::signal<void(const std::filesystem::path& dir)>& signalNewFile() { return newFile_; }
     sigc::signal<void(const std::filesystem::path& dir)>& signalNewFolder() { return newFolder_; }
+    // Open Containing Folder (a file), Open This Folder and Open Terminal Here (a folder, or the
+    // project folder for the empty space below the rows).
+    sigc::signal<void(const std::filesystem::path& file)>& signalShowInFileManager() { return showInFileManager_; }
+    sigc::signal<void(const std::filesystem::path& dir)>& signalOpenInFileManager() { return openInFileManager_; }
+    sigc::signal<void(const std::filesystem::path& dir)>& signalOpenTerminal() { return openTerminal_; }
     // A row was dragged onto a folder (or onto a file in it, or the empty space below the rows: the root).
     sigc::signal<void(const std::filesystem::path& source, const std::filesystem::path& targetDir)>& signalMove() {
         return move_;
@@ -98,6 +103,7 @@ private:
     Glib::RefPtr<Gtk::Filter> filter_;
     Glib::RefPtr<Gtk::Sorter> sorter_;
     sigc::signal<void(const std::filesystem::path&)> fileActivated_, rename_, delete_, newFile_, newFolder_;
+    sigc::signal<void(const std::filesystem::path&)> showInFileManager_, openInFileManager_, openTerminal_;
     sigc::signal<void(const std::filesystem::path&, const std::filesystem::path&)> move_;
     // Swaps a folder row's icon between open and closed; one per bound row, since GTK reuses rows.
     std::map<Gtk::ListItem*, sigc::connection> expandWatch_;

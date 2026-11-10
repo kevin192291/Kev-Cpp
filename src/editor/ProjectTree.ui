@@ -87,6 +87,21 @@ File → New Project or Open Project.</property>
         <attribute name="label" translatable="yes">_Open</attribute>
         <attribute name="action">tree.open</attribute>
       </item>
+      <item>
+        <attribute name="label" translatable="yes">Open _Containing Folder</attribute>
+        <attribute name="action">tree.show-in-file-manager</attribute>
+        <attribute name="hidden-when">action-disabled</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Open _This Folder</attribute>
+        <attribute name="action">tree.open-in-file-manager</attribute>
+        <attribute name="hidden-when">action-disabled</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Open Terminal _Here</attribute>
+        <attribute name="action">tree.open-terminal</attribute>
+        <attribute name="hidden-when">action-disabled</attribute>
+      </item>
     </section>
     <section>
       <item>

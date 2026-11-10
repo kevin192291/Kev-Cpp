@@ -30,4 +30,10 @@ bool isInside(const std::filesystem::path& path, const std::filesystem::path& di
 // ".gitignore". Returns its length in characters (UTF-8 aware).
 int stemLength(const std::string& name, bool folder);
 
+// Open Terminal Here: what to type at a shell's prompt in `cwd` to go to the folder `dir`. A folder
+// inside `cwd` is named from there as "./src" (a bare "src" could go where CDPATH says instead), any
+// other by its full path, quoted when it has to be. "" when the shell is there already; an empty
+// `cwd` (unknown) gives the full path.
+std::string cdCommand(const std::filesystem::path& dir, const std::filesystem::path& cwd);
+
 } // namespace kevc::fileops

@@ -146,6 +146,7 @@ private:
     void newFolderIn(const std::filesystem::path& dir);
     void renamePath(const std::filesystem::path& path);
     void deletePath(const std::filesystem::path& path);
+    void openTerminalIn(const std::filesystem::path& dir); // the Project tab's Open Terminal Here
     void movePath(const std::filesystem::path& source, const std::filesystem::path& targetDir);
     // After `from` became `to`: editors, breakpoints and the routes and git views catch up.
     void relocated(const std::filesystem::path& from, const std::filesystem::path& to);

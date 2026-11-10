@@ -13,6 +13,7 @@
 #include "debug/DebugHover.h"
 #include "lsp/LspBridges.h"
 #include "process/Capture.h"
+#include "process/FileManager.h"
 #include "project/SourceWatcher.h"
 #include "ui/AboutWindow.h"
 #include "ui/Dialogs.h"
@@ -103,6 +104,14 @@ MainWindow::MainWindow(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>&
     projectTree_->signalRename().connect([this](const fs::path& path) { renamePath(path); });
     projectTree_->signalDelete().connect([this](const fs::path& path) { deletePath(path); });
     projectTree_->signalMove().connect([this](const fs::path& source, const fs::path& dir) { movePath(source, dir); });
+    auto fileManagerError = [this, token = std::weak_ptr<int>(lifetime_)](const std::string& message) {
+        if (!token.expired()) showError(*this, "Could not open a file manager", message);
+    };
+    projectTree_->signalShowInFileManager().connect(
+        [fileManagerError](const fs::path& file) { showInFileManager(file, fileManagerError); });
+    projectTree_->signalOpenInFileManager().connect(
+        [fileManagerError](const fs::path& dir) { openInFileManager(dir, fileManagerError); });
+    projectTree_->signalOpenTerminal().connect([this](const fs::path& dir) { openTerminalIn(dir); });
     projectTree_->signalSearchDone().connect([this] {
         if (auto* page = currentDocument()) page->focusPage();
     });
@@ -541,7 +550,7 @@ void MainWindow::applyProfile() {
             taskButtons_.at(Task::Run)->setTooltips("Run: start the dev server and open the browser (F10)",
                                                     "Stop the dev server (Ctrl+F2)");
             taskButtons_.at(Task::CompileRun)->setTooltips("Check types, then run (F11)", "Stop (Ctrl+F2)");
-            taskButtons_.at(Task::Rebuild)->setTooltips("Production build (F12)", "Stop building (Ctrl+F2)");
+            taskButtons_.at(Task::Rebuild)->setTooltips("Production build (Ctrl+F12)", "Stop building (Ctrl+F2)");
         } else {
             for (Task t : {Task::Compile, Task::Run, Task::CompileRun, Task::Rebuild})
                 taskButtons_.at(t)->resetTooltips();
@@ -1240,6 +1249,33 @@ void MainWindow::renamePath(const fs::path& path) {
                    return {};
                },
                fileops::stemLength(name, folder)); // typing replaces "main" and keeps ".cpp"
+}
+
+void MainWindow::openTerminalIn(const fs::path& dir) {
+    auto show = [this] {
+        showBottomPage(*shell_);
+        shell_->focusTerminal();
+    };
+    const std::string busy = shell_->busyWith();
+    if (busy.empty()) {
+        shell_->enterDirectory(dir);
+        show();
+        return;
+    }
+    // Typing cd would go to the program, not the shell. Starting a new shell there stops the program,
+    // which may be a dev server or an editor with unsaved work: ask first.
+    showBottomPage(*shell_);
+    const fs::path relative = dir.lexically_relative(folder_);
+    const bool justName = relative.empty() || relative == "." || relative.begin()->string() == "..";
+    const std::string name = justName ? dir.filename().string() : relative.string();
+    askChoice(*this, "Stop " + busy + " in the Terminal tab?",
+              "Open Terminal Here starts a new shell in \u201c" + name +
+                  "\u201d, which stops what the Terminal tab is running.",
+              {"Cancel", "Stop It and Open"}, 0, 1, [this, dir, show](int choice) {
+                  if (choice != 1) return;
+                  shell_->startShell(dir);
+                  show();
+              });
 }
 
 void MainWindow::deletePath(const fs::path& path) {

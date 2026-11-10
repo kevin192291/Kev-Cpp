@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 272 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 273 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -73,9 +73,10 @@ verified by driving the real app (see "GUI testing").
   root/child sessions) and DapViews (DapVarNode).
 - `src/process/` ManagedProcess (long-running child: own process group, PR_SET_PDEATHSIG, stdin pipe,
   line output; Vite, the dev server, js-debug, the OTLP collector; stopping it signals the group and
-  every descendant that left it), Capture (run + collect stdout; a form that feeds stdin, for prettier) and
+  every descendant that left it), Capture (run + collect stdout; a form that feeds stdin, for prettier),
   BackgroundJob (one worker thread at a time, results posted to the main loop, cancelled and joined
-  before a new one starts or its owner goes; used by the searches).
+  before a new one starts or its owner goes; used by the searches) and FileManager (the desktop's
+  file manager over D-Bus, for Open Containing Folder).
 - `src/build/` BuildRunner (sequential subprocesses, line streaming), CompilerPanel, CompileLog.
 - `src/terminal/` TerminalPane (the Run and Terminal tabs: a VteTerminal running the shell or a
   program, one child at a time).
@@ -290,6 +291,16 @@ verified by driving the real app (see "GUI testing").
   and breakpoints move with them. Delete uses the trash (`g_file_trash`), with a permanent-delete
   fallback. Drags carry the row's GFileInfo, which no other program can read, so rows never leave
   the tree. GUI tests set `XDG_DATA_HOME` so test deletions don't land in the user's real trash.
+- **Open Containing Folder / Open This Folder / Open Terminal Here** (the Project tab's menu; the
+  design hides the items whose action is off, so a file shows the first, a folder or the empty space
+  the other two): `process/FileManager` asks `org.freedesktop.FileManager1` (ShowItems selects the
+  file, ShowFolders) over D-Bus, else opens the folder with the desktop's folder handler. Open
+  Terminal Here uses the Terminal tab: at the shell's prompt (the pty's foreground group is the
+  shell, `TerminalPane::busyWith`) it types Ctrl+E Ctrl+U and `fileops::cdCommand` (`cd ./src`, so
+  CDPATH can't redirect it); with a program running it asks, then restarts the shell there. GUI
+  tests: a private bus from plain `dbus-run-session` still auto-starts Nemo (its FileManager1
+  activation file) on the shell's DISPLAY, the user's screen. Use `--config-file` with a bus config
+  that has no service dirs, run with DISPLAY=:5, and put a logging FileManager1 on that bus.
 - **The Project tab's folders are `FolderListing`s (ProjectTree.cpp), not GtkDirectoryList**: that one
   handles its monitor's events in order and waits forever for a file it can't read, so once a file is
   created and gone before it looks (every save: `g_file_set_contents` writes `name.XXXXXX` and renames

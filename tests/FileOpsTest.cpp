@@ -92,3 +92,17 @@ TEST(FileOps, StemLength) {
     EXPECT_EQ(fileops::stemLength("v1.2", true), 4);          // folders: the whole name
     EXPECT_EQ(fileops::stemLength("café.txt", false), 4); // characters, not bytes
 }
+
+TEST(FileOps, CdCommand) {
+    EXPECT_EQ(fileops::cdCommand("/p/src", "/p"), "cd ./src");
+    EXPECT_EQ(fileops::cdCommand("/p/src/app/", "/p/"), "cd ./src/app");
+    EXPECT_EQ(fileops::cdCommand("/p", "/p"), "");
+    EXPECT_EQ(fileops::cdCommand("/p/src/", "/p/src"), "");
+    EXPECT_EQ(fileops::cdCommand("/p", "/p/src"), "cd /p");        // up: the full path
+    EXPECT_EQ(fileops::cdCommand("/q/lib", "/p"), "cd /q/lib");
+    EXPECT_EQ(fileops::cdCommand("/p/srcx", "/p/src"), "cd /p/srcx"); // not inside, just a longer name
+    EXPECT_EQ(fileops::cdCommand("/p/src", ""), "cd /p/src");      // where the shell is isn't known
+    EXPECT_EQ(fileops::cdCommand("/p/my dir", "/p"), "cd './my dir'");
+    EXPECT_EQ(fileops::cdCommand("/x/it's", "/p"), "cd '/x/it'\\''s'");
+    EXPECT_EQ(fileops::cdCommand("/p/café", "/p"), "cd './café'");
+}
