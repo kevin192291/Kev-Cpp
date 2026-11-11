@@ -770,6 +770,11 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
           <attribute name="action">win.toggle-comment</attribute>
         </item>
       </section>
+      <section>
+        <submenu id="boilerplateMenu_">
+          <attribute name="label" translatable="yes">Insert _Boilerplate</attribute>
+        </submenu>
+      </section>
     </submenu>
     <submenu>
       <attribute name="label" translatable="yes">_Search</attribute>
@@ -1177,6 +1182,11 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
       </item>
     </section>
     <section>
+      <submenu id="editorBoilerplateMenu_">
+        <attribute name="label" translatable="yes">Insert Boiler_plate</attribute>
+      </submenu>
+    </section>
+    <section>
       <item>
         <attribute name="label" translatable="yes">Toggle _Breakpoint</attribute>
         <attribute name="action">win.toggle-breakpoint</attribute>
@@ -1227,6 +1237,11 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
         <attribute name="label" translatable="yes">Toggle Co_mment</attribute>
         <attribute name="action">win.toggle-comment</attribute>
       </item>
+    </section>
+    <section>
+      <submenu id="cppEditorBoilerplateMenu_">
+        <attribute name="label" translatable="yes">Insert Boiler_plate</attribute>
+      </submenu>
     </section>
     <section>
       <item>
@@ -1329,6 +1344,7 @@ MainWindowUi::MainWindowUi(BaseObjectType* object, const Glib::RefPtr<Gtk::Build
     rightDock_ = builder->get_widget<Gtk::Notebook>("rightDock_");
     status_ = builder->get_widget<Gtk::Label>("status_");
     menubar_ = builder->get_object<Gio::Menu>("menubar_");
+    boilerplateMenu_ = builder->get_object<Gio::Menu>("boilerplateMenu_");
     projectMenu_ = builder->get_object<Gio::Menu>("projectMenu_");
     projectFileSection_ = builder->get_object<Gio::Menu>("projectFileSection_");
     projectWebSection_ = builder->get_object<Gio::Menu>("projectWebSection_");
@@ -1346,7 +1362,9 @@ MainWindowUi::MainWindowUi(BaseObjectType* object, const Glib::RefPtr<Gtk::Build
     toolsWebSection_ = builder->get_object<Gio::Menu>("toolsWebSection_");
     toolsSection_ = builder->get_object<Gio::Menu>("toolsSection_");
     editorMenu_ = builder->get_object<Gio::Menu>("editorMenu_");
+    editorBoilerplateMenu_ = builder->get_object<Gio::Menu>("editorBoilerplateMenu_");
     cppEditorMenu_ = builder->get_object<Gio::Menu>("cppEditorMenu_");
+    cppEditorBoilerplateMenu_ = builder->get_object<Gio::Menu>("cppEditorBoilerplateMenu_");
     gutterMenu_ = builder->get_object<Gio::Menu>("gutterMenu_");
     g_signal_connect_data(findEntry_->gobj(), "search-changed",
                           G_CALLBACK(+[](MainWindowUi* self) { self->on_find_changed(); }), this, nullptr,

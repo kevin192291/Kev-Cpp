@@ -28,11 +28,24 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
           <object class="GtkListBox" id="list_">
             <property name="visible">false</property>
             <property name="activate-on-single-click">false</property>
+            <property name="selection-mode">multiple</property>
           </object>
         </child>
       </object>
     </child>
   </object>
+  <menu id="contextMenu_">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Copy</attribute>
+        <attribute name="action">compiler.copy</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Copy _All</attribute>
+        <attribute name="action">compiler.copy-all</attribute>
+      </item>
+    </section>
+  </menu>
 </interface>
 )__kevc_ui__";
 
@@ -46,4 +59,5 @@ CompilerPanelUi::CompilerPanelUi(BaseObjectType* object, const Glib::RefPtr<Gtk:
     : Gtk::ScrolledWindow(object) {
     message_ = builder->get_widget<Gtk::Label>("message_");
     list_ = builder->get_widget<Gtk::ListBox>("list_");
+    contextMenu_ = builder->get_object<Gio::Menu>("contextMenu_");
 }

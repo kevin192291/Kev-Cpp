@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 273 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 293 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -28,7 +28,9 @@ verified by driving the real app (see "GUI testing").
 - `src/core/` — **no GTK**; all unit-tested. Project model (`.kevc` JSON), `ManagedBlock` (the
   marker-delimited block we own inside CMakeLists.txt/Makefile), `BuildFiles` (CMake/Make generators,
   compile_commands.json for C), `BuildPlan` (commands per action/config), `Diagnostics` (gcc/ld/CMake/
-  make/tsc output parser), `Packages` (catalog, pkg-config, FetchContent target detection), `Lsp`
+  make/tsc output parser, a diagnostic as text for the clipboard), `Packages` (catalog, pkg-config,
+  FetchContent target detection, installed CMake packages, how a project links SFML), `Boilerplate`
+  (Edit → Insert Boilerplate: the SFML and GTK 4 snippets, where one goes in a file), `Lsp`
   (framing, URIs, UTF-16 columns, markdown→Pango), `Mi` (GDB/MI parser, expression-under-cursor),
   `Breakpoints` (the breakpoint kinds, their saved form, gdb dprintf and js-debug logpoint messages,
   JavaScript watch traps), `ProcessTree` (a process's descendants from /proc),
@@ -394,6 +396,32 @@ verified by driving the real app (see "GUI testing").
 - **npm Packages dialog**: package.json is edited as text (npm::setDependency/removeDependency), so
   formatting and key order stay; .npmrc keeps every line but registry ones. Newest versions and
   lookups for Add use `npm view … --json` with the dialog's registry flags, 4 at a time.
+- **Packages found by find_package** (`Package::Source::CMake`: name, version, components, targets;
+  options are set() before it). Made for SFML: SFML 3 built from source installs static libraries
+  (`libsfml-graphics-s.a`) but its .pc files say `-lsfml-graphics`, so pkg-config modules compile with
+  /usr/local's SFML 3 headers and link Ubuntu's SFML 2 (undefined references). `sfml::packagesFor`
+  picks: SFML 3 with a CMake package → find_package (with `SFML_STATIC_LIBRARIES ON` when only the
+  static targets are installed); an SFML only pkg-config knows (apt's 2.6) → pkg-config modules; none
+  → FetchContent of SFML 3. `checkSfmlPackages()` (on open, after Project Options) offers the switch
+  when a project's sfml-* modules name libraries that aren't in their -L folder
+  (`missingPkgConfigLibs`), once per project in a session. Project Options lists such a package but
+  has no way to add one by hand yet.
+- **Insert Boilerplate** (Edit menu and the editors' right-click menus; `win.insert-boilerplate` with
+  the snippet's id): core/Boilerplate holds whole programs and pieces for SFML 2 and 3, gtkmm and GTK 4
+  in C; the three submenus are empty in the design and filled in code, with the SFML ones for the
+  installed major version. A program replaces a blank file; otherwise code goes on the cursor's
+  blank line or below its line, a piece indented like its surroundings, with missing #includes added
+  after the file's last one, all as one undo step. The project then gets what the snippet links
+  (`addSystemPackage`, `linkSfml`). `Boilerplate.SnippetsCompile` compiles each against what's
+  installed; SFML 2's were checked by hand against apt's headers (/usr/local's SFML 3 shadows them).
+- **Copying build output**: the Compiler tab's rows are multi-select; right-click → Copy / Copy All
+  and Ctrl+C put them on the clipboard as the compiler wrote them (`toText`: path:line:col: error:
+  message). The Compile Log's own right-click menu copies a selection; the design's `extra-menu`
+  adds Copy All.
+- **Regenerating a design's code without the designer** (after editing a .ui by hand): a ten-line
+  program calling `ui::generateGtkmm(doc, name, ui::basicGtkTypes())` reproduces the committed
+  .ui.h/.ui.cpp except for non-widget objects (CompileLog's `tags_` comes out as a widget pointer:
+  put the `Glib::RefPtr`/`get_object` lines back).
 - **Use Its Own CMakeLists.txt** (Project::buildFileManaged = false): no managed block, no source sync; the
   project's CMakeLists.txt builds as usual and runnableOutput() looks for `targetName` anywhere under
   the build folder. cmakeExecutables() lists add_executable() targets for the chooser. The repository

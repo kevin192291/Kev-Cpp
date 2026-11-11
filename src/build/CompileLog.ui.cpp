@@ -49,12 +49,21 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
         <property name="editable">false</property>
         <property name="cursor-visible">false</property>
         <property name="monospace">true</property>
+        <property name="extra-menu">extraMenu_</property>
         <style>
           <class name="kevc-log"/>
         </style>
       </object>
     </child>
   </object>
+  <menu id="extraMenu_">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Copy A_ll</attribute>
+        <attribute name="action">log.copy-all</attribute>
+      </item>
+    </section>
+  </menu>
 </interface>
 )__kevc_ui__";
 
@@ -69,4 +78,5 @@ CompileLogUi::CompileLogUi(BaseObjectType* object, const Glib::RefPtr<Gtk::Build
     tags_ = builder->get_object<Gtk::TextTagTable>("tags_");
     buffer_ = builder->get_object<Gtk::TextBuffer>("buffer_");
     view_ = builder->get_widget<Gtk::TextView>("view_");
+    extraMenu_ = builder->get_object<Gio::Menu>("extraMenu_");
 }

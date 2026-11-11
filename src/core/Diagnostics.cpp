@@ -6,6 +6,23 @@
 
 namespace kevc {
 
+std::string toText(const Diagnostic& d) {
+    std::string text;
+    if (!d.file.empty()) {
+        text = d.file;
+        if (d.line > 0) text += ":" + std::to_string(d.line);
+        if (d.line > 0 && d.column > 0) text += ":" + std::to_string(d.column);
+        text += ": ";
+    }
+    switch (d.severity) {
+    case Diagnostic::Severity::Error: text += "error: "; break;
+    case Diagnostic::Severity::Warning: text += "warning: "; break;
+    case Diagnostic::Severity::Note: text += "note: "; break;
+    }
+    return text + d.message;
+}
+
+
 namespace {
 
 // main.cpp:12:5: error: 'x' was not declared in this scope

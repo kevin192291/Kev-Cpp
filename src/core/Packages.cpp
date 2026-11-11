@@ -6,6 +6,8 @@
 #include <array>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
+#include <fstream>
 #include <sstream>
 
 namespace kevc {
@@ -114,6 +116,237 @@ std::vector<PkgConfigModule> listPkgConfigModules() {
     pclose(pipe);
     return parsePkgConfigList(output);
 }
+
+std::string runPkgConfig(const std::string& arguments, const std::vector<std::string>& modules) {
+    std::string command = "pkg-config " + arguments;
+    for (const auto& m : modules) {
+        // Module names are letters, digits and a few signs; anything else isn't one.
+        if (m.empty() || !std::all_of(m.begin(), m.end(), [](unsigned char c) {
+                return std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '+';
+            }))
+            return {};
+        command += " " + m;
+    }
+    FILE* pipe = popen((command + " 2>/dev/null").c_str(), "r");
+    if (!pipe) return {};
+    std::string output;
+    std::array<char, 4096> buf{};
+    size_t n;
+    while ((n = fread(buf.data(), 1, buf.size(), pipe)) > 0) output.append(buf.data(), n);
+    if (pclose(pipe) != 0) return {};
+    while (!output.empty() && std::isspace(static_cast<unsigned char>(output.back()))) output.pop_back();
+    return output;
+}
+
+std::vector<std::string> missingPkgConfigLibs(std::string_view libsLine) {
+    std::vector<std::filesystem::path> dirs;
+    std::vector<std::string> libs;
+    for (const std::string& arg : splitArgs(libsLine)) {
+        if (arg.starts_with("-L") && arg.size() > 2) dirs.emplace_back(arg.substr(2));
+        else if (arg.starts_with("-l") && arg.size() > 2 && arg[2] != ':') libs.push_back(arg.substr(2));
+    }
+    std::vector<std::string> missing;
+    if (dirs.empty()) return missing;
+    std::error_code ec;
+    for (const auto& lib : libs) {
+        const bool there = std::any_of(dirs.begin(), dirs.end(), [&](const auto& dir) {
+            return std::filesystem::exists(dir / ("lib" + lib + ".so"), ec) ||
+                   std::filesystem::exists(dir / ("lib" + lib + ".a"), ec);
+        });
+        if (!there && std::find(missing.begin(), missing.end(), lib) == missing.end()) missing.push_back(lib);
+    }
+    return missing;
+}
+
+int CMakeConfig::major() const {
+    int value = 0;
+    for (char c : version) {
+        if (!std::isdigit(static_cast<unsigned char>(c))) break;
+        value = value * 10 + (c - '0');
+    }
+    return value;
+}
+
+std::vector<std::filesystem::path> cmakePrefixes() {
+    std::vector<std::filesystem::path> out;
+    if (const char* env = std::getenv("CMAKE_PREFIX_PATH")) {
+        std::istringstream in{std::string(env)};
+        for (std::string dir; std::getline(in, dir, ':');)
+            if (!dir.empty()) out.emplace_back(dir);
+    }
+    out.emplace_back("/usr/local");
+    out.emplace_back("/usr");
+    return out;
+}
+
+std::optional<CMakeConfig> findCMakeConfig(const std::string& name, const std::vector<std::filesystem::path>& prefixes) {
+    namespace fs = std::filesystem;
+    std::string lowerName = name;
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), [](unsigned char c) { return std::tolower(c); });
+    std::error_code ec;
+    for (const fs::path& prefix : prefixes) {
+        std::vector<fs::path> libDirs{prefix / "lib"};
+        // Debian's multiarch folders: lib/x86_64-linux-gnu.
+        std::vector<fs::path> arch;
+        for (fs::directory_iterator it(prefix / "lib", ec), end; !ec && it != end; it.increment(ec))
+            if (it->is_directory(ec) && fs::exists(it->path() / "cmake", ec)) arch.push_back(it->path());
+        std::sort(arch.begin(), arch.end());
+        libDirs.insert(libDirs.end(), arch.begin(), arch.end());
+        libDirs.push_back(prefix / "lib64");
+        libDirs.push_back(prefix / "share");
+        for (const fs::path& lib : libDirs) {
+            const fs::path dir = lib / "cmake" / name;
+            const bool camel = fs::exists(dir / (name + "Config.cmake"), ec);
+            if (!camel && !fs::exists(dir / (lowerName + "-config.cmake"), ec)) continue;
+            CMakeConfig config{name, {}, dir};
+            std::ifstream in(dir / (camel ? name + "ConfigVersion.cmake" : lowerName + "-config-version.cmake"));
+            for (std::string line; std::getline(in, line);) {
+                // set(PACKAGE_VERSION "3.0.0")
+                const auto at = line.find("set(PACKAGE_VERSION ");
+                if (at == std::string::npos) continue;
+                for (char c : line.substr(at + 20)) {
+                    if (c == '"' && config.version.empty()) continue;
+                    if (!std::isdigit(static_cast<unsigned char>(c)) && c != '.') break;
+                    config.version += c;
+                }
+                break;
+            }
+            return config;
+        }
+    }
+    return std::nullopt;
+}
+
+namespace sfml {
+
+namespace {
+
+// In the order SFML's own libraries depend on each other, most dependent first.
+constexpr std::array<const char*, 5> kComponents{"Graphics", "Audio", "Network", "Window", "System"};
+
+std::string lowered(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
+    return s;
+}
+
+// "Graphics" for "graphics", "sfml-graphics" or "SFML::Graphics"; empty for anything else.
+std::string componentNamed(const std::string& text) {
+    std::string name = lowered(text);
+    for (const char* prefix : {"sfml-", "sfml::"})
+        if (name.starts_with(prefix)) name = name.substr(std::string_view(prefix).size());
+    for (const char* c : kComponents)
+        if (name == lowered(c)) return c;
+    return {};
+}
+
+bool isSfml(const Package& p) {
+    const std::string name = lowered(p.name);
+    return p.source == Package::Source::System ? name.starts_with("sfml-") : name == "sfml";
+}
+
+void sortComponents(std::vector<std::string>& components) {
+    std::vector<std::string> sorted;
+    for (const char* c : kComponents)
+        if (std::find(components.begin(), components.end(), c) != components.end()) sorted.emplace_back(c);
+    components = std::move(sorted);
+}
+
+} // namespace
+
+int Install::major() const {
+    if (config && config->major() > 0) return config->major();
+    if (!pkgConfigVersion.empty()) return pkgConfigVersion[0] == '2' ? 2 : 3;
+    return 3;
+}
+
+Install detect() {
+    Install install;
+    install.config = findCMakeConfig("SFML", cmakePrefixes());
+    install.pkgConfigVersion = runPkgConfig("--modversion", {"sfml-graphics"});
+    return install;
+}
+
+std::vector<std::string> components(const std::vector<Package>& packages) {
+    std::vector<std::string> out;
+    auto add = [&](const std::string& text) {
+        const std::string c = componentNamed(text);
+        if (!c.empty() && std::find(out.begin(), out.end(), c) == out.end()) out.push_back(c);
+    };
+    for (const Package& p : packages) {
+        if (!isSfml(p)) continue;
+        if (p.source == Package::Source::System) {
+            if (lowered(p.name) == "sfml-all")
+                for (const char* c : kComponents) add(c);
+            else add(p.name);
+        } else {
+            for (const auto& c : p.components) add(c);
+            for (const auto& t : p.targets) add(t);
+        }
+    }
+    sortComponents(out);
+    return out;
+}
+
+std::vector<Package> packagesFor(const Install& install, std::vector<std::string> wanted) {
+    for (auto& c : wanted) c = componentNamed(c);
+    sortComponents(wanted);
+    std::vector<std::string> targets;
+    for (const auto& c : wanted) targets.push_back("SFML::" + c);
+
+    if (install.config && install.config->major() >= 3) {
+        Package p;
+        p.source = Package::Source::CMake;
+        p.name = "SFML";
+        p.version = std::to_string(install.config->major());
+        p.components = wanted;
+        p.targets = targets;
+        // An install with static libraries only: SFML's package looks for shared ones unless told.
+        std::error_code ec;
+        const auto& dir = install.config->dir;
+        if (std::filesystem::exists(dir / "SFMLSystemStaticTargets.cmake", ec) &&
+            !std::filesystem::exists(dir / "SFMLSystemSharedTargets.cmake", ec))
+            p.options["SFML_STATIC_LIBRARIES"] = "ON";
+        return {p};
+    }
+    if (!install.pkgConfigVersion.empty()) {
+        std::vector<Package> out;
+        for (const auto& c : wanted) out.push_back(Package{Package::Source::System, "sfml-" + lowered(c), {}, {}, {}, {}});
+        return out;
+    }
+    Package p;
+    p.source = Package::Source::Catalog;
+    p.name = "SFML";
+    p.gitUrl = "https://github.com/SFML/SFML.git";
+    p.gitTag = "3.0.2";
+    p.targets = targets;
+    // Each part SFML isn't asked for needs development packages of its own to build.
+    auto has = [&](const char* c) { return std::find(wanted.begin(), wanted.end(), c) != wanted.end(); };
+    if (!has("Audio")) p.options["SFML_BUILD_AUDIO"] = "OFF";
+    if (!has("Network")) p.options["SFML_BUILD_NETWORK"] = "OFF";
+    return {p};
+}
+
+bool setPackages(std::vector<Package>& packages, const std::vector<Package>& wanted) {
+    std::vector<Package> current;
+    for (const Package& p : packages)
+        if (isSfml(p)) current.push_back(p);
+    if (current == wanted) return false;
+    // The new ones go where the first old one was, so the build file changes as little as it can.
+    const auto first = std::find_if(packages.begin(), packages.end(), isSfml);
+    const auto at = first - packages.begin();
+    std::erase_if(packages, isSfml);
+    packages.insert(packages.begin() + std::min<std::ptrdiff_t>(at, packages.size()), wanted.begin(), wanted.end());
+    return true;
+}
+
+bool needsCMakePackage(const std::vector<Package>& packages, const Install& install, std::string_view libsLine) {
+    const bool viaPkgConfig = std::any_of(packages.begin(), packages.end(), [](const Package& p) {
+        return p.source == Package::Source::System && isSfml(p);
+    });
+    return viaPkgConfig && install.config && install.config->major() >= 3 && !missingPkgConfigLibs(libsLine).empty();
+}
+
+} // namespace sfml
 
 std::string targetDetectionProject(const std::string& name, const std::string& gitUrl, const std::string& gitTag) {
     auto quote = [](const std::string& s) {

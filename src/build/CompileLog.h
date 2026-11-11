@@ -17,6 +17,7 @@ public:
     // Adds text at the end, in one of the design's tags (or none), and scrolls to it.
     void append(const std::string& text, const Glib::ustring& tag = {});
     void clear() { buffer_->set_text(""); }
+    Glib::ustring text() const { return buffer_->get_text(); } // everything, as Copy All copies it
 
 private:
     Glib::RefPtr<Gtk::TextMark> end_;

@@ -23,8 +23,20 @@ public:
 
     sigc::signal<void(const Diagnostic&)>& signalActivated() { return activated_; }
 
+    // The selected rows (or every row) as text, one per line the way the compiler wrote them:
+    // "/path/main.cpp:12:5: error: message". Right-click → Copy / Copy All, and Ctrl+C.
+    std::string selectedText() const;
+    std::string allText() const;
+
+    ~CompilerPanel() override;
+
 private:
     void updateVisibility();
+    void setupContextMenu();
+    void copy(const std::string& text);
+
+    Gtk::PopoverMenu menu_;
+    Glib::RefPtr<Gio::SimpleActionGroup> actions_;
 
     std::vector<Diagnostic> diagnostics_;
     sigc::signal<void(const Diagnostic&)> activated_;

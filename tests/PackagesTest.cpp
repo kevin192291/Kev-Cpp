@@ -133,3 +133,175 @@ TEST(TargetDetect, FindsLibrariesAndNamespacedAliases) {
 
     EXPECT_EQ(found, (std::set<std::string>{"widgets", "widgets::widgets", "Toolkit::core", "Acme::widgets", "gadgets"}));
 }
+
+// ---- pkg-config libraries that aren't where they say, CMake packages, SFML ----------------------
+
+namespace {
+
+struct Prefix {
+    fs::path root = fs::temp_directory_path() / ("kevc-prefix-" + std::to_string(::getpid()));
+    Prefix() { fs::remove_all(root); }
+    ~Prefix() { fs::remove_all(root); }
+    void file(const std::string& rel, const std::string& text = "") const {
+        fs::create_directories((root / rel).parent_path());
+        std::ofstream(root / rel) << text;
+    }
+};
+
+Package systemPackage(const std::string& name) {
+    return Package{Package::Source::System, name, {}, {}, {}, {}};
+}
+
+} // namespace
+
+TEST(PkgConfig, FindsLibrariesMissingFromTheFoldersTheLineNames) {
+    Prefix p;
+    p.file("lib/libsfml-graphics-s.a");
+    p.file("lib/libsfml-window.so");
+    p.file("lib/libfreetype.a");
+    const std::string L = "-L" + (p.root / "lib").string();
+    // A static-only SFML 3: its .pc says -lsfml-graphics, the folder has libsfml-graphics-s.a.
+    EXPECT_EQ(missingPkgConfigLibs(L + " -lsfml-graphics -lsfml-window -lsfml-system -lsfml-graphics"),
+              (std::vector<std::string>{"sfml-graphics", "sfml-system"}));
+    EXPECT_TRUE(missingPkgConfigLibs(L + " -lsfml-window -lfreetype -pthread").empty());
+    // No -L: the libraries are in the system's own folders, which only the linker knows.
+    EXPECT_TRUE(missingPkgConfigLibs("-lgtk-4 -lgobject-2.0").empty());
+    EXPECT_TRUE(missingPkgConfigLibs("").empty());
+}
+
+TEST(PkgConfig, RunsOnlyForModuleNames) {
+    EXPECT_EQ(runPkgConfig("--modversion", {"no-such-module-kevc"}), "");
+    EXPECT_EQ(runPkgConfig("--modversion", {"x; echo hi"}), "");
+}
+
+TEST(CMakeConfig, FindsTheFirstPackageUnderThePrefixes) {
+    Prefix local, usr;
+    usr.root += "-usr";
+    fs::remove_all(usr.root);
+    local.file("lib/cmake/SFML/SFMLConfig.cmake");
+    local.file("lib/cmake/SFML/SFMLConfigVersion.cmake", "# generated\nset(PACKAGE_VERSION \"3.0.0\")\nif(x)\n");
+    usr.file("lib/x86_64-linux-gnu/cmake/SFML/SFMLConfig.cmake");
+    usr.file("lib/x86_64-linux-gnu/cmake/SFML/SFMLConfigVersion.cmake", "set(PACKAGE_VERSION \"2.6.1\")\n");
+    usr.file("share/cmake/fmt/fmt-config.cmake");
+    usr.file("share/cmake/fmt/fmt-config-version.cmake", "set(PACKAGE_VERSION 11.0.2)\n");
+
+    auto found = findCMakeConfig("SFML", {local.root, usr.root});
+    ASSERT_TRUE(found);
+    EXPECT_EQ(found->version, "3.0.0");
+    EXPECT_EQ(found->major(), 3);
+    EXPECT_EQ(found->dir, local.root / "lib/cmake/SFML");
+
+    found = findCMakeConfig("SFML", {usr.root}); // Debian's multiarch folder
+    ASSERT_TRUE(found);
+    EXPECT_EQ(found->version, "2.6.1");
+    EXPECT_EQ(found->major(), 2);
+
+    found = findCMakeConfig("fmt", {local.root, usr.root});
+    ASSERT_TRUE(found);
+    EXPECT_EQ(found->version, "11.0.2");
+    EXPECT_FALSE(findCMakeConfig("Nope", {local.root, usr.root}));
+    EXPECT_FALSE(findCMakeConfig("SFML", {usr.root / "missing"}));
+    fs::remove_all(usr.root);
+}
+
+TEST(Sfml, ComponentsAProjectAsksFor) {
+    EXPECT_EQ(sfml::components({systemPackage("sfml-window"), systemPackage("gtk4"), systemPackage("sfml-graphics"),
+                                systemPackage("sfml-system")}),
+              (std::vector<std::string>{"Graphics", "Window", "System"}));
+    EXPECT_EQ(sfml::components({systemPackage("sfml-all")}).size(), 5u);
+    Package cmake;
+    cmake.source = Package::Source::CMake;
+    cmake.name = "SFML";
+    cmake.components = {"Audio"};
+    cmake.targets = {"SFML::Graphics"};
+    EXPECT_EQ(sfml::components({cmake}), (std::vector<std::string>{"Graphics", "Audio"}));
+    EXPECT_TRUE(sfml::components({systemPackage("gtk4")}).empty());
+}
+
+TEST(Sfml, Version3WithACMakePackageIsFoundThroughIt) {
+    Prefix p;
+    p.file("lib/cmake/SFML/SFMLConfig.cmake");
+    p.file("lib/cmake/SFML/SFMLConfigVersion.cmake", "set(PACKAGE_VERSION \"3.0.0\")\n");
+    p.file("lib/cmake/SFML/SFMLSystemStaticTargets.cmake");
+    sfml::Install install{findCMakeConfig("SFML", {p.root}), "3.0.0"};
+    EXPECT_EQ(install.major(), 3);
+
+    auto packages = sfml::packagesFor(install, {"audio", "Graphics"});
+    ASSERT_EQ(packages.size(), 1u);
+    EXPECT_EQ(packages[0].source, Package::Source::CMake);
+    EXPECT_EQ(packages[0].name, "SFML");
+    EXPECT_EQ(packages[0].version, "3");
+    EXPECT_EQ(packages[0].components, (std::vector<std::string>{"Graphics", "Audio"}));
+    EXPECT_EQ(packages[0].targets, (std::vector<std::string>{"SFML::Graphics", "SFML::Audio"}));
+    // Static libraries only: SFML's package has to be told, or it looks for shared ones and fails.
+    EXPECT_EQ(packages[0].options, (std::map<std::string, std::string>{{"SFML_STATIC_LIBRARIES", "ON"}}));
+
+    p.file("lib/cmake/SFML/SFMLSystemSharedTargets.cmake");
+    EXPECT_TRUE(sfml::packagesFor(install, {"Graphics"})[0].options.empty());
+}
+
+TEST(Sfml, Version2ComesFromPkgConfigAndNoSfmlIsFetched) {
+    sfml::Install two{std::nullopt, "2.6.1"};
+    EXPECT_EQ(two.major(), 2);
+    EXPECT_EQ(sfml::packagesFor(two, {"Graphics", "Audio"}),
+              (std::vector<Package>{systemPackage("sfml-graphics"), systemPackage("sfml-audio")}));
+    // SFML 2's own CMake package has other target names: pkg-config works for it.
+    Prefix p;
+    p.file("lib/cmake/SFML/SFMLConfig.cmake");
+    p.file("lib/cmake/SFML/SFMLConfigVersion.cmake", "set(PACKAGE_VERSION \"2.6.1\")\n");
+    two.config = findCMakeConfig("SFML", {p.root});
+    EXPECT_EQ(two.major(), 2);
+    EXPECT_EQ(sfml::packagesFor(two, {"Graphics"}), (std::vector<Package>{systemPackage("sfml-graphics")}));
+
+    const sfml::Install none;
+    EXPECT_FALSE(none.installed());
+    EXPECT_EQ(none.major(), 3);
+    const auto fetched = sfml::packagesFor(none, {"Graphics"});
+    ASSERT_EQ(fetched.size(), 1u);
+    EXPECT_EQ(fetched[0].source, Package::Source::Catalog);
+    EXPECT_EQ(fetched[0].gitUrl, "https://github.com/SFML/SFML.git");
+    EXPECT_EQ(fetched[0].targets, (std::vector<std::string>{"SFML::Graphics"}));
+    EXPECT_EQ(fetched[0].options.at("SFML_BUILD_AUDIO"), "OFF");
+    EXPECT_EQ(sfml::packagesFor(none, {"Audio"})[0].options.count("SFML_BUILD_AUDIO"), 0u);
+}
+
+TEST(Sfml, SetPackagesReplacesTheProjectsSfmlInPlace) {
+    Prefix p;
+    p.file("lib/cmake/SFML/SFMLConfig.cmake");
+    p.file("lib/cmake/SFML/SFMLConfigVersion.cmake", "set(PACKAGE_VERSION \"3.0.0\")\n");
+    const sfml::Install install{findCMakeConfig("SFML", {p.root}), "3.0.0"};
+
+    std::vector<Package> packages{systemPackage("zlib"), systemPackage("sfml-graphics"), systemPackage("sfml-audio"),
+                                  systemPackage("gtk4")};
+    const auto wanted = sfml::packagesFor(install, sfml::components(packages));
+    EXPECT_TRUE(sfml::setPackages(packages, wanted));
+    ASSERT_EQ(packages.size(), 3u);
+    EXPECT_EQ(packages[0].name, "zlib");
+    EXPECT_EQ(packages[1], wanted[0]);
+    EXPECT_EQ(packages[2].name, "gtk4");
+    EXPECT_FALSE(sfml::setPackages(packages, wanted)); // nothing to change
+
+    std::vector<Package> fresh{systemPackage("zlib")};
+    EXPECT_TRUE(sfml::setPackages(fresh, wanted));
+    EXPECT_EQ(fresh.back(), wanted[0]);
+}
+
+TEST(Sfml, PkgConfigModulesWhoseLibrariesAreMissingNeedTheCMakePackage) {
+    Prefix p;
+    p.file("lib/cmake/SFML/SFMLConfig.cmake");
+    p.file("lib/cmake/SFML/SFMLConfigVersion.cmake", "set(PACKAGE_VERSION \"3.0.0\")\n");
+    p.file("lib/libsfml-graphics-s.a");
+    const sfml::Install install{findCMakeConfig("SFML", {p.root}), "3.0.0"};
+    const std::string broken = "-L" + (p.root / "lib").string() + " -lsfml-graphics";
+    const std::vector<Package> viaPkgConfig{systemPackage("sfml-graphics")};
+
+    EXPECT_TRUE(sfml::needsCMakePackage(viaPkgConfig, install, broken));
+    // Shared libraries where pkg-config says: it works as it is.
+    p.file("lib/libsfml-graphics.so");
+    EXPECT_FALSE(sfml::needsCMakePackage(viaPkgConfig, install, broken));
+    fs::remove(p.root / "lib/libsfml-graphics.so");
+    // No SFML 3 CMake package to switch to, or no SFML from pkg-config in the project.
+    EXPECT_FALSE(sfml::needsCMakePackage(viaPkgConfig, sfml::Install{std::nullopt, "3.0.0"}, broken));
+    EXPECT_FALSE(sfml::needsCMakePackage({systemPackage("gtk4")}, install, broken));
+    EXPECT_FALSE(sfml::needsCMakePackage(sfml::packagesFor(install, {"Graphics"}), install, broken));
+}

@@ -139,7 +139,15 @@ std::string cmake_gen::block(const Project& p) {
 
     std::vector<const Package*> fetched;
     std::vector<const Package*> system;
-    for (const auto& pkg : p.packages) (pkg.source == Package::Source::System ? system : fetched).push_back(&pkg);
+    std::vector<const Package*> found; // through their own CMake packages
+    for (const auto& pkg : p.packages) {
+        switch (pkg.source) {
+        case Package::Source::System: system.push_back(&pkg); break;
+        case Package::Source::CMake: found.push_back(&pkg); break;
+        case Package::Source::Catalog:
+        case Package::Source::Git: fetched.push_back(&pkg); break;
+        }
+    }
 
     if (!fetched.empty()) {
         out << "# CMake 4 rejects packages whose cmake_minimum_required is below 3.5.\n"
@@ -165,6 +173,20 @@ std::string cmake_gen::block(const Project& p) {
         for (const Package* pkg : system)
             out << "pkg_check_modules(" << pkgVariable(pkg->name) << " REQUIRED IMPORTED_TARGET "
                 << cmakeQuote(pkg->name) << ")\n";
+        out << "\n";
+    }
+    if (!found.empty()) {
+        for (const Package* pkg : found) {
+            for (const auto& [key, value] : pkg->options) out << "set(" << key << " " << cmakeQuote(value) << ")\n";
+            out << "find_package(" << pkg->name;
+            if (!pkg->version.empty()) out << " " << pkg->version;
+            out << " REQUIRED";
+            if (!pkg->components.empty()) {
+                out << " COMPONENTS";
+                for (const auto& c : pkg->components) out << " " << c;
+            }
+            out << ")\n";
+        }
         out << "\n";
     }
 
@@ -201,6 +223,7 @@ std::string cmake_gen::block(const Project& p) {
     std::vector<std::string> libs;
     for (const Package* pkg : fetched) libs.insert(libs.end(), pkg->targets.begin(), pkg->targets.end());
     for (const Package* pkg : system) libs.push_back("PkgConfig::" + pkgVariable(pkg->name));
+    for (const Package* pkg : found) libs.insert(libs.end(), pkg->targets.begin(), pkg->targets.end());
     libs.insert(libs.end(), p.linkLibraries.begin(), p.linkLibraries.end());
     cmakeList(out, "target_link_libraries", t + " PRIVATE", libs);
 

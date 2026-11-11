@@ -161,3 +161,12 @@ TEST(Diagnostics, RealGxxOutput) {
     EXPECT_NE(err->message.find("missing"), std::string::npos);
     EXPECT_EQ(p.warnings(), 1); // unused variable
 }
+
+TEST(Diagnostics, AsTextForTheClipboard) {
+    EXPECT_EQ(toText({Diagnostic::Severity::Error, "/p/src/main.cpp", 24, 16, "no member named 'clear'"}),
+              "/p/src/main.cpp:24:16: error: no member named 'clear'");
+    EXPECT_EQ(toText({Diagnostic::Severity::Warning, "/p/a.c", 3, 0, "unused"}), "/p/a.c:3: warning: unused");
+    EXPECT_EQ(toText({Diagnostic::Severity::Note, "/p/a.c", 0, 0, "here"}), "/p/a.c: note: here");
+    EXPECT_EQ(toText({Diagnostic::Severity::Error, "", 0, 0, "undefined reference to `f'"}),
+              "error: undefined reference to `f'");
+}

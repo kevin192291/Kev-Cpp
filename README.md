@@ -120,7 +120,9 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   directories, libraries and linker flags.
 - **Packages** (Project → Packages): add libraries from a catalog (fmt, spdlog, nlohmann_json, CLI11,
   magic_enum, glm, googletest, Catch2, glfw, raylib, SDL3) or any Git repository via CMake
-  FetchContent ("Detect Targets" finds what to link), or system libraries via pkg-config.
+  FetchContent ("Detect Targets" finds what to link), or system libraries via pkg-config. SFML 3
+  installed as static libraries is found through its own CMake package instead: its pkg-config
+  files name libraries that aren't there, and Kev-C++ offers the switch when a project uses them.
 - **IntelliSense**: completion, hover, live diagnostics and a symbol list, from clangd (C/C++) and
   typescript-language-server (JS/TS). Right-click a name for **Go to Definition** (also F12 /
   Ctrl+click), Go to Implementation (from an interface or virtual method to the code that implements
@@ -135,6 +137,16 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   and otherwise in the layout above (lines up to 120 columns, short member functions inside a class on
   one line). Web projects use their own prettier when it's installed, with its config; otherwise the
   TypeScript or Svelte language server formats. It's one undo step, and breakpoints stay on their lines.
+- **Insert Boilerplate** (Edit menu and the editor's right-click menu): starting code for SFML and
+  GTK 4, as whole programs for an empty file (an SFML window and game loop, a moving shape with
+  keyboard input and frame time, a gtkmm or GTK 4 application window) and as pieces for inside your
+  code (a sprite, text, a sound, a button, a message dialog), indented to fit, with the #includes
+  they need. The SFML code matches the installed SFML (2 or 3), and the project gets the packages
+  the code links.
+- **Copying build output**: in the Compiler tab, right-click → Copy or Copy All (or select rows,
+  Ctrl+click and Shift+click for several, and press Ctrl+C) copies errors and warnings as the
+  compiler wrote them (`main.cpp:24:16: error: …`); in the Compile Log, select text and copy it, or
+  right-click → Copy All.
 - **Toggle Comment** (Ctrl+/, in the Edit menu and the editor's right-click menu): comments out the
   line the cursor is on, or puts one block comment around the selected lines (`/*` and `*/` on lines of
   their own); pressing it again takes the comment off. Each language gets its own comments: `//` and

@@ -43,10 +43,19 @@
         <property name="editable">false</property>
         <property name="cursor-visible">false</property>
         <property name="monospace">true</property>
+        <property name="extra-menu">extraMenu_</property>
         <style>
           <class name="kevc-log"/>
         </style>
       </object>
     </child>
   </object>
+  <menu id="extraMenu_">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Copy A_ll</attribute>
+        <attribute name="action">log.copy-all</attribute>
+      </item>
+    </section>
+  </menu>
 </interface>

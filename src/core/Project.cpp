@@ -28,12 +28,16 @@ NLOHMANN_JSON_SERIALIZE_ENUM(Package::Source, {
     {Package::Source::Catalog, "catalog"},
     {Package::Source::Git, "git"},
     {Package::Source::System, "system"},
+    {Package::Source::CMake, "cmake"},
 })
 
 void to_json(json& j, const Package& p) {
     j = json{{"source", p.source}, {"name", p.name}, {"targets", p.targets}};
     if (!p.options.empty()) j["options"] = p.options;
-    if (p.source != Package::Source::System) {
+    if (p.source == Package::Source::CMake) {
+        if (!p.version.empty()) j["version"] = p.version;
+        if (!p.components.empty()) j["components"] = p.components;
+    } else if (p.source != Package::Source::System) {
         j["gitUrl"] = p.gitUrl;
         j["gitTag"] = p.gitTag;
     }
@@ -46,6 +50,8 @@ void from_json(const json& j, Package& p) {
     p.gitTag = j.value("gitTag", "");
     p.targets = j.value("targets", std::vector<std::string>{});
     p.options = j.value("options", std::map<std::string, std::string>{});
+    p.version = j.value("version", "");
+    p.components = j.value("components", std::vector<std::string>{});
 }
 
 namespace {

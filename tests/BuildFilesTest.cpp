@@ -85,6 +85,39 @@ TEST(CMakeGen, PackagesAndLinker) {
               std::string::npos);
 }
 
+TEST(CMakeGen, CMakePackagesAreFoundAndTheirTargetsLinked) {
+    Project p = cppProject();
+    Package sfml;
+    sfml.source = Package::Source::CMake;
+    sfml.name = "SFML";
+    sfml.version = "3";
+    sfml.components = {"Graphics", "Audio"};
+    sfml.targets = {"SFML::Graphics", "SFML::Audio"};
+    sfml.options = {{"SFML_STATIC_LIBRARIES", "ON"}};
+    Package plain;
+    plain.source = Package::Source::CMake;
+    plain.name = "ZLIB";
+    plain.targets = {"ZLIB::ZLIB"};
+    p.packages = {{Package::Source::System, "gtk4", "", "", {}, {}}, sfml, plain};
+    const std::string block = cmake_gen::block(p);
+    EXPECT_NE(block.find("pkg_check_modules(KEVC_PKG_GTK4 REQUIRED IMPORTED_TARGET gtk4)\n\n"
+                         "set(SFML_STATIC_LIBRARIES ON)\n"
+                         "find_package(SFML 3 REQUIRED COMPONENTS Graphics Audio)\n"
+                         "find_package(ZLIB REQUIRED)\n\n"
+                         "add_executable(demo_app)\n"),
+              std::string::npos)
+        << block;
+    EXPECT_NE(block.find("    PkgConfig::KEVC_PKG_GTK4\n    SFML::Graphics\n    SFML::Audio\n    ZLIB::ZLIB\n"), std::string::npos)
+        << block;
+    EXPECT_EQ(block.find("FetchContent"), std::string::npos);
+
+    // It's saved with the project and read back the same.
+    const std::filesystem::path file = std::filesystem::temp_directory_path() / ("kevc-cmakepkg-" + std::to_string(::getpid()) + ".kevc");
+    p.save(file);
+    EXPECT_EQ(Project::load(file).packages, p.packages);
+    std::filesystem::remove(file);
+}
+
 TEST(CMakeGen, PackageOptionsAreSetBeforeFetching) {
     Project p = cppProject();
     Package glfw{Package::Source::Catalog, "glfw", "https://github.com/glfw/glfw.git", "3.4", {"glfw"}, {}};

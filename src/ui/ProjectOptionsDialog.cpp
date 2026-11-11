@@ -77,6 +77,8 @@ std::string packageSummary(const Package& p) {
     for (const auto& t : p.targets) targets += (targets.empty() ? "" : ", ") + t;
     switch (p.source) {
     case Package::Source::System: return "System library via pkg-config";
+    case Package::Source::CMake:
+        return "Installed library via its CMake package (find_package)" + (targets.empty() ? "" : " · links " + targets);
     case Package::Source::Catalog: return "Catalog, " + p.gitTag + " · links " + targets;
     case Package::Source::Git: return p.gitUrl + " @ " + p.gitTag + " · links " + targets;
     }
@@ -366,7 +368,9 @@ void ProjectOptionsDialog::refreshAddButtons() {
     auto refresh = [this](auto& buttons, bool system) {
         for (auto& [name, button] : buttons) {
             const bool added = std::any_of(project_.packages.begin(), project_.packages.end(), [&](const Package& p) {
-                return lower(p.name) == lower(name) && (p.source == Package::Source::System) == system;
+                // One found through its own CMake package (SFML) is neither list's.
+                return lower(p.name) == lower(name) && p.source != Package::Source::CMake &&
+                       (p.source == Package::Source::System) == system;
             });
             button->set_sensitive(!added);
             button->set_label(added ? "Added" : "Add");

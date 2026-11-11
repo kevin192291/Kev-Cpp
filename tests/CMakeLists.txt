@@ -2,6 +2,7 @@ find_package(GTest REQUIRED)
 include(GoogleTest)
 
 add_executable(kevc_tests
+  BoilerplateTest.cpp
   BreakpointsTest.cpp
   BuildFilesTest.cpp
   BuildPlanTest.cpp

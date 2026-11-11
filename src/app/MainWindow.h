@@ -140,6 +140,18 @@ private:
     void refreshGitStatus();  // soon (bursts of requests make one run)
     void runGitStatus();
     void addSystemPackage(const std::string& module);
+    // Edit → Insert Boilerplate (core/Boilerplate): starting code for SFML and GTK 4 at the cursor,
+    // and the packages it needs added to the project.
+    void fillBoilerplateMenus(); // the Edit menu's and the editors' right-click menus' submenus
+    void insertBoilerplate(const std::string& id);
+    // Links SFML the way this computer's SFML needs (sfml::packagesFor), with the components the
+    // project already uses plus `components`. What changed, for the status line; empty if nothing.
+    std::string linkSfml(const std::vector<std::string>& components);
+    // After a project opens or its packages change: SFML through pkg-config modules that name
+    // libraries the computer doesn't have (a static SFML 3) builds against another SFML; offers
+    // SFML's CMake package instead. Asks once per project in a session.
+    void checkSfmlPackages();
+    std::set<std::filesystem::path> sfmlAsked_;
     void newFile();
     // The Project tab's context menu and drag and drop. Open editors follow renamed and moved files.
     void newFileIn(const std::filesystem::path& dir);

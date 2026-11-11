@@ -26,4 +26,5 @@ protected:
     // The objects with an id.
     Gtk::Label* message_ = nullptr;
     Gtk::ListBox* list_ = nullptr;
+    Glib::RefPtr<Gio::Menu> contextMenu_;
 };

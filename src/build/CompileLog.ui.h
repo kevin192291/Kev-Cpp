@@ -27,4 +27,5 @@ protected:
     Glib::RefPtr<Gtk::TextTagTable> tags_;
     Glib::RefPtr<Gtk::TextBuffer> buffer_;
     Gtk::TextView* view_ = nullptr;
+    Glib::RefPtr<Gio::Menu> extraMenu_;
 };

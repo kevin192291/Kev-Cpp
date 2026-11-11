@@ -20,6 +20,10 @@ struct Diagnostic {
     bool hasLocation() const { return !file.empty() && line > 0; }
 };
 
+// A diagnostic as a compiler writes it, for the clipboard: "/path/main.cpp:12:5: error: message"
+// (the location only as far as it's known).
+std::string toText(const Diagnostic& d);
+
 // Turns build output (gcc, g++, ld, CMake, make) into diagnostics, one line at a time.
 class DiagnosticParser {
 public:

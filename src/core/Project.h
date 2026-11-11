@@ -14,14 +14,21 @@ enum class ProjectKind { Cpp, C, WebTs };
 enum class TargetType { Console, Static, Shared };
 
 struct Package {
-    enum class Source { Catalog, Git, System };
+    // Catalog and Git are fetched and built with the project (FetchContent); System is an installed
+    // library found through pkg-config; CMake is an installed one found through its own CMake package
+    // (find_package), for libraries whose pkg-config files can't be trusted (a static-only SFML 3).
+    enum class Source { Catalog, Git, System, CMake };
 
     Source source = Source::Catalog;
-    std::string name;                 // FetchContent name or pkg-config module
+    std::string name;                 // FetchContent name, pkg-config module or find_package name
     std::string gitUrl;               // Catalog/Git only
     std::string gitTag;               // Catalog/Git only
     std::vector<std::string> targets; // CMake targets to link, e.g. fmt::fmt
-    std::map<std::string, std::string> options; // cache variables set before fetching, e.g. GLFW_BUILD_WAYLAND=OFF
+    // Catalog/Git: cache variables set before fetching, e.g. GLFW_BUILD_WAYLAND=OFF.
+    // CMake: variables set before find_package, e.g. SFML_STATIC_LIBRARIES=ON.
+    std::map<std::string, std::string> options;
+    std::string version{};                 // CMake only: the oldest version to accept, e.g. "3"; may be empty
+    std::vector<std::string> components{}; // CMake only: find_package's COMPONENTS
 
     bool operator==(const Package&) const = default;
 };

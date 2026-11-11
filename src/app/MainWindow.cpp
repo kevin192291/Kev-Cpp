@@ -5,7 +5,9 @@
 #include "designer/DesignerPage.h"
 #include "editor/CodeFormatter.h"
 #include "editor/EditorTab.h"
+#include "core/Boilerplate.h"
 #include "core/FileOps.h"
+#include "core/Packages.h"
 #include "core/BuildFiles.h"
 #include "core/Mi.h"
 #include "core/ProjectKinds.h"
@@ -346,6 +348,10 @@ void MainWindow::buildActions() {
             setStatus("Toggle Comment works on a source file: open one first");
         }
     });
+    add_action_with_parameter("insert-boilerplate", Glib::VARIANT_TYPE_STRING, [this](const Glib::VariantBase& v) {
+        insertBoilerplate(Glib::VariantBase::cast_dynamic<Glib::Variant<Glib::ustring>>(v).get());
+    });
+    fillBoilerplateMenus();
     // Search
     add_action("find", [this] {
         replaceToggle_->set_active(false);
@@ -903,6 +909,7 @@ void MainWindow::setProject(std::unique_ptr<ProjectSession> session) {
     watcher_ = std::make_unique<SourceWatcher>(*session_);
     watcher_->signalSynced().connect(sigc::mem_fun(*this, &MainWindow::onProjectSynced));
     watcher_->syncNow(); // pick up files added while the project was closed
+    checkSfmlPackages();
 
     const auto& sources = session_->project().sources;
     auto main = std::find_if(sources.begin(), sources.end(), [](const std::string& s) {
@@ -1169,6 +1176,133 @@ void MainWindow::addSystemPackage(const std::string& module) {
     } catch (const std::exception& e) {
         showError(*this, "Could not add " + module + " to the project", e.what());
     }
+}
+
+void MainWindow::fillBoilerplateMenus() {
+    // SFML 2 and 3 are written differently (the event loop above all): offer the installed one's.
+    const auto snippets = boilerplate::offered(sfml::detect().major());
+    for (const auto& menu : {boilerplateMenu_, editorBoilerplateMenu_, cppEditorBoilerplateMenu_}) {
+        menu->remove_all();
+        std::string heading;
+        Glib::RefPtr<Gio::Menu> section;
+        for (const boilerplate::Snippet* s : snippets) {
+            const std::string library = s->library + " (" + boilerplate::languageName(s->language) + ")";
+            if (library != heading) {
+                heading = library;
+                section = Gio::Menu::create();
+                menu->append_section(heading, section);
+            }
+            auto item = Gio::MenuItem::create(s->program ? "Program: " + s->title : s->title, "");
+            item->set_action_and_target("win.insert-boilerplate", Glib::Variant<Glib::ustring>::create(s->id));
+            section->append_item(item);
+        }
+    }
+}
+
+void MainWindow::insertBoilerplate(const std::string& id) {
+    const boilerplate::Snippet* snippet = boilerplate::find(id);
+    if (!snippet) return;
+    auto* tab = currentEditor();
+    if (!tab) {
+        setStatus("Insert Boilerplate puts code in a C or C++ source file: open one first");
+        return;
+    }
+    // A C project's headers are C.
+    auto language = boilerplate::languageOf(tab->path());
+    if (language && session_ && session_->project().kind == ProjectKind::C) language = boilerplate::Language::C;
+    if (language != snippet->language) {
+        const std::string name = boilerplate::languageName(snippet->language);
+        setStatus("\u201c" + snippet->library + ": " + snippet->title + "\u201d is " + name + " code, and " +
+                  tab->path().filename().string() + " isn't a " + name + " file");
+        return;
+    }
+
+    GtkTextBuffer* buffer = GTK_TEXT_BUFFER(tab->buffer());
+    GtkTextIter start, end, cursor;
+    gtk_text_buffer_get_bounds(buffer, &start, &end);
+    gtk_text_buffer_get_iter_at_mark(buffer, &cursor, gtk_text_buffer_get_insert(buffer));
+    char* text = gtk_text_buffer_get_text(buffer, &start, &end, TRUE);
+    const auto plan = boilerplate::insertion(text, gtk_text_iter_get_line(&cursor), *snippet);
+    g_free(text);
+    tab->applyEdits(plan.edits);
+    tab->gotoLine(plan.cursorLine + 1);
+
+    std::string status = "Inserted \u201c" + snippet->title + "\u201d";
+    std::string libraries;
+    for (const auto& module : snippet->pkgConfig) libraries += (libraries.empty() ? "" : ", ") + module;
+    if (!snippet->sfmlComponents.empty()) libraries = "SFML";
+    if (!session_ || session_->project().kind == ProjectKind::WebTs) {
+        status += ". It needs " + libraries + " to build";
+    } else if (!session_->project().buildFileManaged) {
+        // Kev-C++ doesn't edit a CMakeLists.txt the project keeps itself.
+        status += ". Link " + libraries + " in the project's own " + session_->buildFile().filename().string();
+    } else {
+        for (const auto& module : snippet->pkgConfig) {
+            const auto& packages = session_->project().packages;
+            const bool has = std::any_of(packages.begin(), packages.end(), [&](const Package& p) { return p.name == module; });
+            addSystemPackage(module);
+            if (!has) status += "; added the " + module + " package (pkg-config)";
+        }
+        if (!snippet->sfmlComponents.empty()) status += linkSfml(snippet->sfmlComponents);
+    }
+    setStatus(status);
+}
+
+std::string MainWindow::linkSfml(const std::vector<std::string>& components) {
+    if (!session_ || session_->project().kind != ProjectKind::Cpp || !session_->project().buildFileManaged) return {};
+    auto& packages = session_->project().packages;
+    std::vector<std::string> all = sfml::components(packages);
+    all.insert(all.end(), components.begin(), components.end());
+    const sfml::Install install = sfml::detect();
+    const auto wanted = sfml::packagesFor(install, all);
+    if (wanted.empty() || !sfml::setPackages(packages, wanted)) return {};
+    try {
+        session_->saveAndRegenerate();
+        lsp_->setWorkspace(session_->root(), &session_->project());
+    } catch (const std::exception& e) {
+        showError(*this, "Could not add SFML to the project", e.what());
+        return {};
+    }
+    switch (wanted.front().source) {
+    case Package::Source::CMake:
+        return "; the project links SFML " + install.config->version + " through its CMake package (find_package)";
+    case Package::Source::System:
+        return "; the project links SFML " + install.pkgConfigVersion + " (pkg-config)";
+    default: break;
+    }
+    return "; SFML isn't installed, so SFML " + wanted.front().gitTag + " is downloaded and built on the next build";
+}
+
+void MainWindow::checkSfmlPackages() {
+    if (!session_ || session_->project().kind != ProjectKind::Cpp || !session_->project().buildFileManaged) return;
+    const fs::path root = session_->root();
+    if (sfmlAsked_.contains(root)) return;
+    std::vector<std::string> modules;
+    for (const Package& p : session_->project().packages)
+        if (p.source == Package::Source::System && p.name.starts_with("sfml-")) modules.push_back(p.name);
+    if (modules.empty()) return;
+    const sfml::Install install = sfml::detect();
+    const std::string libs = runPkgConfig("--libs", modules);
+    if (!sfml::needsCMakePackage(session_->project().packages, install, libs)) return;
+    sfmlAsked_.insert(root);
+
+    std::string missing;
+    for (const auto& lib : missingPkgConfigLibs(libs)) missing += (missing.empty() ? "lib" : ", lib") + lib;
+    // <prefix>/lib/cmake/SFML
+    const fs::path prefix = install.config->dir.parent_path().parent_path().parent_path();
+    askChoice(*this, "This project's SFML packages link the wrong SFML",
+              "The project gets SFML from pkg-config (" + modules.front() + (modules.size() > 1 ? ", \u2026" : "") +
+                  "), but SFML " + install.config->version + " in " + prefix.string() + " has no " + missing +
+                  " there (it's installed as static libraries, which its pkg-config files don't name). A build "
+                  "would compile with its headers, link another SFML and fail with undefined references.\n\n"
+                  "SFML's own CMake package (find_package) finds the right libraries. Kev-C++ can switch this "
+                  "project's packages to it.",
+              {"Not Now", "Use SFML's CMake Package"}, 0, 1,
+              [this, root, token = std::weak_ptr<int>(lifetime_)](int choice) {
+                  if (token.expired() || choice != 1 || !session_ || session_->root() != root) return;
+                  if (const std::string changed = linkSfml({}); !changed.empty())
+                      setStatus("Packages updated" + changed + "; " + session_->buildFile().filename().string() + " updated");
+              });
 }
 
 void MainWindow::newFile() {
@@ -3393,6 +3527,7 @@ void MainWindow::showProjectOptions(bool packagesPage) {
                     msg += ". New packages are downloaded on the next build";
                 for (const auto& w : result.warnings) msg += ". " + w;
                 setStatus(msg);
+                if (session_->project().packages != oldPackages) checkSfmlPackages();
             } catch (const std::exception& e) {
                 showError(*this, "Could not save project options", e.what());
             }

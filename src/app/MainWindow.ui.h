@@ -74,6 +74,7 @@ protected:
     Gtk::Notebook* rightDock_ = nullptr;
     Gtk::Label* status_ = nullptr;
     Glib::RefPtr<Gio::Menu> menubar_;
+    Glib::RefPtr<Gio::Menu> boilerplateMenu_;
     Glib::RefPtr<Gio::Menu> projectMenu_;
     Glib::RefPtr<Gio::Menu> projectFileSection_;
     Glib::RefPtr<Gio::Menu> projectWebSection_;
@@ -91,7 +92,9 @@ protected:
     Glib::RefPtr<Gio::Menu> toolsWebSection_;
     Glib::RefPtr<Gio::Menu> toolsSection_;
     Glib::RefPtr<Gio::Menu> editorMenu_;
+    Glib::RefPtr<Gio::Menu> editorBoilerplateMenu_;
     Glib::RefPtr<Gio::Menu> cppEditorMenu_;
+    Glib::RefPtr<Gio::Menu> cppEditorBoilerplateMenu_;
     Glib::RefPtr<Gio::Menu> gutterMenu_;
 
     // The signal handlers named in the design: override them in MainWindow.
