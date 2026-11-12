@@ -1,0 +1,50 @@
+---
+order: 40
+description: An on/off switch drawn over a real checkbox, so forms, keyboard and screen readers work as usual
+---
+/* <label><input type="checkbox" role="switch"> Notifications</label> */
+input[type="checkbox"][role="switch"] {
+    appearance: none;
+    position: relative;
+    flex-shrink: 0;
+    inline-size: 2.75em;
+    block-size: 1.5em;
+    margin: 0;
+    border-radius: 999px;
+    background: #9ca3af;
+    vertical-align: middle;
+    cursor: pointer;
+    transition: background-color 0.2s;
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset-block-start: 0.1875em;
+        inset-inline-start: 0.1875em;
+        inline-size: 1.125em;
+        block-size: 1.125em;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+        transition: inset-inline-start 0.2s;
+    }
+
+    &:checked {
+        background: #2563eb;
+    }
+
+    /* inset-inline-start, not translate, so the knob also moves the right way in right-to-left text */
+    &:checked::before {
+        inset-inline-start: calc(100% - 1.3125em);
+    }
+
+    &:focus-visible {
+        outline: 2px solid #2563eb;
+        outline-offset: 2px;
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}

@@ -1,0 +1,23 @@
+---
+order: 10
+description: Mobile-first media queries: small-screen styles first, each breakpoint adds to them as the window widens
+---
+/* Range syntax (width >= 40rem) works in every current browser. Breakpoints in rem move with the
+   reader's text size, so a larger font gets the narrower layout sooner. */
+
+/* Large phones and small tablets */
+@media (width >= 40rem) {
+    {{cursor}}
+}
+
+/* Tablets */
+@media (width >= 48rem) {
+}
+
+/* Laptops */
+@media (width >= 64rem) {
+}
+
+/* Desktops */
+@media (width >= 80rem) {
+}

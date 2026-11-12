@@ -1,0 +1,14 @@
+---
+order: 60
+description: Smooth scrolling to #anchors, only for people who haven't asked their system for reduced motion
+---
+@media (prefers-reduced-motion: no-preference) {
+    html {
+        scroll-behavior: smooth;
+    }
+}
+
+/* The height of a sticky header, so a jump to an anchor doesn't hide the heading under it */
+html {
+    scroll-padding-block-start: 5rem;
+}

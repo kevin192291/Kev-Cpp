@@ -124,14 +124,18 @@ put "$PKG/bin/kev" "$PREFIX/bin/kev" 755
 while IFS= read -r -d '' icon; do
     put "$icon" "$PREFIX/${icon#"$PKG/"}" 644
 done < <(find "$PKG/share/icons" -type f -print0)
-# The bundled tools as a whole: the new copy first, then swap it in.
-tools=$PREFIX/share/kev-cpp/tools
+# The bundled tools and the Boilerplate menu's snippets, each as a whole: the new copy first, then
+# swap it in (snippets removed from Kev-C++ go too; the user's own are in ~/.config/kev-cpp).
 "${SUDO[@]}" mkdir -p "$PREFIX/share/kev-cpp"
-"${SUDO[@]}" rm -rf "$tools.new" "$tools.old"
-"${SUDO[@]}" cp -a "$PKG/share/kev-cpp/tools" "$tools.new"
-if [[ -e $tools ]]; then "${SUDO[@]}" mv "$tools" "$tools.old"; fi
-"${SUDO[@]}" mv "$tools.new" "$tools"
-"${SUDO[@]}" rm -rf "$tools.old"
+for part in tools boilerplate; do
+    [[ -d $PKG/share/kev-cpp/$part ]] || continue
+    dest=$PREFIX/share/kev-cpp/$part
+    "${SUDO[@]}" rm -rf "$dest.new" "$dest.old"
+    "${SUDO[@]}" cp -a "$PKG/share/kev-cpp/$part" "$dest.new"
+    if [[ -e $dest ]]; then "${SUDO[@]}" mv "$dest" "$dest.old"; fi
+    "${SUDO[@]}" mv "$dest.new" "$dest"
+    "${SUDO[@]}" rm -rf "$dest.old"
+done
 printf '%s\n' "$VERSION" | "${SUDO[@]}" tee "$PREFIX/share/kev-cpp/VERSION" >/dev/null
 
 # --- Menu entry ---

@@ -1,0 +1,27 @@
+---
+order: 30
+description: A component that changes layout with the width of its container, not the window (@container)
+ask: Component = card
+---
+/* <div class="{{Component:kebab}}-container"><article class="{{Component:kebab}}">...</article></div>
+   It reacts to the space it's given, so the same component works in a sidebar and in the main column. */
+.{{Component:kebab}}-container {
+    container: {{Component:kebab}} / inline-size;
+}
+
+.{{Component:kebab}} {
+    display: grid;
+    gap: 1rem;
+}
+
+/* cqi is 1% of the container's width */
+.{{Component:kebab}} h2 {
+    font-size: clamp(1.125rem, 4cqi, 1.75rem);
+}
+
+@container {{Component:kebab}} (inline-size >= 30rem) {
+    .{{Component:kebab}} {
+        grid-template-columns: 10rem 1fr;
+        align-items: start;
+    }
+}

@@ -1,0 +1,8 @@
+---
+order: 60
+description: The colours of selected text
+---
+::selection {
+    background: #bfdbfe;
+    color: #1e3a8a;
+}

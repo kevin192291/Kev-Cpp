@@ -1,0 +1,11 @@
+---
+order: 30
+description: Shows at most three lines and ends the last with an ellipsis; set --lines for another count
+---
+/* The -webkit- properties are still the form every browser supports. */
+.line-clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--lines, 3);
+    overflow: hidden;
+}

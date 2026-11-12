@@ -1,0 +1,15 @@
+---
+order: 70
+description: Near-instant animations, transitions and scrolling everywhere for people who ask for reduced motion
+---
+/* 0.01ms rather than none, so scripts waiting for animationend or transitionend still get them. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

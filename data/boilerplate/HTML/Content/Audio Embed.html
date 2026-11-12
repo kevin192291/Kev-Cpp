@@ -1,0 +1,14 @@
+---
+order: 80
+description: An <audio> player with a caption, Opus and MP3 sources, a download fallback and a transcript link
+---
+<figure>
+    <figcaption>Episode 1: Getting started</figcaption>
+    <!-- preload="none" downloads nothing until Play is pressed -->
+    <audio controls preload="none">
+        <source src="episode-1.opus" type="audio/ogg; codecs=opus">
+        <source src="episode-1.mp3" type="audio/mpeg">
+        <a href="episode-1.mp3">Download the episode</a>
+    </audio>
+    <p><a href="episode-1-transcript.html">Read the transcript</a></p>
+</figure>

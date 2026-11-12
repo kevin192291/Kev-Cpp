@@ -1,0 +1,44 @@
+---
+order: 100
+description: Tabs styled from their ARIA roles: role="tablist", role="tab" with aria-selected, role="tabpanel"
+---
+/* The script that switches tabs sets aria-selected on the tabs and the hidden attribute on the panels. */
+[role="tablist"] {
+    display: flex;
+    gap: 0.25rem;
+    overflow-x: auto;
+    /* An inset shadow, not a border, so the selected tab's underline can cover it inside the scroll area */
+    box-shadow: inset 0 -1px 0 color-mix(in srgb, currentColor 20%, transparent);
+}
+
+[role="tab"] {
+    flex-shrink: 0;
+    padding: 0.625rem 1rem;
+    border: none;
+    border-block-end: 2px solid transparent;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    opacity: 0.75;
+
+    &:hover {
+        opacity: 1;
+    }
+
+    &[aria-selected="true"] {
+        border-block-end-color: #2563eb;
+        font-weight: 600;
+        opacity: 1;
+    }
+
+    /* Inside the scrolling tab list an outside outline would be cut off */
+    &:focus-visible {
+        outline: 2px solid #2563eb;
+        outline-offset: -2px;
+    }
+}
+
+[role="tabpanel"] {
+    padding-block: 1rem;
+}

@@ -1,0 +1,30 @@
+---
+order: 60
+description: Inline SVG icons in the text colour: beside a label, alone on a button, and carrying meaning by itself
+---
+<!-- Beside visible text the icon is decoration: aria-hidden keeps screen readers from announcing it.
+     The btn class (CSS Button snippet) lines icon and text up with a gap. -->
+<button class="btn" type="button">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14"/>
+    </svg>
+    Delete
+</button>
+
+<!-- Alone on a button: the button carries the name. -->
+<button class="btn" type="button" aria-label="Search">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/>
+        <path d="m21 21-5-5"/>
+    </svg>
+</button>
+
+<!-- Meaningful by itself: role="img" and a <title> give it a name. -->
+<svg role="img" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <title>Warning</title>
+    <path d="M12 3 2 21h20L12 3z"/>
+    <path d="M12 10v4M12 17h.01"/>
+</svg>

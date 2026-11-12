@@ -1,0 +1,21 @@
+---
+order: 30
+description: Fades elements in once as the page loads, one after another with --delay
+---
+/* <li class="fade-in" style="--delay: 1">, --delay: 2 for the next, and so on */
+.fade-in {
+    animation: fade-in 0.6s ease-out both;
+    animation-delay: calc(var(--delay, 0) * 80ms);
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fade-in {
+        animation: none;
+    }
+}

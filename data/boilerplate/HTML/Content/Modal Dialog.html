@@ -1,0 +1,36 @@
+---
+order: 30
+description: A <dialog> opened by a button with showModal(), closed by its buttons, Escape or a click on the backdrop
+ask: Name = Settings
+---
+<button class="btn" type="button" id="open-{{Name:kebab}}-dialog">Open {{Name:lower}}</button>
+
+<dialog id="{{Name:kebab}}-dialog" aria-labelledby="{{Name:kebab}}-dialog-title">
+    <!-- The dialog itself has no padding (see the CSS Modal Dialog snippet); this wrapper does. -->
+    <div class="dialog-body">
+        <h2 id="{{Name:kebab}}-dialog-title">{{Name}}</h2>
+        {{cursor}}
+        <!-- A form with method="dialog" closes the dialog when submitted; the button's value becomes
+             dialog.returnValue. -->
+        <form class="dialog-actions" method="dialog">
+            <button class="btn" value="cancel">Cancel</button>
+            <button class="btn btn--primary" value="ok">OK</button>
+        </form>
+    </div>
+</dialog>
+
+<script type="module">
+    const dialog = document.getElementById('{{Name:kebab}}-dialog');
+
+    document.getElementById('open-{{Name:kebab}}-dialog').addEventListener('click', () => {
+        dialog.returnValue = '';
+        dialog.showModal();
+    });
+
+    // The wrapper covers the inside of the dialog, so a click that targets the dialog element was on the backdrop.
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) {
+            dialog.close();
+        }
+    });
+</script>

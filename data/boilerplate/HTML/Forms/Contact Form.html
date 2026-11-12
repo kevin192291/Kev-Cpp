@@ -1,0 +1,39 @@
+---
+order: 30
+description: A contact form: name, email, topic, how to reply (a fieldset of radio buttons) and the message
+---
+<form action="/contact" method="post">
+    <div class="field">
+        <label for="contact-name">Name</label>
+        <input id="contact-name" name="name" type="text" autocomplete="name" required>
+    </div>
+
+    <div class="field">
+        <label for="contact-email">Email</label>
+        <input id="contact-email" name="email" type="email" autocomplete="email" required>
+    </div>
+
+    <div class="field">
+        <label for="contact-topic">Topic</label>
+        <!-- The empty first option makes "required" insist on a real choice -->
+        <select id="contact-topic" name="topic" required>
+            <option value="">Choose a topic</option>
+            <option value="question">A question</option>
+            <option value="support">Support</option>
+            <option value="feedback">Feedback</option>
+        </select>
+    </div>
+
+    <fieldset>
+        <legend>How should we reply?</legend>
+        <label><input name="reply" type="radio" value="email" checked> By email</label>
+        <label><input name="reply" type="radio" value="phone"> By phone</label>
+    </fieldset>
+
+    <div class="field">
+        <label for="contact-message">Message</label>
+        <textarea id="contact-message" name="message" rows="6" maxlength="2000" required></textarea>
+    </div>
+
+    <button class="btn btn--primary" type="submit">Send message</button>
+</form>

@@ -1,0 +1,7 @@
+---
+order: 80
+description: Puts the selected rules in a prefers-reduced-motion: no-preference query, so they only run when motion is welcome
+---
+@media (prefers-reduced-motion: no-preference) {
+    {{selection}}{{cursor}}
+}

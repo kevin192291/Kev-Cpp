@@ -1,0 +1,59 @@
+---
+order: 70
+description: Print-friendly pages: black on white, no navigation or buttons, link addresses written out, sensible page breaks
+---
+@media print {
+    *,
+    *::before,
+    *::after {
+        background: transparent !important;
+        color: #000000 !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    nav,
+    aside,
+    button,
+    video,
+    audio,
+    iframe,
+    .no-print {
+        display: none !important;
+    }
+
+    /* Paper can't be clicked: print where external links go */
+    a[href^="http"]::after {
+        content: " (" attr(href) ")";
+        font-size: 0.875em;
+        overflow-wrap: anywhere;
+    }
+
+    abbr[title]::after {
+        content: " (" attr(title) ")";
+    }
+
+    pre,
+    blockquote,
+    figure,
+    img,
+    tr {
+        break-inside: avoid;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        break-after: avoid;
+    }
+
+    p {
+        orphans: 3;
+        widows: 3;
+    }
+}
+
+@page {
+    margin: 2cm;
+}

@@ -1,0 +1,21 @@
+---
+order: 10
+description: Description, canonical address, Open Graph and Twitter card tags for search results and link previews
+ask: Title = My Page
+ask: Description = A one-sentence summary of the page.
+ask: Url = https://example.com/
+---
+<!-- For search results -->
+<meta name="description" content="{{Description}}">
+<link rel="canonical" href="{{Url}}">
+
+<!-- For link previews in social networks and chat apps. og:image needs a full address; 1200x630 suits most. -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{Url}}">
+<meta property="og:title" content="{{Title}}">
+<meta property="og:description" content="{{Description}}">
+<meta property="og:image" content="https://example.com/og-image.png">
+<meta property="og:image:alt" content="Describe the preview image">
+
+<!-- X (Twitter) reads the og: tags above for the title, description and image; it only needs the card type. -->
+<meta name="twitter:card" content="summary_large_image">

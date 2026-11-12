@@ -1,0 +1,15 @@
+---
+order: 40
+description: Images that never overflow their box, and covers that fill a set shape without stretching (object-fit)
+---
+img {
+    max-inline-size: 100%;
+    block-size: auto; /* keeps the ratio when width and height attributes are set */
+}
+
+.cover {
+    inline-size: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover; /* crops to fill; contain shows it all with bars instead */
+    object-position: center; /* the part that survives the crop */
+}

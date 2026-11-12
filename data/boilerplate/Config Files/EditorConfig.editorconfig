@@ -1,0 +1,25 @@
+---
+label: .editorconfig
+description: 4-space indents, LF line endings and UTF-8 in every editor, tabs in Makefiles
+file: .editorconfig
+whole-file: yes
+order: 20
+section: editor
+---
+# https://editorconfig.org: most editors read this file and follow it.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[{Makefile,*.mk}]
+indent_style = tab
+
+# Two spaces at the end of a line are a line break in Markdown.
+[*.md]
+trim_trailing_whitespace = false

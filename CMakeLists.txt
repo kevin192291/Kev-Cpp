@@ -21,10 +21,10 @@ find_package(Threads REQUIRED) # Find in Files and the Project tab search run on
 
 # Pure logic with no GTK dependency, so it can be unit tested headlessly.
 add_library(kevc_core STATIC
+  src/core/Boilerplate.cpp
   src/core/Breakpoints.cpp
   src/core/BuildFiles.cpp
   src/core/BuildPlan.cpp
-  src/core/Boilerplate.cpp
   src/core/Comments.cpp
   src/core/CppStyle.cpp
   src/core/Dap.cpp
@@ -93,6 +93,7 @@ add_executable(kev-cpp
   src/app/Application.cpp
   src/app/BuildInfo.cpp
   src/app/MainWindow.cpp
+  src/app/MainWindowBoilerplate.cpp
   src/app/MainWindow.ui.cpp
   src/build/BuildRunner.cpp
   src/build/CompilerPanel.cpp
@@ -229,6 +230,8 @@ install(CODE "
                   OUTPUT_QUIET ERROR_QUIET)
 ")
 install(DIRECTORY tools/ DESTINATION ${CMAKE_INSTALL_DATADIR}/kev-cpp/tools)
+# The Boilerplate menu's snippets (MainWindowBoilerplate.cpp finds them next to the binary).
+install(DIRECTORY data/boilerplate/ DESTINATION ${CMAKE_INSTALL_DATADIR}/kev-cpp/boilerplate)
 
 # typescript-language-server + typescript for JS/TS IntelliSense, pinned in tools/package-lock.json.
 find_program(NPM_EXECUTABLE npm)

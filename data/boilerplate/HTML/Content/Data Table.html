@@ -1,0 +1,45 @@
+---
+order: 20
+description: A table with caption, header cells scoped to their columns and rows, a footer, and side scrolling on small screens
+---
+<!-- The wrapper scrolls sideways on narrow screens; tabindex lets keyboard users scroll it, and the
+     region role with the caption as its name tells screen-reader users what it is. -->
+<div class="table-scroll" role="region" aria-labelledby="sales-caption" tabindex="0">
+    <table>
+        <caption id="sales-caption">Sales by region, in units</caption>
+        <thead>
+            <tr>
+                <th scope="col">Region</th>
+                <th scope="col">Q1</th>
+                <th scope="col">Q2</th>
+                <th scope="col">Q3</th>
+                <th scope="col">Q4</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th scope="row">North</th>
+                <td>1,200</td>
+                <td>1,350</td>
+                <td>1,100</td>
+                <td>1,500</td>
+            </tr>
+            <tr>
+                <th scope="row">South</th>
+                <td>980</td>
+                <td>1,020</td>
+                <td>1,240</td>
+                <td>1,310</td>
+            </tr>
+        </tbody>
+        <tfoot>
+            <tr>
+                <th scope="row">Total</th>
+                <td>2,180</td>
+                <td>2,370</td>
+                <td>2,340</td>
+                <td>2,810</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>

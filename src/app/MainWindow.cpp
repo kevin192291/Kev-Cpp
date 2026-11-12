@@ -93,6 +93,7 @@ MainWindow::MainWindow(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>&
                                                  [this](const std::string& status) { setStatus(status); })) {
     updateTitle();
     buildActions();
+    refreshBoilerplate();
     // The search field sits in the middle of the menu bar's row, where people look for one first.
     quickSearchSlot_->append(quickSearch_);
     setupToolbar();
@@ -348,10 +349,6 @@ void MainWindow::buildActions() {
             setStatus("Toggle Comment works on a source file: open one first");
         }
     });
-    add_action_with_parameter("insert-boilerplate", Glib::VARIANT_TYPE_STRING, [this](const Glib::VariantBase& v) {
-        insertBoilerplate(Glib::VariantBase::cast_dynamic<Glib::Variant<Glib::ustring>>(v).get());
-    });
-    fillBoilerplateMenus();
     // Search
     add_action("find", [this] {
         replaceToggle_->set_active(false);
@@ -366,6 +363,13 @@ void MainWindow::buildActions() {
     add_action("goto-type-definition", [this] { lookUpAtCursor(Lookup::TypeDefinition); });
     add_action("goto-implementation", [this] { lookUpAtCursor(Lookup::Implementation); });
     add_action("find-references", [this] { lookUpAtCursor(Lookup::References); });
+    // Boilerplate (its items are made from the snippet folders; see refreshBoilerplate)
+    add_action_with_parameter("boilerplate", Glib::VARIANT_TYPE_STRING, [this](const Glib::VariantBase& v) {
+        const std::string key = Glib::VariantBase::cast_dynamic<Glib::Variant<Glib::ustring>>(v).get();
+        afterMenuChoice([this, key] { insertBoilerplate(key); });
+    });
+    add_action("boilerplate-save", [this] { saveSelectionAsBoilerplate(); });
+    add_action("boilerplate-folder", [this] { openBoilerplateFolder(); });
     // View
     add_action("toggle-left-dock", [this] { leftDock_->set_visible(!leftDock_->get_visible()); });
     add_action("toggle-bottom-dock", [this] { bottomDock_->set_visible(!bottomDock_->get_visible()); });
@@ -1176,76 +1180,6 @@ void MainWindow::addSystemPackage(const std::string& module) {
     } catch (const std::exception& e) {
         showError(*this, "Could not add " + module + " to the project", e.what());
     }
-}
-
-void MainWindow::fillBoilerplateMenus() {
-    // SFML 2 and 3 are written differently (the event loop above all): offer the installed one's.
-    const auto snippets = boilerplate::offered(sfml::detect().major());
-    for (const auto& menu : {boilerplateMenu_, editorBoilerplateMenu_, cppEditorBoilerplateMenu_}) {
-        menu->remove_all();
-        std::string heading;
-        Glib::RefPtr<Gio::Menu> section;
-        for (const boilerplate::Snippet* s : snippets) {
-            const std::string library = s->library + " (" + boilerplate::languageName(s->language) + ")";
-            if (library != heading) {
-                heading = library;
-                section = Gio::Menu::create();
-                menu->append_section(heading, section);
-            }
-            auto item = Gio::MenuItem::create(s->program ? "Program: " + s->title : s->title, "");
-            item->set_action_and_target("win.insert-boilerplate", Glib::Variant<Glib::ustring>::create(s->id));
-            section->append_item(item);
-        }
-    }
-}
-
-void MainWindow::insertBoilerplate(const std::string& id) {
-    const boilerplate::Snippet* snippet = boilerplate::find(id);
-    if (!snippet) return;
-    auto* tab = currentEditor();
-    if (!tab) {
-        setStatus("Insert Boilerplate puts code in a C or C++ source file: open one first");
-        return;
-    }
-    // A C project's headers are C.
-    auto language = boilerplate::languageOf(tab->path());
-    if (language && session_ && session_->project().kind == ProjectKind::C) language = boilerplate::Language::C;
-    if (language != snippet->language) {
-        const std::string name = boilerplate::languageName(snippet->language);
-        setStatus("\u201c" + snippet->library + ": " + snippet->title + "\u201d is " + name + " code, and " +
-                  tab->path().filename().string() + " isn't a " + name + " file");
-        return;
-    }
-
-    GtkTextBuffer* buffer = GTK_TEXT_BUFFER(tab->buffer());
-    GtkTextIter start, end, cursor;
-    gtk_text_buffer_get_bounds(buffer, &start, &end);
-    gtk_text_buffer_get_iter_at_mark(buffer, &cursor, gtk_text_buffer_get_insert(buffer));
-    char* text = gtk_text_buffer_get_text(buffer, &start, &end, TRUE);
-    const auto plan = boilerplate::insertion(text, gtk_text_iter_get_line(&cursor), *snippet);
-    g_free(text);
-    tab->applyEdits(plan.edits);
-    tab->gotoLine(plan.cursorLine + 1);
-
-    std::string status = "Inserted \u201c" + snippet->title + "\u201d";
-    std::string libraries;
-    for (const auto& module : snippet->pkgConfig) libraries += (libraries.empty() ? "" : ", ") + module;
-    if (!snippet->sfmlComponents.empty()) libraries = "SFML";
-    if (!session_ || session_->project().kind == ProjectKind::WebTs) {
-        status += ". It needs " + libraries + " to build";
-    } else if (!session_->project().buildFileManaged) {
-        // Kev-C++ doesn't edit a CMakeLists.txt the project keeps itself.
-        status += ". Link " + libraries + " in the project's own " + session_->buildFile().filename().string();
-    } else {
-        for (const auto& module : snippet->pkgConfig) {
-            const auto& packages = session_->project().packages;
-            const bool has = std::any_of(packages.begin(), packages.end(), [&](const Package& p) { return p.name == module; });
-            addSystemPackage(module);
-            if (!has) status += "; added the " + module + " package (pkg-config)";
-        }
-        if (!snippet->sfmlComponents.empty()) status += linkSfml(snippet->sfmlComponents);
-    }
-    setStatus(status);
 }
 
 std::string MainWindow::linkSfml(const std::vector<std::string>& components) {

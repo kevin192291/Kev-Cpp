@@ -1,0 +1,29 @@
+---
+order: 40
+description: Rises slightly with a deeper shadow under the pointer or keyboard focus
+---
+.lift {
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+    transition:
+        translate 0.2s ease-out,
+        box-shadow 0.2s ease-out;
+}
+
+.lift:focus-visible {
+    translate: 0 -4px;
+    box-shadow: 0 12px 24px rgb(0 0 0 / 0.15);
+}
+
+/* Only where hovering is real: on touch screens a tap would leave the element raised */
+@media (hover: hover) {
+    .lift:hover {
+        translate: 0 -4px;
+        box-shadow: 0 12px 24px rgb(0 0 0 / 0.15);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lift:is(:hover, :focus-visible) {
+        translate: none;
+    }
+}

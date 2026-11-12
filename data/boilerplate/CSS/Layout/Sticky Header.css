@@ -1,0 +1,11 @@
+---
+order: 50
+description: A header that stays at the top of the window while the page scrolls under it
+---
+/* Sticky stops working when an ancestor has overflow: hidden, auto or scroll. */
+.site-header {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 10;
+    background: Canvas; /* opaque, or the page shows through; Canvas follows light and dark */
+}

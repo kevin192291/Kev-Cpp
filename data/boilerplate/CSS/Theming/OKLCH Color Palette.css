@@ -1,0 +1,24 @@
+---
+order: 50
+description: A ten-step palette from one hue in oklch(), plus color-mix() shades; change --brand-hue to recolour
+---
+/* oklch(lightness chroma hue): equal lightness steps look evenly spaced, which HSL's don't.
+   Chroma is lower at the ends of the scale, where very light and very dark colours can't be as vivid. */
+:root {
+    --brand-hue: 255;
+    --brand-chroma: 0.16;
+
+    --brand-50: oklch(97% calc(var(--brand-chroma) * 0.2) var(--brand-hue));
+    --brand-100: oklch(93% calc(var(--brand-chroma) * 0.35) var(--brand-hue));
+    --brand-200: oklch(87% calc(var(--brand-chroma) * 0.55) var(--brand-hue));
+    --brand-300: oklch(79% calc(var(--brand-chroma) * 0.8) var(--brand-hue));
+    --brand-400: oklch(69% var(--brand-chroma) var(--brand-hue));
+    --brand-500: oklch(59% var(--brand-chroma) var(--brand-hue));
+    --brand-600: oklch(51% var(--brand-chroma) var(--brand-hue));
+    --brand-700: oklch(44% var(--brand-chroma) var(--brand-hue));
+    --brand-800: oklch(36% calc(var(--brand-chroma) * 0.8) var(--brand-hue));
+    --brand-900: oklch(28% calc(var(--brand-chroma) * 0.6) var(--brand-hue));
+
+    --brand-hover: color-mix(in oklch, var(--brand-600), black 15%);
+    --brand-subtle: color-mix(in oklch, var(--brand-500) 15%, transparent);
+}

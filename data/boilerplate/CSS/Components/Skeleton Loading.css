@@ -1,0 +1,49 @@
+---
+order: 120
+description: Grey placeholder shapes with a moving shimmer, shown where content is still loading
+---
+/* <div aria-busy="true">
+       <div class="skeleton skeleton--circle"></div>
+       <div class="skeleton skeleton--text"></div>
+       <div class="skeleton skeleton--text"></div>
+   </div> */
+.skeleton {
+    --skeleton-base: color-mix(in srgb, currentColor 10%, transparent);
+    --skeleton-shine: color-mix(in srgb, currentColor 20%, transparent);
+
+    border-radius: 0.375rem;
+    background: linear-gradient(90deg, var(--skeleton-base) 25%, var(--skeleton-shine) 37%, var(--skeleton-base) 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+.skeleton--text {
+    block-size: 1em;
+    margin-block: 0.5em;
+}
+
+.skeleton--text:last-child {
+    inline-size: 60%;
+}
+
+.skeleton--circle {
+    inline-size: 3rem;
+    aspect-ratio: 1;
+    border-radius: 50%;
+}
+
+@keyframes skeleton-shimmer {
+    from {
+        background-position: 100% 50%;
+    }
+
+    to {
+        background-position: 0 50%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton {
+        animation: none;
+    }
+}

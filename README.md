@@ -137,12 +137,6 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   and otherwise in the layout above (lines up to 120 columns, short member functions inside a class on
   one line). Web projects use their own prettier when it's installed, with its config; otherwise the
   TypeScript or Svelte language server formats. It's one undo step, and breakpoints stay on their lines.
-- **Insert Boilerplate** (Edit menu and the editor's right-click menu): starting code for SFML and
-  GTK 4, as whole programs for an empty file (an SFML window and game loop, a moving shape with
-  keyboard input and frame time, a gtkmm or GTK 4 application window) and as pieces for inside your
-  code (a sprite, text, a sound, a button, a message dialog), indented to fit, with the #includes
-  they need. The SFML code matches the installed SFML (2 or 3), and the project gets the packages
-  the code links.
 - **Copying build output**: in the Compiler tab, right-click → Copy or Copy All (or select rows,
   Ctrl+click and Shift+click for several, and press Ctrl+C) copies errors and warnings as the
   compiler wrote them (`main.cpp:24:16: error: …`); in the Compile Log, select text and copy it, or
@@ -154,6 +148,20 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   and shell scripts, and inside HTML and Svelte files the `<script>` and `<style>` parts comment as
   JavaScript and CSS. Selected lines that already hold a `*/` get a `//` each instead, since a block
   comment would end at it.
+- **Boilerplate menu**: a few hundred starters and patterns in nested submenus, such as C/C++ → SFML →
+  Window, C/C++ → GTK4 → gtkmm (C++) → Window, Svelte/SvelteKit → SvelteKit Routes, TypeScript, CSS,
+  HTML, CMake, Makefiles, config files, Python and shell; the editor's right-click menu has the same
+  under Insert Boilerplate. Choosing one puts it at the cursor, indented to fit, with the `#include`s it
+  needs added to the file, as one undo step. Some ask for a name first (a class name, say). "Wrap" items
+  put the selected code inside them. Whole files (a program, a component) ask whether to replace the
+  open file's text. A snippet that doesn't belong in the open file (CSS in `main.cpp`) goes into a new
+  file. SFML items match the installed SFML (2 or 3), and SFML and GTK items add the library to a C/C++
+  project's packages. Each item is a plain file in
+  `data/boilerplate`, and its folder is its submenu. Add your own in `~/.config/kev-cpp/boilerplate`
+  (Boilerplate → Open My Boilerplate Folder), or select some code and choose **Save Selection as
+  Boilerplate**. New files appear in the menu straight away. `data/boilerplate/_README.md` describes the
+  format: a header with the label, order, questions and packages, and placeholders such as `{{cursor}}`
+  and `{{selection}}`.
 - **Editor font** (View → Preferences): the font, its style (Regular, Bold, Italic…) and the text size,
   with a preview; every editor changes as you pick. View → Larger Text and Smaller Text (Ctrl+Plus,
   Ctrl+Minus) change the size from the keyboard, Ctrl+0 goes back to 11 points. Kept for every project.

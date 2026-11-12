@@ -1,0 +1,49 @@
+---
+order: 40
+description: Header, footer and content between two sidebars with grid areas; one column on narrow screens
+---
+/* <body class="holy-grail"> with <header>, <nav>, <main>, <aside> and <footer> as its children */
+.holy-grail {
+    display: grid;
+    grid-template-areas:
+        "header"
+        "nav"
+        "main"
+        "aside"
+        "footer";
+    grid-template-rows: auto auto 1fr auto auto;
+    min-block-size: 100dvh;
+    margin: 0;
+}
+
+.holy-grail > header {
+    grid-area: header;
+}
+
+.holy-grail > nav {
+    grid-area: nav;
+}
+
+.holy-grail > main {
+    grid-area: main;
+}
+
+.holy-grail > aside {
+    grid-area: aside;
+}
+
+.holy-grail > footer {
+    grid-area: footer;
+}
+
+@media (width >= 48rem) {
+    .holy-grail {
+        grid-template-areas:
+            "header header header"
+            "nav    main   aside"
+            "footer footer footer";
+        /* minmax(0, 1fr): wide content (code, tables) scrolls instead of pushing the sidebars out */
+        grid-template-columns: 12rem minmax(0, 1fr) 12rem;
+        grid-template-rows: auto 1fr auto;
+    }
+}

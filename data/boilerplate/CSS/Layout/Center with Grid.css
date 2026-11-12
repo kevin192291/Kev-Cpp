@@ -1,0 +1,9 @@
+---
+order: 11
+description: Centres the children horizontally and vertically with grid's place-items
+---
+/* Add min-block-size: 100dvh to centre in the whole window */
+.grid-center {
+    display: grid;
+    place-items: center;
+}

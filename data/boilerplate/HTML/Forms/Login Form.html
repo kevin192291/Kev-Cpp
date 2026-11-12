@@ -1,0 +1,29 @@
+---
+order: 20
+description: A sign-in form whose autocomplete values let password managers fill it in
+---
+<form class="login-form" action="/login" method="post">
+    <h2>Sign in</h2>
+
+    <div class="field">
+        <label for="login-username">Email or username</label>
+        <input id="login-username" name="username" type="text" autocomplete="username" autocapitalize="none"
+            spellcheck="false" required>
+    </div>
+
+    <div class="field">
+        <label for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+
+    <p>
+        <label>
+            <input name="remember" type="checkbox">
+            Keep me signed in
+        </label>
+    </p>
+
+    <button class="btn btn--primary" type="submit">Sign in</button>
+
+    <p><a href="/forgot-password">Forgot your password?</a></p>
+</form>

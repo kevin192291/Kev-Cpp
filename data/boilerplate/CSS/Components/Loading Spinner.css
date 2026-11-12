@@ -1,0 +1,28 @@
+---
+order: 110
+description: A spinning ring in the text colour, for buttons and loading areas
+---
+/* <span class="spinner" role="status" aria-label="Loading"></span> */
+.spinner {
+    display: inline-block;
+    inline-size: 1.5em;
+    block-size: 1.5em;
+    border: 0.1875em solid color-mix(in srgb, currentColor 20%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    vertical-align: middle;
+    animation: spinner-turn 0.8s linear infinite;
+}
+
+@keyframes spinner-turn {
+    to {
+        rotate: 1turn;
+    }
+}
+
+/* Slower rather than stopped: a spinner that doesn't move looks like a hang */
+@media (prefers-reduced-motion: reduce) {
+    .spinner {
+        animation-duration: 2.4s;
+    }
+}

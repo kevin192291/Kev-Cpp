@@ -1,0 +1,11 @@
+---
+order: 51
+description: A footer at the bottom of the window on short pages and after the content on long ones
+---
+/* For a body whose children are <header>, <main> and <footer>: main takes the spare height */
+body {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-block-size: 100dvh;
+    margin: 0;
+}

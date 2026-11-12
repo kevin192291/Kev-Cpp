@@ -1,0 +1,94 @@
+---
+order: 10
+description: A small modern reset: border-box sizing, no stray margins, readable line height, media that fits its box
+file: reset.css
+whole-file: yes
+---
+/* Modern CSS reset: removes the browser defaults that get in the way and keeps the useful ones. */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+* {
+    margin: 0;
+}
+
+/* Modal dialogs and popovers are centred by margin: auto */
+dialog,
+[popover] {
+    margin: auto;
+}
+
+html {
+    /* Stop iOS enlarging the text after the phone is turned to landscape */
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+}
+
+body {
+    line-height: 1.5;
+}
+
+/* Inline SVG is left alone, so icons stay in line with their text */
+img,
+picture,
+video,
+canvas {
+    display: block;
+    max-inline-size: 100%;
+}
+
+/* With width and height attributes set, this keeps the image's ratio when max-inline-size shrinks it */
+img,
+video {
+    block-size: auto;
+}
+
+input,
+button,
+textarea,
+select {
+    font: inherit;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    text-wrap: balance;
+}
+
+p {
+    text-wrap: pretty;
+}
+
+/* Lists given role="list" are the ones styled as plain stacks; the role keeps Safari announcing them as lists */
+ul[role="list"],
+ol[role="list"] {
+    padding: 0;
+    list-style: none;
+}
+
+textarea:not([rows]) {
+    min-block-size: 10em;
+}
+
+/* Leave a little room above an element jumped to with #anchor */
+:target {
+    scroll-margin-block: 5ex;
+}

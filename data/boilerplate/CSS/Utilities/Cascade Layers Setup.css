@@ -1,0 +1,37 @@
+---
+order: 80
+description: Cascade layers (@layer): the order listed decides which styles win, whatever the selectors' specificity
+---
+/* Later layers beat earlier ones, and styles outside any layer beat them all.
+   Third-party CSS can join an early layer with @import url("library.css") layer(vendor);
+   placed straight after this first line (an @import must come before every other rule). */
+@layer reset, vendor, base, layout, components, utilities;
+
+@layer reset {
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+    }
+
+    * {
+        margin: 0;
+    }
+}
+
+@layer base {
+    body {
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+    }
+}
+
+@layer components {
+    {{cursor}}
+}
+
+@layer utilities {
+    .hidden {
+        display: none;
+    }
+}

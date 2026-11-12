@@ -1,0 +1,20 @@
+---
+order: 40
+description: Collapsible sections from <details> and <summary>, keyboard-accessible with no script
+---
+<!-- Each <details> opens and closes by itself. Sharing a name makes them exclusive: opening one closes the
+     others (browsers from 2024 on; older ones just let several stay open). -->
+<div class="accordion">
+    <details name="faq" open>
+        <summary>What is it?</summary>
+        <p>{{cursor}}</p>
+    </details>
+    <details name="faq">
+        <summary>How do I install it?</summary>
+        <p>Answer.</p>
+    </details>
+    <details name="faq">
+        <summary>Is it free?</summary>
+        <p>Answer.</p>
+    </details>
+</div>

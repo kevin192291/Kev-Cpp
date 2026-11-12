@@ -1,0 +1,50 @@
+---
+order: 10
+description: A sign-up form checked by the browser: required, type, minlength, maxlength, pattern, min and max, with hints
+---
+<!-- The browser checks these before submitting and explains what's wrong; the server must still check
+     everything again. The class names match the CSS Form Inputs and Button snippets. -->
+<form action="/signup" method="post">
+    <div class="field">
+        <label for="signup-name">Name</label>
+        <input id="signup-name" name="name" type="text" autocomplete="name" required>
+    </div>
+
+    <div class="field">
+        <label for="signup-email">Email</label>
+        <input id="signup-email" name="email" type="email" autocomplete="email" required>
+    </div>
+
+    <div class="field">
+        <label for="signup-username">Username</label>
+        <input id="signup-username" name="username" type="text" autocomplete="username" required
+            minlength="3" maxlength="20" pattern="[a-z0-9_]+" aria-describedby="signup-username-hint">
+        <p id="signup-username-hint" class="field__hint">3 to 20 characters: lower-case letters, digits and _</p>
+    </div>
+
+    <div class="field">
+        <label for="signup-password">Password</label>
+        <input id="signup-password" name="password" type="password" autocomplete="new-password" required
+            minlength="8" aria-describedby="signup-password-hint">
+        <p id="signup-password-hint" class="field__hint">At least 8 characters</p>
+    </div>
+
+    <div class="field">
+        <label for="signup-age">Age (optional)</label>
+        <input id="signup-age" name="age" type="number" min="13" max="120" step="1">
+    </div>
+
+    <div class="field">
+        <label for="signup-website">Website (optional)</label>
+        <input id="signup-website" name="website" type="url" autocomplete="url" placeholder="https://">
+    </div>
+
+    <p>
+        <label>
+            <input name="terms" type="checkbox" required>
+            I accept the <a href="/terms">terms of use</a>
+        </label>
+    </p>
+
+    <button class="btn btn--primary" type="submit">Create account</button>
+</form>

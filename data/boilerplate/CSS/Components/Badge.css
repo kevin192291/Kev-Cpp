@@ -1,0 +1,32 @@
+---
+order: 90
+description: Small pill-shaped status or count labels in a few colours
+---
+/* <span class="badge">New</span> <span class="badge badge--success">Paid</span> */
+.badge {
+    --badge-color: #1d4ed8;
+
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125em 0.6em;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--badge-color) 14%, transparent);
+    color: var(--badge-color);
+    font-size: 0.75em;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.badge--success {
+    --badge-color: #15803d;
+}
+
+.badge--warning {
+    --badge-color: #b45309;
+}
+
+.badge--danger {
+    --badge-color: #b91c1c;
+}

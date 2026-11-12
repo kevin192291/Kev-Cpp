@@ -1,0 +1,29 @@
+---
+order: 40
+description: Both theme colours in one declaration with light-dark() (Chrome 123, Firefox 120, Safari 17.5 and later)
+---
+/* light-dark(a, b) is a in a light colour scheme and b in a dark one; color-scheme decides which,
+   so data-theme="light" or "dark" on <html> pins one without repeating any colour. */
+:root {
+    color-scheme: light dark;
+
+    --bg: light-dark(#ffffff, #18181b);
+    --surface: light-dark(#f4f4f5, #27272a);
+    --text: light-dark(#18181b, #f4f4f5);
+    --muted: light-dark(#52525b, #a1a1aa);
+    --border: light-dark(#e4e4e7, #3f3f46);
+    --accent: light-dark(#2563eb, #60a5fa);
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+}

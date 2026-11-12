@@ -1,0 +1,63 @@
+---
+order: 70
+description: Styles a <dialog> opened with showModal(): centred box, dimmed backdrop, fade-in, page scroll locked
+---
+/* The dialog has no padding and its .dialog-body child pads instead, so a click that targets the dialog
+   element itself can only be on the backdrop (see the HTML Modal Dialog snippet). */
+dialog {
+    inline-size: min(32rem, 100% - 2rem);
+    margin: auto; /* centres it, also after a reset that sets every margin to 0 */
+    padding: 0;
+    border: none;
+    border-radius: 0.75rem;
+    box-shadow: 0 20px 50px rgb(0 0 0 / 0.3);
+}
+
+dialog::backdrop {
+    background: rgb(0 0 0 / 0.5);
+    backdrop-filter: blur(2px);
+}
+
+dialog[open] {
+    animation: dialog-in 0.2s ease-out;
+}
+
+dialog[open]::backdrop {
+    animation: dialog-backdrop-in 0.2s ease-out;
+}
+
+.dialog-body {
+    padding: 1.5rem;
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-block-start: 1.5rem;
+}
+
+/* Stop the page behind scrolling while a modal is open */
+body:has(dialog:modal) {
+    overflow: hidden;
+}
+
+@keyframes dialog-in {
+    from {
+        opacity: 0;
+        translate: 0 1rem;
+    }
+}
+
+@keyframes dialog-backdrop-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    dialog[open],
+    dialog[open]::backdrop {
+        animation: none;
+    }
+}

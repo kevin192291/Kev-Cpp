@@ -1,0 +1,9 @@
+---
+order: 52
+description: Fills the window's height exactly, also on phones whose browser toolbars come and go (dvh)
+---
+/* dvh follows the visible height as the toolbars slide; svh is the height with them shown (never jumps),
+   lvh with them hidden. */
+.full-height {
+    min-block-size: 100dvh;
+}

@@ -1,0 +1,3 @@
+label: Svelte/SvelteKit
+order: 20
+section: languages

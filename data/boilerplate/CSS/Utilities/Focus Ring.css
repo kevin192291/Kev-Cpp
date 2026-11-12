@@ -1,0 +1,13 @@
+---
+order: 40
+description: A clear focus outline for keyboard users; :focus-visible leaves it off for mouse clicks on buttons and links
+---
+:focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 2px;
+}
+
+/* In a container with overflow: hidden or auto an outline outside the element is cut off: draw it inside */
+.focus-inset:focus-visible {
+    outline-offset: -3px;
+}

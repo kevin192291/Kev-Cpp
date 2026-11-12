@@ -1,0 +1,40 @@
+---
+label: .gitignore (Node/SvelteKit)
+description: Keeps node_modules, build output, .env files and test reports out of git
+file: .gitignore
+whole-file: yes
+order: 11
+section: git
+---
+node_modules/
+
+# Build output
+/build/
+/dist/
+/.svelte-kit/
+/package/
+.output/
+.vercel/
+.netlify/
+.wrangler/
+
+# Secrets stay local; the example file is shared
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite's temporary config copies
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Tests
+coverage/
+test-results/
+playwright-report/
+
+# Logs and system files
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,37 @@
+---
+label: .gitignore (C/C++)
+description: Keeps CMake and Make build output, objects and editor leftovers out of git
+file: .gitignore
+whole-file: yes
+order: 10
+section: git
+---
+# Build folders (CMake, Make, CLion)
+build/
+build-*/
+cmake-build-*/
+_deps/
+
+# CMake run inside the source folder
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+
+# Compiler output
+*.o
+*.obj
+*.d
+*.a
+*.so
+*.exe
+
+# Generated for clangd by each build; clangd's index
+compile_commands.json
+.cache/
+
+# Editors
+*.swp
+*~
+.idea/

@@ -1,0 +1,12 @@
+---
+order: 70
+description: A <video> with controls, poster, WebM and MP4 sources, captions and a download link as fallback
+---
+<!-- preload="metadata" fetches only the length and first frame until Play is pressed. For a silent
+     background loop use autoplay muted loop playsinline instead of controls: browsers only autoplay muted video. -->
+<video controls preload="metadata" playsinline width="1280" height="720" poster="poster.jpg">
+    <source src="video.webm" type="video/webm">
+    <source src="video.mp4" type="video/mp4">
+    <track kind="captions" src="captions.en.vtt" srclang="en" label="English" default>
+    <p>This browser can't play the video. <a href="video.mp4">Download it</a> instead.</p>
+</video>

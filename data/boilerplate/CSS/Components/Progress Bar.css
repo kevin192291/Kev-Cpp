@@ -1,0 +1,63 @@
+---
+order: 130
+description: Styles the native <progress> element, with a sliding stripe when it has no value
+---
+/* <progress value="40" max="100">40%</progress>, or <progress></progress> while the amount is unknown.
+   Each engine still draws the parts with its own pseudo-elements, hence the ::-webkit- and ::-moz- rules. */
+progress {
+    --progress-color: #2563eb;
+    --progress-track: color-mix(in srgb, currentColor 15%, transparent);
+
+    appearance: none;
+    display: block;
+    inline-size: 100%;
+    block-size: 0.625rem;
+    overflow: hidden;
+    border: none;
+    border-radius: 999px;
+    background: var(--progress-track);
+}
+
+/* Transparent, so the element's own background is the track (in Chrome and Safari both would draw one) */
+progress::-webkit-progress-bar {
+    background: transparent;
+}
+
+progress::-webkit-progress-value {
+    border-radius: 999px;
+    background: var(--progress-color);
+    transition: width 0.3s;
+}
+
+progress::-moz-progress-bar {
+    border-radius: 999px;
+    background: var(--progress-color);
+}
+
+progress:indeterminate {
+    background:
+        linear-gradient(var(--progress-color) 0 0) 0 0 / 30% 100% no-repeat,
+        var(--progress-track);
+    animation: progress-slide 1.2s ease-in-out infinite;
+}
+
+progress:indeterminate::-moz-progress-bar {
+    background: transparent;
+}
+
+/* Positions as percentages of the free space: -43% and 143% put the 30% stripe just outside each end */
+@keyframes progress-slide {
+    from {
+        background-position: -43% 0;
+    }
+
+    to {
+        background-position: 143% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    progress:indeterminate {
+        animation-duration: 3s;
+    }
+}

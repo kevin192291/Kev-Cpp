@@ -1,0 +1,10 @@
+---
+order: 20
+description: One line of text cut off with an ellipsis when it doesn't fit
+---
+/* Inside a flex or grid item, also give the item min-inline-size: 0, or it grows to fit the text. */
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

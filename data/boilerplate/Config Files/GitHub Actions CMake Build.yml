@@ -1,0 +1,36 @@
+---
+label: GitHub Actions (CMake C++)
+description: A GitHub Actions workflow that builds a CMake project and runs its tests on every push
+file: .github/workflows/build.yml
+whole-file: yes
+order: 40
+section: ci
+---
+name: Build
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+    workflow_dispatch:
+
+jobs:
+    build:
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@v5
+
+            # Add the -dev packages the project links to (libsfml-dev, libgtkmm-4.0-dev...).
+            - name: Install build tools
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y --no-install-recommends cmake ninja-build g++
+
+            - name: Configure
+              run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+            - name: Build
+              run: cmake --build build --parallel
+
+            - name: Test
+              run: ctest --test-dir build --output-on-failure

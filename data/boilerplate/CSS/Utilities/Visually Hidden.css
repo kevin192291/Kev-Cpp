@@ -1,0 +1,18 @@
+---
+order: 10
+description: Hidden on screen but still read by screen readers, plus a variant that appears on focus for skip links
+---
+/* <button><svg aria-hidden="true">...</svg><span class="visually-hidden">Close</span></button>
+   <a class="visually-hidden-focusable" href="#main">Skip to content</a> */
+.visually-hidden,
+.visually-hidden-focusable:not(:focus, :focus-within) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}

@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 293 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 303 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -29,8 +29,7 @@ verified by driving the real app (see "GUI testing").
   marker-delimited block we own inside CMakeLists.txt/Makefile), `BuildFiles` (CMake/Make generators,
   compile_commands.json for C), `BuildPlan` (commands per action/config), `Diagnostics` (gcc/ld/CMake/
   make/tsc output parser, a diagnostic as text for the clipboard), `Packages` (catalog, pkg-config,
-  FetchContent target detection, installed CMake packages, how a project links SFML), `Boilerplate`
-  (Edit → Insert Boilerplate: the SFML and GTK 4 snippets, where one goes in a file), `Lsp`
+  FetchContent target detection, installed CMake packages, how a project links SFML), `Lsp`
   (framing, URIs, UTF-16 columns, markdown→Pango), `Mi` (GDB/MI parser, expression-under-cursor),
   `Breakpoints` (the breakpoint kinds, their saved form, gdb dprintf and js-debug logpoint messages,
   JavaScript watch traps), `ProcessTree` (a process's descendants from /proc),
@@ -55,10 +54,12 @@ verified by driving the real app (see "GUI testing").
   between old and new text, the nearest .clang-format, the project's prettier), `Comments` (Toggle
   Comment: a file's comment style, the script/style sections of HTML and Svelte, the edits), `Servers`
   (Running Servers: listening sockets from /proc/net/tcp(6) and the processes holding them, command
-  summaries, the HTTP probe).
+  summaries, the HTTP probe), `Boilerplate` (the Boilerplate menu: snippet folders merged into a tree,
+  headers, placeholders, indentation, which files a snippet fits, missing #includes, the installed
+  SFML's snippets, Save Selection's path).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon, the splash), `MainWindow`
   (everything wired together: actions, build/run, debugging, IntelliSense, dev server; its frame and
-  menus are `MainWindow.ui`).
+  menus are `MainWindow.ui`; MainWindowBoilerplate.cpp holds the Boilerplate menu's side).
 - `src/editor/` EditorTab (GtkSourceView; breakpoints = source marks), CppIndenter (the
   GtkSourceIndenter for C/C++ files, using core/CppStyle), CodeFormatter (Edit → Auto Format),
   ProjectTree (with Go to File search, context menu, drag and drop), SymbolsPanel, and DocumentPage,
@@ -97,6 +98,8 @@ verified by driving the real app (see "GUI testing").
   downloads js-debug 1.140.0 (SHA-256 checked) into `tools/js-debug/`; `tools/otel/collector.mjs` is the
   loopback OTLP/HTTP JSON collector. `data/language-specs/svelte.lang` is copied to the cache like the
   style scheme.
+- `data/boilerplate/` the Boilerplate menu's snippets (installed to `share/kev-cpp/boilerplate`, not a
+  GResource, so a file dropped in shows up; `_README.md` is the format).
 - `data/` icons (GResource-embedded), `packages.json` catalog, `.desktop` template. `data/art/` holds the
   icon sprite sheet, the classic Dev-C++ toolbar sheet (`classic-toolbar-sheet.png` → `kevc-classic-*`,
   used by the toolbar where Dev-C++ had the button), the C++/C/TypeScript logos (`logos/`, New Project dialog) and `make_icons.py`, which generates `data/icons/hicolor/*/actions/kevc-*.png` and
@@ -319,6 +322,33 @@ verified by driving the real app (see "GUI testing").
   still holds the socket, sends SIGTERM + SIGCONT, SIGKILL after 3 s, on a timer the window doesn't
   own. A killed row stays in place ("Stopped") until Refresh: rows closing up under the pointer put
   the next program's Kill button there.
+- **Boilerplate menu** (`boilerplateMenu_` in MainWindow.ui, after Search): folders are submenus, files
+  are items (`win.boilerplate`, target = the path relative to its root). Two roots, merged by on-disk
+  name: the built-in one (`$KEVC_BOILERPLATE_DIR`, `share/kev-cpp/boilerplate` beside the binary, else
+  `data/boilerplate` in the source tree) and `$XDG_CONFIG_HOME/kev-cpp/boilerplate`, whose files replace
+  built-in ones at the same path. A file's extension is its language (`boilerplate::fits`: a .cpp snippet
+  goes into C++ files and headers, .css into CSS/Svelte/HTML, .txt anywhere); a misfit goes into a new
+  file, and with nothing open the text goes to the clipboard. The design holds only the last section
+  (Save Selection, Open My Boilerplate Folder); `refreshBoilerplate` rebuilds the rest only when
+  `signature()` changes. It watches every folder of both trees with GFileMonitors, not window
+  activation: opening a nested submenu deactivates the window on X11, and a rebuild while a menu is open
+  closes it, so a rebuild waits while any popover under `menuBar_` is visible. GTK 4.14's menu bar
+  often opens the menu left of Boilerplate (Search, Edit) when an item three menus deep is chosen (two
+  deep never does): `afterMenuChoice` closes any menu-bar popover that shows in the 250 ms after a
+  choice, then inserts. The editors' right-click menus have the same tree under Insert Boilerplate
+  (`editorBoilerplateMenu_`, `cppEditorBoilerplateMenu_`, filled with it). Placeholders are
+  `{{name}}` (not `${}`, which TypeScript, CMake and shell use); unknown names stay as written. Inserted
+  text is indented like its line, replacing the line's leading whitespace (`Insertion::fromLineStart`);
+  whole lines selected for `{{selection}}` keep their indentation as the base. `includes:` headers the
+  file lacks go after its last #include in the same undo step (`missingIncludes`). `sfml: 2|3` items
+  show only when that SFML is installed (`sfml::detect().major()`, 3 with none; `forSfml`); SFML 2's
+  are in "C and C++/SFML 2". `packages:` modules go through `addSystemPackage`, sfml-* ones through
+  `linkSfml` (pkg-config, SFML's CMake package or a download). This replaced an Edit → Insert
+  Boilerplate with SFML/GTK snippets compiled into the program (3e71025): its SFML 2 snippets, missing
+  #includes, `linkSfml` and right-click submenus were kept. `Boilerplate.BuiltInBoilerplateIsWellFormed`
+  checks every built-in file (a description, only placeholders that get filled, every `ask:` used,
+  sfml-* packages with an `sfml:` line); `BuiltInWholeFilesCompile` compiles every whole C/C++ file
+  with what's installed (skipping what isn't, and sources that include their partner header).
 - **Editor font** (View → Preferences, `PreferencesDialog.ui`; View → Larger/Smaller/Default Text Size,
   Ctrl+Plus or Ctrl+=, Ctrl+Minus, Ctrl+0): one setting, /editor/font (family, size in points, weight,
   style), for every project. `Application` owns a CSS provider holding only the `.kevc-editor` rule
@@ -406,22 +436,16 @@ verified by driving the real app (see "GUI testing").
   when a project's sfml-* modules name libraries that aren't in their -L folder
   (`missingPkgConfigLibs`), once per project in a session. Project Options lists such a package but
   has no way to add one by hand yet.
-- **Insert Boilerplate** (Edit menu and the editors' right-click menus; `win.insert-boilerplate` with
-  the snippet's id): core/Boilerplate holds whole programs and pieces for SFML 2 and 3, gtkmm and GTK 4
-  in C; the three submenus are empty in the design and filled in code, with the SFML ones for the
-  installed major version. A program replaces a blank file; otherwise code goes on the cursor's
-  blank line or below its line, a piece indented like its surroundings, with missing #includes added
-  after the file's last one, all as one undo step. The project then gets what the snippet links
-  (`addSystemPackage`, `linkSfml`). `Boilerplate.SnippetsCompile` compiles each against what's
-  installed; SFML 2's were checked by hand against apt's headers (/usr/local's SFML 3 shadows them).
 - **Copying build output**: the Compiler tab's rows are multi-select; right-click → Copy / Copy All
   and Ctrl+C put them on the clipboard as the compiler wrote them (`toText`: path:line:col: error:
   message). The Compile Log's own right-click menu copies a selection; the design's `extra-menu`
   adds Copy All.
-- **Regenerating a design's code without the designer** (after editing a .ui by hand): a ten-line
-  program calling `ui::generateGtkmm(doc, name, ui::basicGtkTypes())` reproduces the committed
-  .ui.h/.ui.cpp except for non-widget objects (CompileLog's `tags_` comes out as a widget pointer:
-  put the `Glib::RefPtr`/`get_object` lines back).
+- **Regenerating a design's code without the designer** (after editing a .ui by hand, or merging two
+  edits of one): a short program that calls `gtk_init()`, then `ui::generateGtkmm(doc, name,
+  designer::gtkTypes())`, linked with src/designer/DesignerTypes.cpp, build/kevcpp-resources.c and
+  libkevc_core.a, reproduces the committed .ui.h/.ui.cpp byte for byte (it needs a display: run it on
+  Xephyr's). With `ui::basicGtkTypes()` instead, non-widget objects come out wrong (CompileLog's
+  `tags_` as a widget pointer).
 - **Use Its Own CMakeLists.txt** (Project::buildFileManaged = false): no managed block, no source sync; the
   project's CMakeLists.txt builds as usual and runnableOutput() looks for `targetName` anywhere under
   the build folder. cmakeExecutables() lists add_executable() targets for the chooser. The repository

@@ -1,0 +1,45 @@
+---
+order: 30
+description: Follows the system theme unless <html data-theme="light"> or "dark" picks one, for a theme switch
+---
+/* Switch from a script: document.documentElement.dataset.theme = 'dark';
+   and keep the choice in localStorage, applying it before the page paints to avoid a flash. */
+:root {
+    color-scheme: light;
+
+    --bg: #ffffff;
+    --surface: #f4f4f5;
+    --text: #18181b;
+    --muted: #52525b;
+    --border: #e4e4e7;
+    --accent: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+
+        --bg: #18181b;
+        --surface: #27272a;
+        --text: #f4f4f5;
+        --muted: #a1a1aa;
+        --border: #3f3f46;
+        --accent: #60a5fa;
+    }
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --bg: #18181b;
+    --surface: #27272a;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #3f3f46;
+    --accent: #60a5fa;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+}

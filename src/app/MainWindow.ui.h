@@ -75,6 +75,7 @@ protected:
     Gtk::Label* status_ = nullptr;
     Glib::RefPtr<Gio::Menu> menubar_;
     Glib::RefPtr<Gio::Menu> boilerplateMenu_;
+    Glib::RefPtr<Gio::Menu> boilerplateToolsSection_;
     Glib::RefPtr<Gio::Menu> projectMenu_;
     Glib::RefPtr<Gio::Menu> projectFileSection_;
     Glib::RefPtr<Gio::Menu> projectWebSection_;

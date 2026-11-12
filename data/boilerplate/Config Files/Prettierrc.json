@@ -1,0 +1,17 @@
+---
+label: .prettierrc
+description: Prettier settings matching Kev-C++'s style: 4 spaces, single quotes, semicolons, 120 columns
+file: .prettierrc
+whole-file: yes
+order: 31
+section: web
+---
+{
+    "tabWidth": 4,
+    "useTabs": false,
+    "singleQuote": true,
+    "semi": true,
+    "printWidth": 120,
+    "trailingComma": "all",
+    "endOfLine": "lf"
+}

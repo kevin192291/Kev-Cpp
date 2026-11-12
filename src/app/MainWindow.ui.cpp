@@ -770,11 +770,6 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
           <attribute name="action">win.toggle-comment</attribute>
         </item>
       </section>
-      <section>
-        <submenu id="boilerplateMenu_">
-          <attribute name="label" translatable="yes">Insert _Boilerplate</attribute>
-        </submenu>
-      </section>
     </submenu>
     <submenu>
       <attribute name="label" translatable="yes">_Search</attribute>
@@ -818,6 +813,19 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
         <item>
           <attribute name="label" translatable="yes">Find All _References</attribute>
           <attribute name="action">win.find-references</attribute>
+        </item>
+      </section>
+    </submenu>
+    <submenu id="boilerplateMenu_">
+      <attribute name="label" translatable="yes">_Boilerplate</attribute>
+      <section id="boilerplateToolsSection_">
+        <item>
+          <attribute name="label" translatable="yes">_Save Selection as Boilerplate…</attribute>
+          <attribute name="action">win.boilerplate-save</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">_Open My Boilerplate Folder</attribute>
+          <attribute name="action">win.boilerplate-folder</attribute>
         </item>
       </section>
     </submenu>
@@ -1345,6 +1353,7 @@ MainWindowUi::MainWindowUi(BaseObjectType* object, const Glib::RefPtr<Gtk::Build
     status_ = builder->get_widget<Gtk::Label>("status_");
     menubar_ = builder->get_object<Gio::Menu>("menubar_");
     boilerplateMenu_ = builder->get_object<Gio::Menu>("boilerplateMenu_");
+    boilerplateToolsSection_ = builder->get_object<Gio::Menu>("boilerplateToolsSection_");
     projectMenu_ = builder->get_object<Gio::Menu>("projectMenu_");
     projectFileSection_ = builder->get_object<Gio::Menu>("projectFileSection_");
     projectWebSection_ = builder->get_object<Gio::Menu>("projectWebSection_");

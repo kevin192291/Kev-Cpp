@@ -1,0 +1,22 @@
+---
+order: 35
+description: A sidebar beside the content that moves above it when there isn't room, without a media query
+---
+/* <div class="with-sidebar"> <aside>...</aside> <main>...</main> </div>
+   Side by side while the content can be at least 60% of the row, stacked otherwise. */
+.with-sidebar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+.with-sidebar > :first-child {
+    flex-grow: 1;
+    flex-basis: 16rem;
+}
+
+.with-sidebar > :last-child {
+    flex-grow: 999;
+    flex-basis: 0;
+    min-inline-size: 60%;
+}

@@ -1,0 +1,17 @@
+---
+order: 10
+description: Smooth changes between states, listing the properties so unrelated changes don't animate
+---
+/* opacity, translate, scale and rotate animate cheaply; width, height and margins make the page re-lay out. */
+.link-button {
+    background-color: #2563eb;
+    color: #ffffff;
+    transition:
+        background-color 0.2s ease-out,
+        translate 0.2s ease-out;
+}
+
+.link-button:hover {
+    background-color: #1d4ed8;
+    translate: 0 -2px;
+}

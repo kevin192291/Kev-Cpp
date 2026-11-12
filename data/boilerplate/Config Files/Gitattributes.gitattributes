@@ -1,0 +1,21 @@
+---
+label: .gitattributes
+description: LF line endings for every text file, whatever system it's checked out on
+file: .gitattributes
+whole-file: yes
+order: 12
+section: git
+---
+# Text files are stored and checked out with LF; Windows batch files keep CRLF, which cmd needs.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never merged or diffed as text
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.wav binary
+*.ogg binary

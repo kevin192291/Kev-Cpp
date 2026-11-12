@@ -1,0 +1,31 @@
+---
+order: 20
+description: Light colours by default and dark ones when the system is set to dark (prefers-color-scheme)
+---
+/* color-scheme makes the browser's own parts (form fields, scrollbars) follow the theme too. */
+:root {
+    color-scheme: light dark;
+
+    --bg: #ffffff;
+    --surface: #f4f4f5;
+    --text: #18181b;
+    --muted: #52525b;
+    --border: #e4e4e7;
+    --accent: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #18181b;
+        --surface: #27272a;
+        --text: #f4f4f5;
+        --muted: #a1a1aa;
+        --border: #3f3f46;
+        --accent: #60a5fa;
+    }
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+}

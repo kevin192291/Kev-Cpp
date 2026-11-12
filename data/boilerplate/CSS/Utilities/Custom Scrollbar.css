@@ -1,0 +1,25 @@
+---
+order: 50
+description: Thin scrollbars in your own colours, standard properties first, ::-webkit-scrollbar where they're missing
+---
+.thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #9ca3af transparent; /* thumb, track */
+}
+
+/* For browsers without scrollbar-color; Chrome ignores these rules once the standard ones are set */
+@supports not (scrollbar-color: auto) {
+    .thin-scrollbar::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .thin-scrollbar::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: #9ca3af;
+    }
+
+    .thin-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+}

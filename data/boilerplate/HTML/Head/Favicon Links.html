@@ -1,0 +1,12 @@
+---
+order: 20
+description: The favicon set current browsers need: .ico, scalable SVG, Apple touch icon, web app manifest, theme colour
+---
+<!-- sizes="32x32" stops Chrome choosing the .ico over the SVG. The SVG may hold a prefers-color-scheme
+     media query to change with the theme. The 180x180 PNG is for iOS home screens; the manifest lists
+     192x192 and 512x512 PNGs for Android. -->
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#2563eb">

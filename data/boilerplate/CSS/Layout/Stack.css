@@ -1,0 +1,10 @@
+---
+order: 25
+description: Even vertical spacing between children, set in one place with gap
+---
+/* Change the spacing of one stack with style="--stack-space: 2rem" */
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stack-space, 1rem);
+}

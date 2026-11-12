@@ -1,0 +1,23 @@
+---
+order: 10
+description: A complete HTML5 page: doctype, language, character set, viewport, title, stylesheet and module script
+file: index.html
+whole-file: yes
+ask: Title = My Page
+---
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{{Title}}</title>
+        <link rel="stylesheet" href="styles.css">
+        <script type="module" src="main.js"></script>
+    </head>
+    <body>
+        <main>
+            <h1>{{Title}}</h1>
+            {{cursor}}
+        </main>
+    </body>
+</html>

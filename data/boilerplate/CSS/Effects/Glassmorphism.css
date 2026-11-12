@@ -1,0 +1,19 @@
+---
+order: 60
+description: A frosted-glass panel that blurs what's behind it (backdrop-filter), readable where that isn't supported
+---
+/* It needs something colourful behind it, such as a photo or gradient, to show. */
+.glass {
+    border: 1px solid rgb(255 255 255 / 0.3);
+    border-radius: 1rem;
+    background: rgb(255 255 255 / 0.15);
+    box-shadow: 0 8px 32px rgb(0 0 0 / 0.15);
+    -webkit-backdrop-filter: blur(12px) saturate(160%); /* Safari before 18 */
+    backdrop-filter: blur(12px) saturate(160%);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+        background: rgb(255 255 255 / 0.85);
+    }
+}

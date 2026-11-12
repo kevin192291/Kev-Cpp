@@ -1,0 +1,15 @@
+---
+order: 50
+description: Utility classes that hide an element below or above 48rem; it is hidden from screen readers too
+---
+@media (width < 48rem) {
+    .hide-mobile {
+        display: none !important;
+    }
+}
+
+@media (width >= 48rem) {
+    .hide-desktop {
+        display: none !important;
+    }
+}

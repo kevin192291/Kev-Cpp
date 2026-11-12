@@ -1,0 +1,11 @@
+---
+order: 20
+description: As many equal columns as fit, each at least 16rem wide, with no media queries
+---
+/* min(16rem, 100%) stops a single column overflowing windows narrower than 16rem.
+   auto-fill instead of auto-fit keeps empty columns, so a few items don't stretch across the row. */
+.auto-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+    gap: 1rem;
+}

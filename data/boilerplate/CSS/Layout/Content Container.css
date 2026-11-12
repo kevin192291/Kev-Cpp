@@ -1,0 +1,8 @@
+---
+order: 15
+description: Centred content with a maximum width and side gutters that never touch the window's edge
+---
+.container {
+    inline-size: min(100% - 2rem, 70rem);
+    margin-inline: auto;
+}

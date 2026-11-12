@@ -1,0 +1,7 @@
+---
+order: 20
+description: Puts the selected rules inside a min-width media query
+---
+@media (width >= 48rem) {
+    {{selection}}{{cursor}}
+}

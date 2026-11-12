@@ -1,0 +1,15 @@
+---
+order: 30
+description: Border-box sizing everywhere, so width and height include padding and border
+---
+/* Inherited rather than set on every element, so a widget that needs content-box can switch back
+   by setting box-sizing on its root only. */
+html {
+    box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: inherit;
+}

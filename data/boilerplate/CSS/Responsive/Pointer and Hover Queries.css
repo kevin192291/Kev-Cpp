@@ -1,0 +1,17 @@
+---
+order: 60
+description: Styles for touch screens and for mice, chosen by what the device can do rather than its width
+---
+/* Touch screens: bigger targets, no hover-only features */
+@media (pointer: coarse) {
+    button,
+    select,
+    input:not([type="checkbox"], [type="radio"]) {
+        min-block-size: 2.75rem; /* 44px, the usual smallest comfortable target */
+    }
+}
+
+/* A mouse or trackpad: hover effects make sense */
+@media (hover: hover) and (pointer: fine) {
+    {{cursor}}
+}

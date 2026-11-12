@@ -1,0 +1,36 @@
+---
+order: 20
+description: A page body built from landmarks: skip link, header with navigation, main, sidebar and footer
+---
+<!-- Screen-reader users jump between these landmarks; the skip link lets keyboard users pass the header. -->
+<a class="visually-hidden-focusable" href="#main">Skip to content</a>
+
+<header>
+    <a href="/">Site name</a>
+    <nav aria-label="Main">
+        <ul>
+            <li><a href="/" aria-current="page">Home</a></li>
+            <li><a href="/about">About</a></li>
+            <li><a href="/contact">Contact</a></li>
+        </ul>
+    </nav>
+</header>
+
+<main id="main">
+    <article>
+        <h1>Page title</h1>
+        {{cursor}}
+    </article>
+</main>
+
+<aside>
+    <h2>Related</h2>
+    <ul>
+        <li><a href="/first">First related page</a></li>
+        <li><a href="/second">Second related page</a></li>
+    </ul>
+</aside>
+
+<footer>
+    <p><small>&copy; {{year}} Site name</small></p>
+</footer>

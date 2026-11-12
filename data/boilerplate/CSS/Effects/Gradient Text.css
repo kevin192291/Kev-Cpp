@@ -1,0 +1,15 @@
+---
+order: 50
+description: Text filled with a gradient, with a solid colour where background-clip: text isn't supported
+---
+.gradient-text {
+    color: #7c3aed;
+}
+
+@supports (background-clip: text) {
+    .gradient-text {
+        background: linear-gradient(90deg, #2563eb, #7c3aed, #db2777);
+        background-clip: text;
+        color: transparent;
+    }
+}

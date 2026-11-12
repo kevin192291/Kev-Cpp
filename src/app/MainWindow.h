@@ -5,6 +5,7 @@
 #include "build/BuildRunner.h"
 #include "build/CompileLog.h"
 #include "build/CompilerPanel.h"
+#include "core/Boilerplate.h"
 #include "core/BuildPlan.h"
 #include "core/Diagnostics.h"
 #include "core/ProjectSession.h"
@@ -140,10 +141,6 @@ private:
     void refreshGitStatus();  // soon (bursts of requests make one run)
     void runGitStatus();
     void addSystemPackage(const std::string& module);
-    // Edit → Insert Boilerplate (core/Boilerplate): starting code for SFML and GTK 4 at the cursor,
-    // and the packages it needs added to the project.
-    void fillBoilerplateMenus(); // the Edit menu's and the editors' right-click menus' submenus
-    void insertBoilerplate(const std::string& id);
     // Links SFML the way this computer's SFML needs (sfml::packagesFor), with the components the
     // project already uses plus `components`. What changed, for the status line; empty if nothing.
     std::string linkSfml(const std::vector<std::string>& components);
@@ -232,6 +229,29 @@ private:
                   const std::vector<std::filesystem::path>& files = {});
     std::vector<std::pair<std::string, std::string>> traceEnvironment();
     void refreshDependencies();
+
+    // The Boilerplate menu (MainWindowBoilerplate.cpp): starters and patterns from folders of snippet
+    // files (core/Boilerplate), Kev-C++'s own and the user's, inserted at the cursor or into a new file.
+    struct BoilerplateRequest; // a chosen snippet on its way into the editor
+    std::vector<std::filesystem::path> boilerplateRoots() const; // built-in first, then the user's
+    std::filesystem::path userBoilerplateDir() const;
+    // Rescans the folders and rebuilds the menu when what it shows changed; not while a menu is open
+    // (that would close it), but soon after. The folders are watched: a change rescans them.
+    void refreshBoilerplate();
+    void refreshBoilerplateSoon();
+    // Runs `then` once the menu an item was chosen from has gone, closing a menu GTK opens by itself
+    // meanwhile (see the .cpp).
+    void afterMenuChoice(std::function<void()> then);
+    void watchBoilerplate();
+    void insertBoilerplate(const std::string& key);
+    void askBoilerplateValues(std::shared_ptr<BoilerplateRequest> request, size_t next);
+    void placeBoilerplate(std::shared_ptr<BoilerplateRequest> request);
+    void insertBoilerplateInto(EditorTab* tab, const BoilerplateRequest& request, bool replaceAll);
+    void newFileWithBoilerplate(std::shared_ptr<BoilerplateRequest> request, const std::string& why);
+    void boilerplateInserted(const BoilerplateRequest& request, const std::string& where);
+    boilerplate::Values boilerplateValues(const BoilerplateRequest& request) const;
+    void saveSelectionAsBoilerplate();
+    void openBoilerplateFolder();
 
     void showToolchainInfo();
     // Help → Check for Updates: the latest GitHub release, downloaded and installed over this one.
@@ -362,6 +382,11 @@ private:
     // View → Toolbars / Panels check items, by group or panel id.
     std::map<std::string, Glib::RefPtr<Gio::SimpleAction>> toolbarActions_;
     std::map<std::string, Glib::RefPtr<Gio::SimpleAction>> panelActions_;
+    boilerplate::Entry boilerplate_;  // what the Boilerplate menu shows
+    std::string boilerplateSignature_; // of boilerplate_, to rebuild the menu only when it changes
+    std::vector<Glib::RefPtr<Gio::FileMonitor>> boilerplateMonitors_;
+    sigc::connection boilerplateSoon_;
+    int sfmlMajor_ = 0; // the installed SFML's (sfml::detect), for which SFML snippets the menu shows
     std::string profile_ = "none";
     bool applyingProfile_ = false; // setting the Debug/Release choice from the project, not the user
     std::unique_ptr<TaskButton> continueTask_; // Continue while paused, Pause while the program runs

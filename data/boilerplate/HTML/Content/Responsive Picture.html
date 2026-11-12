@@ -1,0 +1,26 @@
+---
+order: 50
+description: A <picture> with AVIF and WebP sources and a JPEG fallback, sized with srcset and sizes
+---
+<!-- The browser takes the first source type it supports, then the smallest file sharp enough for the width
+     that sizes says the image will have. width and height reserve the space, so the page doesn't jump.
+     Drop loading="lazy" for an image at the top of the page: it should load straight away. -->
+<picture>
+    <source
+        type="image/avif"
+        srcset="photo-480.avif 480w, photo-960.avif 960w, photo-1440.avif 1440w"
+        sizes="(min-width: 64rem) 50vw, 100vw">
+    <source
+        type="image/webp"
+        srcset="photo-480.webp 480w, photo-960.webp 960w, photo-1440.webp 1440w"
+        sizes="(min-width: 64rem) 50vw, 100vw">
+    <img
+        src="photo-960.jpg"
+        srcset="photo-480.jpg 480w, photo-960.jpg 960w, photo-1440.jpg 1440w"
+        sizes="(min-width: 64rem) 50vw, 100vw"
+        width="1440"
+        height="960"
+        alt="Describe what the picture shows"
+        loading="lazy"
+        decoding="async">
+</picture>
