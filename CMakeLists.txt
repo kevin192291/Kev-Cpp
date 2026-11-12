@@ -44,6 +44,7 @@ add_library(kevc_core STATIC
   src/core/ProjectSession.cpp
   src/core/ProcessTree.cpp
   src/core/ProjectState.cpp
+  src/core/QuickFix.cpp
   src/core/RecentProjects.cpp
   src/core/Search.cpp
   src/core/Servers.cpp

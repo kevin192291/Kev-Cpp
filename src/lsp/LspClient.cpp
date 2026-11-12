@@ -24,6 +24,9 @@ LspClient::json clientCapabilities() {
           {"hover", {{"contentFormat", {"markdown", "plaintext"}}}},
           {"definition", {{"linkSupport", true}}},
           {"documentSymbol", {{"hierarchicalDocumentSymbolSupport", true}}},
+          // CodeAction literals: without them clangd answers with commands it would carry out itself.
+          {"codeAction", {{"codeActionLiteralSupport", {{"codeActionKind", {{"valueSet", {"quickfix"}}}}}},
+                          {"isPreferredSupport", true}}},
           {"publishDiagnostics", {{"relatedInformation", false}}}}},
     };
 }

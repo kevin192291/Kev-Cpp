@@ -23,6 +23,7 @@ add_executable(kevc_tests
   ProjectSessionTest.cpp
   ProcessTreeTest.cpp
   ProjectStateTest.cpp
+  QuickFixTest.cpp
   RecentProjectsTest.cpp
   SearchTest.cpp
   ServersTest.cpp

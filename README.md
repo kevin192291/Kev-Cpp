@@ -87,8 +87,9 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   the tree, the Routes tab one that filters its routes, and the Ctrl+F bar a button that searches
   every file for what's in it.
 - **Files in the Project tab**: right-click a file or folder to open, rename (F2) or delete it
-  (Delete; it goes to the trash), make a new file or folder in it, or copy its path. A file's menu
-  has **Open Containing Folder** (the file manager opens its folder with the file selected); a
+  (Delete; it goes to the trash), make a new file or folder in it, or copy its path (**Copy File
+  Path** or **Copy Directory Path**, the whole path; Copy Relative Path, from the project folder). A
+  file's menu has **Open Containing Folder** (the file manager opens its folder with the file selected); a
   folder's has **Open This Folder** (in the file manager) and **Open Terminal Here** (the Terminal
   tab goes to that folder; if a program is running there, Kev-C++ asks before stopping it). Drag a file or
   folder onto another folder to move it there (drop it on a file to use that file's folder, or on the
@@ -129,6 +130,13 @@ replaces the program, its bundled tools and the menu entry, and installs any mis
   it), Go to Type Definition, Go to Declaration (C/C++) and Find All References; with several answers
   a list opens at the cursor. In TypeScript, Go to Definition of something from a library goes on to
   its JavaScript source instead of stopping at the `.d.ts` declarations.
+- **Possible fixes**: hover over an error and, when something can fix it, the hover has a lightbulb
+  button, **Show possible fixes**; click it and choose one. For a class, function or variable the file
+  doesn't know yet (`TileMap map;` → "Unknown type name 'TileMap'"), the list offers an `#include` of
+  each header in the project that declares it, nearest first, even one nothing includes yet; choosing it
+  adds the line after the file's last `#include`. The language server's own fixes are listed too
+  (clangd's "insert ';'", "change '.' to '->'", TypeScript's missing imports). Also in the Edit menu and
+  the editor's right-click menu as **Show Possible Fixes**, and on **Ctrl+.** for the cursor's line.
 - **C/C++ layout as you type**: a `{` after a class, function or `if (…)` moves to a line of its own;
   `public:`, `private:` and `protected:` snap to the class's own indentation, members one level in;
   the `}` that closes a class, struct, union or enum gets its `;`.
@@ -305,5 +313,6 @@ project instead.
 | Ctrl+R | Replace in the current file | Right-click | Go to Definition / Implementation / References |
 | Ctrl+I | Auto Format (file or selected lines) | Right-click a line number | Breakpoint, IF, Live, Break When Value Changes |
 | Ctrl+/ | Toggle comment (the line, or a block around selected lines) | Ctrl+Plus / Ctrl+Minus | Larger / smaller editor text (Ctrl+0: default size) |
+| Ctrl+. | Show possible fixes for the error at the cursor | | |
 
 Logs from the language servers are in `~/.cache/kev-cpp/logs/`.

@@ -329,6 +329,12 @@ private:
     void lookUpAtCursor(Lookup what);
     void showLocations(EditorTab* tab, const GtkTextIter& at, const Glib::ustring& what, std::vector<LspLocation> locations);
     void openLocation(const LspLocation& location);
+    // Edit → Show Possible Fixes (Ctrl+.), the editor's right-click menu and the hover's lightbulb:
+    // the fixes for the error or warning at `at` (with `orLine`, else on its line) listed there; the
+    // one chosen is applied.
+    void showFixes(EditorTab* tab, const GtkTextIter& at, bool orLine);
+    // Opens a popover parented to editorArea_ under the text at `at`.
+    void popUpAtText(Gtk::Popover& popover, EditorTab* tab, const GtkTextIter& at);
     void refreshSymbols();
     void scheduleSymbolsRefresh();
     void showProjectOptions(bool packagesPage);
@@ -365,6 +371,7 @@ private:
     std::vector<TestCase> lastFailed_;
     sigc::connection symbolsTimer_;
     Gtk::Popover locationsPopover_; // several answers to a Go to…, at the cursor
+    Gtk::Popover fixesPopover_;     // Show Possible Fixes' list, at the error
     std::set<std::filesystem::path> warnedUnlisted_; // designer code already reported as not in CMakeLists.txt
     Glib::RefPtr<WelcomePage> welcomePage_; // while no file is open
     std::filesystem::path gitTopLevel_; // the open folder's git work tree ("" if it isn't in one)

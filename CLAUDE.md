@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 303 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 315 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -54,9 +54,11 @@ verified by driving the real app (see "GUI testing").
   between old and new text, the nearest .clang-format, the project's prettier), `Comments` (Toggle
   Comment: a file's comment style, the script/style sections of HTML and Svelte, the edits), `Servers`
   (Running Servers: listening sockets from /proc/net/tcp(6) and the processes holding them, command
-  summaries, the HTTP probe), `Boilerplate` (the Boilerplate menu: snippet folders merged into a tree,
-  headers, placeholders, indentation, which files a snippet fits, missing #includes, the installed
-  SFML's snippets, Save Selection's path).
+  summaries, the HTTP probe), `QuickFix` (Show Possible Fixes: the unknown name in a compiler
+  message, the names a header declares, `#include` spellings, the HeaderIndex cache, a server's code
+  actions), `Boilerplate` (the Boilerplate menu: snippet folders merged into a tree, headers,
+  placeholders, indentation, which files a snippet fits, missing #includes, the installed SFML's
+  snippets, Save Selection's path).
 - `src/app/` — `Application` (startup, toolchain check, accelerators, CSS, icon, the splash), `MainWindow`
   (everything wired together: actions, build/run, debugging, IntelliSense, dev server; its frame and
   menus are `MainWindow.ui`; MainWindowBoilerplate.cpp holds the Boilerplate menu's side).
@@ -420,6 +422,20 @@ verified by driving the real app (see "GUI testing").
   `_typescript.goToSourceDefinition`. Several answers show in locationsPopover_ (parented to
   editorArea_). Right-click moves the cursor (outside a selection) so the menu acts on the clicked
   word; the items are the editors' extra_menu.
+- **Possible fixes** (`win.show-fixes`, Ctrl+.; Edit menu, both editor right-click menus, and a
+  lightbulb button in the hover over a diagnostic that has fixes): `LspManager::fixes` sends
+  `textDocument/codeAction` (quickfix only) with the server's own diagnostic JSON (`LspDiagnostic::raw`:
+  clangd matches by message, so the displayed message can drop its " (fix available)") and, for clangd
+  files, adds an #include of every project header declaring the name the error says is unknown
+  (`quickfix::unknownName`, `HeaderIndex` over the Project tab's files plus include folders outside the
+  project, cached by size and time). clangd alone can't: its index only has headers some compiled file
+  includes, so a new class's header is never suggested. A server fix that only adds
+  one #include line becomes the same kind of fix (title `#include "X"`, placed by
+  `boilerplate::missingIncludes` after the last #include), so both look and land alike; duplicates are
+  dropped. Clients advertise codeActionLiteralSupport, or clangd answers with commands. The hover asks
+  for its text and the fixes at once (`HoverParts`); the button re-requests the fixes on click
+  (`MainWindow::showFixes`) rather than keeping edits that might be stale. Commands and edits to other
+  files are left out.
 - **Replace**: the find bar's Replace row uses GtkSourceSearchContext replace/replace_all; Find in
   Files' Replace All re-runs the matcher on each listed file (search::Matcher::replace, $1 groups for
   regex), writes files directly, and hands open modified editors their new text (one undo step).

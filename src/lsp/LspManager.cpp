@@ -503,6 +503,82 @@ void LspManager::format(EditorTab* tab, std::optional<std::pair<GtkTextIter, Gtk
     client->notify("textDocument/didClose", {{"textDocument", {{"uri", uri}}}});
 }
 
+std::vector<LspDiagnostic> LspManager::diagnosticsAt(EditorTab* tab, const GtkTextIter& at, bool orLine) const {
+    std::vector<LspDiagnostic> found;
+    const Document* doc = find(tab);
+    if (!doc) return found;
+    const json pos = positionOf(at);
+    const int line = pos["line"], col = pos["character"];
+    for (const auto& d : doc->diagnostics)
+        if (!before(line, col, d.startLine, d.startUtf16) && !before(d.endLine, d.endUtf16, line, col))
+            found.push_back(d);
+    if (found.empty() && orLine)
+        for (const auto& d : doc->diagnostics)
+            if (d.startLine <= line && line <= d.endLine) found.push_back(d);
+    return found;
+}
+
+void LspManager::fixes(EditorTab* tab, const GtkTextIter& at, bool orLine, std::function<void(LspFixes)> done) {
+    Document* doc = find(tab);
+    LspFixes result;
+    result.diagnostics = diagnosticsAt(tab, at, orLine);
+    LspClient* client = doc ? clientFor(doc->server) : nullptr;
+    if (!client || result.diagnostics.empty()) {
+        done(std::move(result));
+        return;
+    }
+    flush(*doc);
+
+    // The project's headers that declare a name an error says it doesn't know. clangd suggests a
+    // header only once its index has it, and nothing indexes a header no compiled file includes yet.
+    std::vector<fs::path> headers;
+    std::vector<fs::path> includeDirs;
+    if (doc->server == lsp::Server::Clangd) {
+        const fs::path base = root_.empty() ? tab->path().parent_path() : root_;
+        std::vector<fs::path> folders{base};
+        if (project_)
+            for (const auto& dir : project_->includeDirs) {
+                const fs::path path = (fs::path(dir).is_absolute() ? fs::path(dir) : base / dir).lexically_normal();
+                includeDirs.push_back(path);
+                const fs::path rel = path.lexically_relative(base);
+                // The project's own are listed with it already.
+                if (rel.empty() || *rel.begin() == "..") folders.push_back(path);
+            }
+        for (const auto& d : result.diagnostics)
+            if (const auto name = quickfix::unknownName(d.message))
+                for (auto& header : headers_.find(folders, *name))
+                    if (std::find(headers.begin(), headers.end(), header) == headers.end()) headers.push_back(header);
+    }
+
+    json diagnostics = json::array();
+    int startLine = result.diagnostics[0].startLine, startUtf16 = result.diagnostics[0].startUtf16;
+    int endLine = result.diagnostics[0].endLine, endUtf16 = result.diagnostics[0].endUtf16;
+    for (const auto& d : result.diagnostics) {
+        diagnostics.push_back(d.raw);
+        if (before(d.startLine, d.startUtf16, startLine, startUtf16)) {
+            startLine = d.startLine;
+            startUtf16 = d.startUtf16;
+        }
+        if (before(endLine, endUtf16, d.endLine, d.endUtf16)) {
+            endLine = d.endLine;
+            endUtf16 = d.endUtf16;
+        }
+    }
+    json params = {{"textDocument", {{"uri", doc->uri}}},
+                   {"range", {{"start", {{"line", startLine}, {"character", startUtf16}}},
+                              {"end", {{"line", endLine}, {"character", endUtf16}}}}},
+                   {"context", {{"diagnostics", diagnostics}, {"only", {"quickfix"}}, {"triggerKind", 1}}}};
+    const fs::path file = tab->path();
+    const std::string text = documentText(GTK_TEXT_BUFFER(tab->buffer()));
+    client->request("textDocument/codeAction", params,
+                    [done, file, text, headers, includeDirs, result](const json& answer, const json* error) mutable {
+                        if (!error) result.fixes = quickfix::parseCodeActions(answer, file);
+                        auto includes = quickfix::includeFixes(file, text, headers, includeDirs, result.fixes);
+                        result.fixes.insert(result.fixes.end(), includes.begin(), includes.end());
+                        done(std::move(result));
+                    });
+}
+
 std::vector<std::string> LspManager::triggerCharacters(EditorTab* tab) const {
     const Document* doc = find(tab);
     if (!doc) return {};
@@ -530,7 +606,10 @@ void LspManager::onDiagnostics(const std::string& uri, const json& diagnostics) 
             out.startUtf16 = d["range"]["start"].value("character", 0);
             out.endLine = d["range"]["end"].value("line", 0);
             out.endUtf16 = d["range"]["end"].value("character", 0);
-            out.message = d.value("message", "");
+            // The lightbulb says a fix is there; the server's own copy keeps the words (clangd
+            // matches a code action request's diagnostics by them).
+            out.message = quickfix::withoutFixCount(d.value("message", ""));
+            out.raw = d;
             doc->diagnostics.push_back(std::move(out));
         }
         diagnosticsChanged_.emit(tab);

@@ -2,6 +2,7 @@
 
 #include "core/Breakpoints.h"
 #include "core/Format.h"
+#include "core/QuickFix.h"
 #include "editor/DocumentPage.h"
 
 #include <gtkmm.h>
@@ -80,6 +81,9 @@ public:
     // Edits whose ranges are in the current text (Auto Format's), as one undo step. Marks outside the
     // edited ranges, breakpoints among them, stay where they are.
     void applyEdits(const std::vector<format::TextEdit>& edits);
+    // One of Show Possible Fixes' fixes, as one undo step: its #include after the file's last one (at
+    // the top when there's none), or its edits. False when the #include is there already.
+    bool applyFix(const quickfix::Fix& fix);
     // Edit → Toggle Comment (Ctrl+/): the cursor's line or the selected lines commented out, or back
     // in, the way the file's language writes comments (core/Comments), as one undo step. Several lines
     // stay selected with their comment markers, so pressing it again takes them off. Returns why

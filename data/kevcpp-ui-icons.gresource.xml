@@ -79,6 +79,7 @@
     <file>icons/hicolor/16x16/actions/kevc-help.png</file>
     <file>icons/hicolor/16x16/actions/kevc-integer-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-js-file.png</file>
+    <file>icons/hicolor/16x16/actions/kevc-lightbulb.png</file>
     <file>icons/hicolor/16x16/actions/kevc-local-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-member-variable.png</file>
     <file>icons/hicolor/16x16/actions/kevc-memory.png</file>
@@ -202,6 +203,7 @@
     <file>icons/hicolor/24x24/actions/kevc-help.png</file>
     <file>icons/hicolor/24x24/actions/kevc-integer-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-js-file.png</file>
+    <file>icons/hicolor/24x24/actions/kevc-lightbulb.png</file>
     <file>icons/hicolor/24x24/actions/kevc-local-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-member-variable.png</file>
     <file>icons/hicolor/24x24/actions/kevc-memory.png</file>
@@ -325,6 +327,7 @@
     <file>icons/hicolor/32x32/actions/kevc-help.png</file>
     <file>icons/hicolor/32x32/actions/kevc-integer-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-js-file.png</file>
+    <file>icons/hicolor/32x32/actions/kevc-lightbulb.png</file>
     <file>icons/hicolor/32x32/actions/kevc-local-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-member-variable.png</file>
     <file>icons/hicolor/32x32/actions/kevc-memory.png</file>
@@ -448,6 +451,7 @@
     <file>icons/hicolor/48x48/actions/kevc-help.png</file>
     <file>icons/hicolor/48x48/actions/kevc-integer-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-js-file.png</file>
+    <file>icons/hicolor/48x48/actions/kevc-lightbulb.png</file>
     <file>icons/hicolor/48x48/actions/kevc-local-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-member-variable.png</file>
     <file>icons/hicolor/48x48/actions/kevc-memory.png</file>

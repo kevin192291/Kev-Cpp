@@ -3,6 +3,7 @@
 #include "core/Format.h"
 #include "core/Lsp.h"
 #include "core/Project.h"
+#include "core/QuickFix.h"
 #include "core/Toolchain.h"
 #include "lsp/LspClient.h"
 
@@ -25,6 +26,13 @@ struct LspDiagnostic {
     Severity severity = Severity::Error;
     int startLine = 0, startUtf16 = 0, endLine = 0, endUtf16 = 0;
     std::string message;
+    lsp::json raw; // as the server sent it: a code action request hands it back
+};
+
+// What Show Possible Fixes offers for a place in a file.
+struct LspFixes {
+    std::vector<LspDiagnostic> diagnostics; // the errors and warnings there (none: nothing to fix)
+    std::vector<quickfix::Fix> fixes;
 };
 
 struct LspLocation {
@@ -65,6 +73,13 @@ public:
     // Empty for other servers.
     void sourceDefinition(EditorTab* tab, const GtkTextIter& at, std::function<void(std::vector<LspLocation>)> done);
     void documentSymbols(EditorTab* tab, std::function<void(const json& symbols)> done);
+    // The diagnostics whose range holds `at`; with `orLine` and none there, those on its line.
+    std::vector<LspDiagnostic> diagnosticsAt(EditorTab* tab, const GtkTextIter& at, bool orLine) const;
+    // Possible fixes for the diagnostics at `at` (see diagnosticsAt): the server's quick fixes and, in
+    // C/C++, an #include of each project header that declares a name an error says is unknown.
+    // `done` runs when the server answers or fails (straight away when no server or diagnostic is there);
+    // the tab may have closed by then.
+    void fixes(EditorTab* tab, const GtkTextIter& at, bool orLine, std::function<void(LspFixes)> done);
     // Edit → Auto Format: the server's edits for the document, or only for `range` when the server
     // formats ranges (`ranged` says whether it did). With `standInFolder`, clangd formats a stand-in
     // copy of the text there instead (see format::standInName), so that folder's .clang-format applies.
@@ -122,6 +137,7 @@ private:
     bool hadCompileDatabase_ = false;
     bool hoverEnabled_ = true;
     int standIns_ = 0; // names Auto Format's stand-in documents
+    quickfix::HeaderIndex headers_; // which project headers declare what, for #include fixes
     std::map<EditorTab*, std::unique_ptr<Document>> docs_;
     std::map<lsp::Server, std::unique_ptr<LspClient>> clients_;
     std::map<lsp::Server, bool> unavailable_; // reported once per workspace

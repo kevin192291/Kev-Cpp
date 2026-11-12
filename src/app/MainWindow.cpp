@@ -301,6 +301,7 @@ MainWindow::MainWindow(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>&
 
 MainWindow::~MainWindow() {
     locationsPopover_.unparent();
+    fixesPopover_.unparent();
 }
 
 void MainWindow::closeWithoutQuestions() {
@@ -341,6 +342,16 @@ void MainWindow::buildActions() {
     add_action("format", [this] {
         if (auto* tab = currentEditor()) formatter_->format(*tab, folder_);
         else setStatus("Auto Format works on a source file: open one first");
+    });
+    add_action("show-fixes", [this] {
+        if (auto* tab = currentEditor()) {
+            GtkTextIter cursor;
+            GtkTextBuffer* text = GTK_TEXT_BUFFER(tab->buffer());
+            gtk_text_buffer_get_iter_at_mark(text, &cursor, gtk_text_buffer_get_insert(text));
+            showFixes(tab, cursor, true);
+        } else {
+            setStatus("Show Possible Fixes works on a source file: open one first");
+        }
     });
     add_action("toggle-comment", [this] {
         if (auto* tab = currentEditor()) {
@@ -692,6 +703,9 @@ void MainWindow::setupEditorArea() {
     locationsPopover_.set_parent(*editorArea_);
     locationsPopover_.set_position(Gtk::PositionType::BOTTOM);
     locationsPopover_.set_halign(Gtk::Align::START); // rightwards from the word, not centred on it
+    fixesPopover_.set_parent(*editorArea_);
+    fixesPopover_.set_position(Gtk::PositionType::BOTTOM);
+    fixesPopover_.set_halign(Gtk::Align::START);
 }
 
 void MainWindow::on_find_changed() {
@@ -3223,7 +3237,8 @@ void MainWindow::setupIntelliSense(EditorTab* tab) {
     g_object_set(completion, "show-icons", TRUE, "select-on-show", TRUE, "page-size", 10, nullptr);
 
     GtkSourceHover* hover = gtk_source_view_get_hover(tab->view());
-    GtkSourceHoverProvider* hoverProvider = newLspHoverProvider(lsp_.get(), tab);
+    GtkSourceHoverProvider* hoverProvider =
+        newLspHoverProvider(lsp_.get(), tab, [this, tab](const GtkTextIter& at) { showFixes(tab, at, false); });
     gtk_source_hover_add_provider(hover, hoverProvider);
     g_object_unref(hoverProvider);
 
@@ -3389,6 +3404,11 @@ void MainWindow::showLocations(EditorTab* tab, const GtkTextIter& at, const Glib
     scroller->set_min_content_width(520);
     box->append(*scroller);
     locationsPopover_.set_child(*box);
+    popUpAtText(locationsPopover_, tab, at);
+    setStatus(std::to_string(locations.size()) + " " + plural + ": choose one");
+}
+
+void MainWindow::popUpAtText(Gtk::Popover& popover, EditorTab* tab, const GtkTextIter& at) {
     // Under the word, in editorArea_'s coordinates.
     GdkRectangle rect;
     gtk_text_view_get_iter_location(GTK_TEXT_VIEW(tab->view()), &at, &rect);
@@ -3396,9 +3416,87 @@ void MainWindow::showLocations(EditorTab* tab, const GtkTextIter& at, const Glib
     gtk_text_view_buffer_to_window_coords(GTK_TEXT_VIEW(tab->view()), GTK_TEXT_WINDOW_WIDGET, rect.x, rect.y, &wx, &wy);
     graphene_point_t point = GRAPHENE_POINT_INIT(float(wx), float(wy)), inArea;
     if (!gtk_widget_compute_point(GTK_WIDGET(tab->view()), GTK_WIDGET(editorArea_->gobj()), &point, &inArea)) return;
-    locationsPopover_.set_pointing_to(Gdk::Rectangle(int(inArea.x), int(inArea.y), std::max(rect.width, 1), rect.height));
-    locationsPopover_.popup();
-    setStatus(std::to_string(locations.size()) + " " + plural + ": choose one");
+    popover.set_pointing_to(Gdk::Rectangle(int(inArea.x), int(inArea.y), std::max(rect.width, 1), rect.height));
+    popover.popup();
+}
+
+void MainWindow::showFixes(EditorTab* tab, const GtkTextIter& at, bool orLine) {
+    if (!lsp_->handles(tab)) {
+        setStatus("Show Possible Fixes needs IntelliSense for this file");
+        return;
+    }
+    std::weak_ptr<int> alive = lifetime_;
+    lsp_->fixes(tab, at, orLine, [this, tab, alive](LspFixes found) {
+        if (alive.expired()) return;
+        const auto open = editors(); // the tab may have been closed while the server thought
+        if (std::find(open.begin(), open.end(), tab) == open.end()) return;
+        if (found.diagnostics.empty()) {
+            setStatus("No error or warning here to fix");
+            return;
+        }
+        const LspDiagnostic& problem = found.diagnostics.front();
+        if (found.fixes.empty()) {
+            setStatus("No possible fixes for: " + problem.message);
+            return;
+        }
+        auto* list = Gtk::make_managed<Gtk::ListBox>();
+        list->set_selection_mode(Gtk::SelectionMode::BROWSE);
+        list->set_activate_on_single_click(true);
+        auto fixes = std::make_shared<std::vector<quickfix::Fix>>(std::move(found.fixes));
+        for (const auto& fix : *fixes) {
+            auto* row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+            row->set_margin(4);
+            auto* icon = Gtk::make_managed<Gtk::Image>();
+            icon->set_from_icon_name(fix.include.empty() ? "kevc-lightbulb" : "kevc-header-file");
+            icon->set_pixel_size(16);
+            row->append(*icon);
+            auto* label = Gtk::make_managed<Gtk::Label>();
+            const std::string text = Glib::Markup::escape_text(fix.title);
+            label->set_markup(fix.include.empty() ? text : "<tt>" + text + "</tt>");
+            label->set_xalign(0.0f);
+            label->set_ellipsize(Pango::EllipsizeMode::END);
+            row->append(*label);
+            list->append(*row);
+        }
+        list->signal_row_activated().connect([this, tab, fixes](Gtk::ListBoxRow* row) {
+            const quickfix::Fix chosen = (*fixes)[static_cast<size_t>(row->get_index())];
+            fixesPopover_.popdown();
+            Glib::signal_idle().connect_once(sigc::track_obj(
+                [this, tab, chosen] {
+                    const auto open = editors();
+                    if (std::find(open.begin(), open.end(), tab) == open.end()) return;
+                    if (!tab->applyFix(chosen)) setStatus("The file has " + chosen.title + " already");
+                    else setStatus(chosen.include.empty() ? "Fixed: " + chosen.title : "Added " + chosen.title);
+                    tab->focusEditor();
+                },
+                *this));
+        });
+        auto* box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+        auto* title = Gtk::make_managed<Gtk::Label>();
+        title->set_markup("<b>Possible fixes</b>  <span alpha=\"60%\">for " +
+                          Glib::Markup::escape_text(problem.message) + "</span>");
+        title->set_xalign(0.0f);
+        title->set_ellipsize(Pango::EllipsizeMode::END);
+        title->set_max_width_chars(80);
+        box->append(*title);
+        auto* scroller = Gtk::make_managed<Gtk::ScrolledWindow>();
+        scroller->set_child(*list);
+        scroller->set_propagate_natural_height(true);
+        scroller->set_propagate_natural_width(true);
+        scroller->set_max_content_height(360);
+        scroller->set_min_content_width(360);
+        scroller->set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
+        box->append(*scroller);
+        fixesPopover_.set_child(*box);
+        popUpAtText(fixesPopover_, tab,
+                    LspManager::iterAt(GTK_TEXT_BUFFER(tab->buffer()), problem.startLine, problem.startUtf16));
+        if (auto* first = list->get_row_at_index(0)) {
+            list->select_row(*first);
+            first->grab_focus();
+        }
+        setStatus(fixes->size() == 1 ? "1 possible fix: click it or press Enter"
+                                     : std::to_string(fixes->size()) + " possible fixes: choose one");
+    });
 }
 
 void MainWindow::scheduleSymbolsRefresh() {

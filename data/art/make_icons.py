@@ -223,6 +223,28 @@ def draw_pin():
     return img.crop(img.getchannel("A").getbbox())
 
 
+def draw_lightbulb():
+    """Possible fixes (the hover's button, the fixes list): a lit bulb, as Visual Studio shows."""
+    img, d = canvas()
+    glass, shade, shine = (255, 214, 40, 255), (236, 168, 0, 255), (255, 248, 200, 255)
+    metal, ridge = (178, 180, 190, 255), (110, 112, 124, 255)
+    neck = [(40, 66), (88, 66), (80, 96), (48, 96)]
+    # The outline is the same shapes drawn larger in black underneath.
+    d.ellipse((16, 0, 112, 96), fill=OUTLINE)
+    d.polygon([(34, 62), (94, 62), (86, 102), (42, 102)], fill=OUTLINE)
+    d.ellipse((24, 8, 104, 88), fill=glass)
+    d.polygon(neck, fill=glass)
+    d.pieslice((24, 8, 104, 88), -10, 100, fill=shade)  # shaded lower right
+    d.polygon([(64, 66), (88, 66), (80, 96), (64, 96)], fill=shade)
+    d.ellipse((38, 20, 58, 44), fill=shine)              # highlight
+    d.line([(52, 92), (56, 62), (64, 72), (72, 62), (76, 92)], fill=(196, 110, 0, 255), width=5, joint="curve")
+    d.rounded_rectangle((42, 94, 86, 120), radius=6, fill=metal, outline=OUTLINE, width=6)
+    for y in (103, 111):
+        d.line([(46, y), (82, y)], fill=ridge, width=3)
+    d.rounded_rectangle((54, 118, 74, 127), radius=4, fill=OUTLINE)
+    return img
+
+
 def draw_git_badge(fill, mark=None):
     """A round badge for the Project tab's git states: half the icon's size, so it reads as a dot."""
     img, d = canvas()
@@ -340,6 +362,7 @@ def build(sheet):
     icons["servers"] = with_badge(draw_globe(), get("stop"), 0.5)  # Running Servers: the dev server's globe, Stop
     icons["terminal"] = square(draw_terminal(), min_side=0)
     icons["exec-arrow"] = square(draw_exec_arrow(), min_side=0)
+    icons["lightbulb"] = square(draw_lightbulb(), min_side=0)
     pin = draw_pin()
     icons["pinned"] = square(pin, min_side=0)
     icons["unpinned"] = square(greyed(pin), min_side=0)

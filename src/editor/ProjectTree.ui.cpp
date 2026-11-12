@@ -130,8 +130,14 @@ File → New Project or Open Project.</property>
     </section>
     <section>
       <item>
-        <attribute name="label" translatable="yes">Copy _Path</attribute>
-        <attribute name="action">tree.copy-path</attribute>
+        <attribute name="label" translatable="yes">Copy File _Path</attribute>
+        <attribute name="action">tree.copy-file-path</attribute>
+        <attribute name="hidden-when">action-disabled</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Copy Directory _Path</attribute>
+        <attribute name="action">tree.copy-directory-path</attribute>
+        <attribute name="hidden-when">action-disabled</attribute>
       </item>
       <item>
         <attribute name="label" translatable="yes">Copy Relati_ve Path</attribute>

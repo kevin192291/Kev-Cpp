@@ -216,6 +216,7 @@ void Application::setupAccelerators() {
         {"win.goto-line", {"<Control>g"}},
         {"win.format", {"<Control>i"}},
         {"win.toggle-comment", {"<Control>slash", "<Control>KP_Divide"}}, // a text view's Select All otherwise
+        {"win.show-fixes", {"<Control>period"}}, // as in Visual Studio; a text view's emoji chooser otherwise
         // Ctrl+= too: on most keyboards + is Shift+=, and people press it without Shift.
         {"win.zoom-in", {"<Control>plus", "<Control>equal", "<Control>KP_Add"}},
         {"win.zoom-out", {"<Control>minus", "<Control>KP_Subtract"}},

@@ -2,9 +2,11 @@
 
 #include "core/Icons.h"
 #include "core/Lsp.h"
+#include "editor/EditorTab.h"
 #include "lsp/LspManager.h"
 
 #include <algorithm>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -385,6 +387,7 @@ struct KevcHoverProvider {
     GObject parent_instance;
     kevc::LspManager* manager;
     kevc::EditorTab* tab;
+    std::function<void(const GtkTextIter&)>* showFixes;
 };
 struct KevcHoverProviderClass {
     GObjectClass parent_class;
@@ -395,8 +398,107 @@ static void kevc_hover_provider_iface_init(GtkSourceHoverProviderInterface* ifac
 G_DEFINE_TYPE_WITH_CODE(KevcHoverProvider, kevc_hover_provider, G_TYPE_OBJECT,
                         G_IMPLEMENT_INTERFACE(GTK_SOURCE_TYPE_HOVER_PROVIDER, kevc_hover_provider_iface_init))
 
-static void kevc_hover_provider_class_init(KevcHoverProviderClass*) {}
-static void kevc_hover_provider_init(KevcHoverProvider*) {}
+static void kevc_hover_provider_finalize(GObject* object) {
+    delete reinterpret_cast<KevcHoverProvider*>(object)->showFixes;
+    G_OBJECT_CLASS(kevc_hover_provider_parent_class)->finalize(object);
+}
+
+static void kevc_hover_provider_class_init(KevcHoverProviderClass* klass) {
+    G_OBJECT_CLASS(klass)->finalize = kevc_hover_provider_finalize;
+}
+static void kevc_hover_provider_init(KevcHoverProvider* self) {
+    self->showFixes = nullptr;
+}
+
+namespace {
+
+// The hover's text and the number of fixes arrive separately; the hover shows once both have.
+struct HoverParts {
+    GTask* task = nullptr;
+    GtkSourceHoverDisplay* display = nullptr;
+    KevcHoverProvider* provider = nullptr;
+    int line = 0, utf16 = 0; // the place hovered, found again when the button is pressed
+    int waiting = 0;
+    std::string markup;
+    size_t fixes = 0;
+    bool returned = false;
+    ~HoverParts() {
+        // A server stopped before it answered: the hover still needs its answer.
+        if (!returned) g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "No answer");
+        g_object_unref(task);
+        g_object_unref(display);
+        g_object_unref(provider);
+    }
+};
+
+// What the button keeps: a reference to the provider, and the place.
+struct FixesButton {
+    KevcHoverProvider* provider;
+    int line, utf16;
+};
+
+void freeFixesButton(gpointer data, GClosure*) {
+    auto* button = static_cast<FixesButton*>(data);
+    g_object_unref(button->provider);
+    delete button;
+}
+
+void onFixesClicked(GtkButton* button, gpointer data) {
+    const auto* place = static_cast<FixesButton*>(data);
+    KevcHoverProvider* self = place->provider;
+    if (GtkWidget* hover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER))
+        gtk_popover_popdown(GTK_POPOVER(hover));
+    // The hover only shows over the tab's own view, so the tab is still there.
+    if (self->showFixes && *self->showFixes)
+        (*self->showFixes)(kevc::LspManager::iterAt(GTK_TEXT_BUFFER(self->tab->buffer()), place->line, place->utf16));
+}
+
+void showHover(HoverParts& parts) {
+    parts.returned = true;
+    if (parts.markup.empty() && !parts.fixes) {
+        g_task_return_new_error(parts.task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "Nothing to show");
+        return;
+    }
+    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_set_margin_start(box, 8);
+    gtk_widget_set_margin_end(box, 8);
+    gtk_widget_set_margin_top(box, 6);
+    gtk_widget_set_margin_bottom(box, 6);
+    if (!parts.markup.empty()) {
+        GtkWidget* label = gtk_label_new(nullptr);
+        kevc::setMarkupOrText(GTK_LABEL(label), parts.markup);
+        gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+        gtk_label_set_max_width_chars(GTK_LABEL(label), 90);
+        gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+        gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
+        gtk_box_append(GTK_BOX(box), label);
+    }
+    if (parts.fixes) {
+        // A lightbulb with words, as Visual Studio's "Show potential fixes": seen without knowing to look.
+        GtkWidget* content = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+        GtkWidget* icon = gtk_image_new_from_icon_name("kevc-lightbulb");
+        gtk_image_set_pixel_size(GTK_IMAGE(icon), 16);
+        gtk_box_append(GTK_BOX(content), icon);
+        GtkWidget* text = gtk_label_new(nullptr);
+        const std::string count = parts.fixes == 1 ? "1 possible fix" : std::to_string(parts.fixes) + " possible fixes";
+        const std::string markup = "Show " + count + "  <span alpha=\"60%\">Ctrl+.</span>";
+        gtk_label_set_markup(GTK_LABEL(text), markup.c_str());
+        gtk_box_append(GTK_BOX(content), text);
+        GtkWidget* button = gtk_button_new();
+        gtk_button_set_child(GTK_BUTTON(button), content);
+        gtk_widget_set_halign(button, GTK_ALIGN_START);
+        gtk_widget_set_tooltip_text(button, "Choose a change that fixes this, such as the #include it needs");
+        gtk_widget_add_css_class(button, "kevc-fixes-button");
+        auto* provider = static_cast<KevcHoverProvider*>(g_object_ref(parts.provider));
+        auto* place = new FixesButton{provider, parts.line, parts.utf16};
+        g_signal_connect_data(button, "clicked", G_CALLBACK(onFixesClicked), place, freeFixesButton, GConnectFlags(0));
+        gtk_box_append(GTK_BOX(box), button);
+    }
+    gtk_source_hover_display_append(parts.display, box);
+    g_task_return_boolean(parts.task, TRUE);
+}
+
+} // namespace
 
 static void hover_populate_async(GtkSourceHoverProvider* provider, GtkSourceHoverContext* context,
                                  GtkSourceHoverDisplay* display, GCancellable* cancellable,
@@ -409,27 +511,28 @@ static void hover_populate_async(GtkSourceHoverProvider* provider, GtkSourceHove
         g_object_unref(task);
         return;
     }
-    g_object_ref(display);
-    self->manager->hover(self->tab, iter, [task, display](const std::string& markup) {
-        if (markup.empty()) {
-            g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "Nothing to show");
-        } else {
-            GtkWidget* label = gtk_label_new(nullptr);
-            kevc::setMarkupOrText(GTK_LABEL(label), markup);
-            gtk_label_set_wrap(GTK_LABEL(label), TRUE);
-            gtk_label_set_max_width_chars(GTK_LABEL(label), 90);
-            gtk_label_set_selectable(GTK_LABEL(label), TRUE);
-            gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
-            gtk_widget_set_margin_start(label, 8);
-            gtk_widget_set_margin_end(label, 8);
-            gtk_widget_set_margin_top(label, 6);
-            gtk_widget_set_margin_bottom(label, 6);
-            gtk_source_hover_display_append(display, label);
-            g_task_return_boolean(task, TRUE);
-        }
-        g_object_unref(display);
-        g_object_unref(task);
+    auto parts = std::make_shared<HoverParts>();
+    parts->task = task;
+    parts->display = GTK_SOURCE_HOVER_DISPLAY(g_object_ref(display));
+    parts->provider = static_cast<KevcHoverProvider*>(g_object_ref(self));
+    const auto pos = kevc::LspManager::positionOf(iter);
+    parts->line = pos.value("line", 0);
+    parts->utf16 = pos.value("character", 0);
+    // Both requests go out now, while the iterator is good; their answers only touch `parts`.
+    const bool problems = !self->manager->diagnosticsAt(self->tab, iter, false).empty();
+    parts->waiting = problems ? 2 : 1;
+    auto arrived = [parts] {
+        if (--parts->waiting == 0) showHover(*parts);
+    };
+    self->manager->hover(self->tab, iter, [parts, arrived](const std::string& markup) {
+        parts->markup = markup;
+        arrived();
     });
+    if (problems)
+        self->manager->fixes(self->tab, iter, false, [parts, arrived](kevc::LspFixes found) {
+            parts->fixes = found.fixes.size();
+            arrived();
+        });
 }
 
 static gboolean hover_populate_finish(GtkSourceHoverProvider*, GAsyncResult* result, GError** error) {
@@ -450,10 +553,12 @@ GtkSourceCompletionProvider* newLspCompletionProvider(LspManager* manager, Edito
     return GTK_SOURCE_COMPLETION_PROVIDER(self);
 }
 
-GtkSourceHoverProvider* newLspHoverProvider(LspManager* manager, EditorTab* tab) {
+GtkSourceHoverProvider* newLspHoverProvider(LspManager* manager, EditorTab* tab,
+                                            std::function<void(const GtkTextIter&)> showFixes) {
     auto* self = static_cast<KevcHoverProvider*>(g_object_new(kevc_hover_provider_get_type(), nullptr));
     self->manager = manager;
     self->tab = tab;
+    self->showFixes = new std::function<void(const GtkTextIter&)>(std::move(showFixes));
     return GTK_SOURCE_HOVER_PROVIDER(self);
 }
 

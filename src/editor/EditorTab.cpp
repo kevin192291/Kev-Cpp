@@ -1,5 +1,6 @@
 #include "editor/EditorTab.h"
 
+#include "core/Boilerplate.h"
 #include "core/Comments.h"
 
 #include "editor/CppIndenter.h"
@@ -293,6 +294,28 @@ void EditorTab::applyEdits(const std::vector<format::TextEdit>& edits) {
     }
     gtk_text_buffer_end_user_action(text);
     gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(view_), gtk_text_buffer_get_insert(text));
+}
+
+bool EditorTab::applyFix(const quickfix::Fix& fix) {
+    if (fix.include.empty()) {
+        applyEdits(fix.edits);
+        return !fix.edits.empty();
+    }
+    GtkTextBuffer* text = GTK_TEXT_BUFFER(buffer_);
+    GtkTextIter start, end;
+    gtk_text_buffer_get_bounds(text, &start, &end);
+    char* all = gtk_text_buffer_get_text(text, &start, &end, TRUE);
+    const std::string contents(all);
+    g_free(all);
+    // Placed as the Boilerplate menu places the #includes a snippet needs.
+    const auto insertion = boilerplate::missingIncludes(contents, {fix.include});
+    if (!insertion) return false;
+    GtkTextIter at;
+    gtk_text_buffer_get_iter_at_offset(text, &at, int(g_utf8_strlen(contents.data(), gssize(insertion->offset))));
+    gtk_text_buffer_begin_user_action(text);
+    gtk_text_buffer_insert(text, &at, insertion->text.data(), int(insertion->text.size()));
+    gtk_text_buffer_end_user_action(text);
+    return true;
 }
 
 std::string EditorTab::toggleComment() {

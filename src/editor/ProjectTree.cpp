@@ -495,7 +495,11 @@ void ProjectTree::setupContextMenu() {
     actions_->add_action("delete", [this] {
         if (menuRow_) delete_.emit(menuRow_->path);
     });
-    actions_->add_action("copy-path", [this] {
+    // The full path, named for what was clicked: a file, or a folder (the empty space is the project's).
+    actions_->add_action("copy-file-path", [this] {
+        if (menuRow_ && !menuRow_->folder) get_clipboard()->set_text(menuRow_->path);
+    });
+    actions_->add_action("copy-directory-path", [this] {
         get_clipboard()->set_text(menuRow_ ? menuRow_->path : root_.string());
     });
     actions_->add_action("copy-relative-path", [this] {
@@ -557,13 +561,16 @@ void ProjectTree::showContextMenu(Gtk::ListItem* item, double x, double y) {
         if (auto action = std::dynamic_pointer_cast<Gio::SimpleAction>(actions_->lookup_action(name)))
             action->set_enabled(on);
     };
-    // The design hides the items whose action is off: a file gets Open Containing Folder, a folder
-    // (or the empty space, meaning the project folder) Open This Folder and Open Terminal Here.
+    // The design hides the items whose action is off: a file gets Open Containing Folder and Copy
+    // File Path, a folder (or the empty space, meaning the project folder) Open This Folder, Open
+    // Terminal Here and Copy Directory Path.
     const bool file = menuRow_ && !menuRow_->folder;
     enable("open", file);
     enable("show-in-file-manager", file);
+    enable("copy-file-path", file);
     enable("open-in-file-manager", !file);
     enable("open-terminal", !file);
+    enable("copy-directory-path", !file);
     enable("rename", menuRow_.has_value());
     enable("delete", menuRow_.has_value());
 

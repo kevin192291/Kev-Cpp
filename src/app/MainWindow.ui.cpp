@@ -769,6 +769,10 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
           <attribute name="label" translatable="yes">Toggle Co_mment</attribute>
           <attribute name="action">win.toggle-comment</attribute>
         </item>
+        <item>
+          <attribute name="label" translatable="yes">Show Possible Fi_xes</attribute>
+          <attribute name="action">win.show-fixes</attribute>
+        </item>
       </section>
     </submenu>
     <submenu>
@@ -1163,6 +1167,12 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
   <menu id="editorMenu_">
     <section>
       <item>
+        <attribute name="label" translatable="yes">Show Possible Fi_xes</attribute>
+        <attribute name="action">win.show-fixes</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
         <attribute name="label" translatable="yes">Go to _Definition</attribute>
         <attribute name="action">win.goto-definition</attribute>
       </item>
@@ -1214,6 +1224,12 @@ const char* const kUi = R"__kevc_ui__(<?xml version="1.0" encoding="UTF-8"?>
     </section>
   </menu>
   <menu id="cppEditorMenu_">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Show Possible Fi_xes</attribute>
+        <attribute name="action">win.show-fixes</attribute>
+      </item>
+    </section>
     <section>
       <item>
         <attribute name="label" translatable="yes">Go to _Definition</attribute>
