@@ -338,7 +338,11 @@ verified by driving the real app (see "GUI testing").
   often opens the menu left of Boilerplate (Search, Edit) when an item three menus deep is chosen (two
   deep never does): `afterMenuChoice` closes any menu-bar popover that shows in the 250 ms after a
   choice, then inserts. The editors' right-click menus have the same tree under Insert Boilerplate
-  (`editorBoilerplateMenu_`, `cppEditorBoilerplateMenu_`, filled with it). Placeholders are
+  (`editorBoilerplateMenu_`, `cppEditorBoilerplateMenu_`, filled with it). Those right-click menus
+  are sliding GtkPopoverMenus, which name each submenu's page after its raw label and open the first
+  page of a name (the menu bar's nested ones don't): two folders called Components (CSS's, Svelte's)
+  opened the same page. `distinctSubmenuLabel` gives repeats (and "main", the top page) zero-width
+  spaces. Placeholders are
   `{{name}}` (not `${}`, which TypeScript, CMake and shell use); unknown names stay as written. Inserted
   text is indented like its line, replacing the line's leading whitespace (`Insertion::fromLineStart`);
   whole lines selected for `{{selection}}` keep their indentation as the base. `includes:` headers the

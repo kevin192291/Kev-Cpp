@@ -11,6 +11,7 @@
 #include "ui/Dialogs.h"
 
 #include <cstdlib>
+#include <set>
 
 namespace fs = std::filesystem;
 
@@ -46,7 +47,8 @@ std::string join(const std::vector<std::string>& parts, const std::string& separ
 }
 
 // A folder's entries as menu sections: a new section (a separator) wherever the section name changes.
-void fillMenu(const Glib::RefPtr<Gio::Menu>& menu, const boilerplate::Entry& folder) {
+// `submenus` holds the submenu labels used so far in the whole menu, which must all differ.
+void fillMenu(const Glib::RefPtr<Gio::Menu>& menu, const boilerplate::Entry& folder, std::set<std::string>& submenus) {
     Glib::RefPtr<Gio::Menu> section;
     const std::string* current = nullptr;
     for (const auto& entry : folder.children) {
@@ -57,8 +59,9 @@ void fillMenu(const Glib::RefPtr<Gio::Menu>& menu, const boilerplate::Entry& fol
         }
         if (entry.folder) {
             auto submenu = Gio::Menu::create();
-            fillMenu(submenu, entry);
-            section->append_submenu(boilerplate::menuLabel(entry.label), submenu);
+            fillMenu(submenu, entry, submenus);
+            section->append_submenu(boilerplate::distinctSubmenuLabel(boilerplate::menuLabel(entry.label), submenus),
+                                    submenu);
         } else {
             auto item = Gio::MenuItem::create(boilerplate::menuLabel(entry.label), "");
             item->set_action_and_target("win.boilerplate", Glib::Variant<Glib::ustring>::create(entry.key));
@@ -134,7 +137,8 @@ void MainWindow::refreshBoilerplate() {
     // The editors' right-click menus have the same tree under Insert Boilerplate.
     for (const auto& menu : {boilerplateMenu_, editorBoilerplateMenu_, cppEditorBoilerplateMenu_}) {
         menu->remove_all();
-        fillMenu(menu, boilerplate_);
+        std::set<std::string> submenus;
+        fillMenu(menu, boilerplate_, submenus);
         menu->append_section(boilerplateToolsSection_);
     }
 }

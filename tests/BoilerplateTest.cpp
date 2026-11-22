@@ -216,6 +216,17 @@ TEST(Boilerplate, MenuLabelsKeepTheirUnderscores) {
     EXPECT_EQ(menuLabel("Window"), "Window");
 }
 
+TEST(Boilerplate, SubmenuLabelsAreToldApart) {
+    std::set<std::string> used;
+    EXPECT_EQ(distinctSubmenuLabel("Components", used), "Components");
+    EXPECT_EQ(distinctSubmenuLabel("Classes", used), "Classes");
+    EXPECT_EQ(distinctSubmenuLabel("Components", used), "Components\u200B");
+    EXPECT_EQ(distinctSubmenuLabel("Components", used), "Components\u200B\u200B");
+    EXPECT_EQ(distinctSubmenuLabel("main", used), "main\u200B");
+    EXPECT_EQ(used, (std::set<std::string>{"Classes", "Components", "Components\u200B", "Components\u200B\u200B",
+                                           "main\u200B"}));
+}
+
 TEST(Boilerplate, SnippetsFitFilesOfTheirLanguage) {
     EXPECT_TRUE(fits("Window.cpp", "src/main.cpp"));
     EXPECT_TRUE(fits("Window.cpp", "player.h"));

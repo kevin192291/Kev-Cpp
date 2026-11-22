@@ -442,6 +442,12 @@ std::string menuLabel(std::string_view label) {
     return out;
 }
 
+std::string distinctSubmenuLabel(const std::string& label, std::set<std::string>& used) {
+    std::string out = label;
+    while (out == "main" || !used.insert(out).second) out += "\u200B"; // "main" is the top page's name
+    return out;
+}
+
 bool fits(const fs::path& snippetFile, const fs::path& target) {
     const Lang s = langOf(snippetFile), t = langOf(target);
     auto in = [t](std::initializer_list<Lang> langs) { return std::find(langs.begin(), langs.end(), t) != langs.end(); };

@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -70,6 +71,11 @@ std::optional<std::filesystem::path> locate(const std::vector<std::filesystem::p
 
 // A label for a GMenu item: GTK reads '_' as a mnemonic, so underscores are doubled.
 std::string menuLabel(std::string_view label);
+// A submenu's label, told apart from the others in the same menu (`used`, which it's added to). A
+// sliding GtkPopoverMenu (an editor's right-click menu) names each submenu's page after its label and
+// opens the first page with that name: Svelte's "Components" opened CSS's, and a submenu called
+// "main" would open the top of the menu. A repeat gets zero-width spaces after it, which show as nothing.
+std::string distinctSubmenuLabel(const std::string& label, std::set<std::string>& used);
 
 // Whether a snippet (by its file name: its extension is its language) belongs in a file: C++ snippets
 // in C++ files and headers, CSS in CSS, Svelte and HTML files, a .txt snippet anywhere, and so on.
