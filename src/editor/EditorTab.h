@@ -9,6 +9,7 @@
 #include <gtksourceview/gtksource.h>
 
 #include <filesystem>
+#include <list>
 #include <map>
 #include <optional>
 #include <vector>
@@ -38,6 +39,12 @@ public:
     GtkSourceBuffer* buffer() const { return buffer_; }
 
     void focusEditor();
+    // Closes the completion list (dropping an answer still on its way) and GtkSourceView's other
+    // popups over the text, such as the hover. Done whenever the editor loses the focus, the window
+    // stops being the active one, the text or a popup's transparent edge is clicked, or Escape is
+    // pressed with nothing showing: the list never grabs the pointer, so GtkSourceView itself only
+    // closes it for keys and cursor moves.
+    void closePopups();
     void gotoLine(int line, int column = 0); // 1-based line and column
     void activateTextAction(const char* action) override; // "text.undo", "clipboard.copy", ...
     void placeCursor(const GtkTextIter& iter);   // moves, scrolls to and focuses
@@ -138,6 +145,17 @@ private:
     static void onLineNumberActivated(GtkSourceGutterRenderer* renderer, GtkTextIter* iter, GdkRectangle*,
                                       guint button, GdkModifierType, gint, gpointer self);
     GtkWidget* lineNumbers_ = nullptr; // GtkSourceView's own line-number renderer
+    // What closes the popups (closePopups): the view's focus and presses, the window's is-active.
+    GtkEventController* focusWatch_ = nullptr;
+    GtkEventController* pressWatch_ = nullptr; // a GtkGestureClick
+    GtkEventController* escapeWatch_ = nullptr;
+    std::vector<GtkWidget*> popupsShowing() const; // GtkSourceView's, over the text
+    void watchPopup(GtkWidget* child); // a press on its surface but outside its box closes it
+    GListModel* viewChildren_ = nullptr;          // the view's children, to find its popups as they come
+    std::list<GtkEventController*> popupWatches_; // weak pointers, so stable addresses
+    sigc::connection windowActive_; // while the editor is showing
+    void on_map() override;
+    void on_unmap() override;
     GtkTextTag* errorTag_ = nullptr;
     GtkTextTag* warningTag_ = nullptr;
 };

@@ -130,6 +130,59 @@ EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_
     g_signal_connect(gutterClick, "pressed", G_CALLBACK(onGutterPress), this);
     gtk_widget_add_controller(GTK_WIDGET(view_), GTK_EVENT_CONTROLLER(gutterClick));
 
+    // GtkSourceView's popups (completion, hover) don't grab, so nothing closes them when the user
+    // goes elsewhere: they stayed over the window, and over other programs' windows, until Escape.
+    focusWatch_ = gtk_event_controller_focus_new();
+    // Leaving for a widget outside the view, or the window becoming inactive (focus moving into the
+    // view's own popups, such as the hover's lightbulb button or the context menu, isn't leaving).
+    g_signal_connect_swapped(focusWatch_, "leave", G_CALLBACK(+[](EditorTab* tab) { tab->closePopups(); }), this);
+    gtk_widget_add_controller(GTK_WIDGET(view_), focusWatch_);
+    pressWatch_ = GTK_EVENT_CONTROLLER(gtk_gesture_click_new());
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(pressWatch_), 0);
+    gtk_event_controller_set_propagation_phase(pressWatch_, GTK_PHASE_CAPTURE);
+    auto onAnyPress = +[](GtkGestureClick* gesture, int, double, double, gpointer self) {
+        auto* tab = static_cast<EditorTab*>(self);
+        // Presses on the view's popups' own widgets (a proposal) pass through the view too, since
+        // they're its children: only the window's surface (the text, the gutter) counts here.
+        GdkEvent* event = gtk_event_controller_get_current_event(GTK_EVENT_CONTROLLER(gesture));
+        GtkNative* native = gtk_widget_get_native(GTK_WIDGET(tab->view_));
+        if (event && native && gdk_event_get_surface(event) == gtk_native_get_surface(native)) tab->closePopups();
+    };
+    g_signal_connect(pressWatch_, "pressed", G_CALLBACK(onAnyPress), this);
+    gtk_widget_add_controller(GTK_WIDGET(view_), pressWatch_);
+    // Escape before the language server has answered: GtkSourceView has nothing to hide yet, and
+    // showed the list when the answer came. With a popup showing, Escape stays GtkSourceView's (it
+    // hides it but keeps the list's request, so typing on brings the same list back). On the tab, not
+    // the view: the list adds a key controller of its own to the view, which GTK runs before older
+    // ones and which hides the list before passing Escape on; the parent's capture comes first.
+    escapeWatch_ = gtk_event_controller_key_new();
+    gtk_event_controller_set_propagation_phase(escapeWatch_, GTK_PHASE_CAPTURE);
+    auto onKey = +[](GtkEventControllerKey*, guint keyval, guint, GdkModifierType state, gpointer self) -> gboolean {
+        auto* tab = static_cast<EditorTab*>(self);
+        const bool plain = !(state & gtk_accelerator_get_default_mod_mask());
+        if (keyval == GDK_KEY_Escape && plain && tab->popupsShowing().empty()) tab->closePopups();
+        return FALSE;
+    };
+    g_signal_connect(escapeWatch_, "key-pressed", G_CALLBACK(onKey), this);
+    gtk_widget_add_controller(GTK_WIDGET(gobj()), escapeWatch_);
+    // A popup's surface is larger than its box (room for the shadow) and GTK hands presses on that
+    // edge to the popup: the strip just above the completion list, over the line being typed, took
+    // clicks meant for the text. GtkSourceView makes its popups when first needed, so each gets a
+    // watch as it joins the view.
+    viewChildren_ = gtk_widget_observe_children(GTK_WIDGET(view_));
+    auto onChildren = +[](GListModel* children, guint position, guint, guint added, gpointer self) {
+        for (guint i = position; i < position + added; ++i) {
+            GObject* child = static_cast<GObject*>(g_list_model_get_item(children, i));
+            static_cast<EditorTab*>(self)->watchPopup(GTK_WIDGET(child));
+            g_object_unref(child);
+        }
+    };
+    g_signal_connect(viewChildren_, "items-changed", G_CALLBACK(onChildren), this);
+    onChildren(viewChildren_, 0, 0, g_list_model_get_n_items(viewChildren_), this); // any made already
+    // Closing the window frees the view and its controllers before this object is deleted.
+    for (auto** watch : {&focusWatch_, &pressWatch_, &escapeWatch_})
+        g_object_add_weak_pointer(G_OBJECT(*watch), reinterpret_cast<gpointer*>(watch));
+
     // Clicking a line number toggles a breakpoint, as in Dev-C++. The line-number renderer is
     // private to GtkSourceView, so find it among the gutter's children by type name.
     GtkWidget* gutter = GTK_WIDGET(gtk_source_view_get_gutter(view_, GTK_TEXT_WINDOW_LEFT));
@@ -164,6 +217,21 @@ EditorTab::EditorTab(const std::filesystem::path& file, bool cppHeaders) : path_
 }
 
 EditorTab::~EditorTab() {
+    windowActive_.disconnect();
+    // A view closed with its tab outlives this object briefly, and losing the focus as it goes would
+    // call closePopups(). (When the window closes they're freed first: the weak pointers are null.)
+    for (auto** watch : {&focusWatch_, &pressWatch_, &escapeWatch_}) {
+        if (!*watch) continue;
+        g_signal_handlers_disconnect_by_data(*watch, this);
+        g_object_remove_weak_pointer(G_OBJECT(*watch), reinterpret_cast<gpointer*>(watch));
+    }
+    for (GtkEventController*& watch : popupWatches_) {
+        if (!watch) continue;
+        g_signal_handlers_disconnect_by_data(watch, this);
+        g_object_remove_weak_pointer(G_OBJECT(watch), reinterpret_cast<gpointer*>(&watch));
+    }
+    g_signal_handlers_disconnect_by_data(viewChildren_, this);
+    g_object_unref(viewChildren_);
     if (monitor_) monitor_->cancel();
     for (auto& [mark, label] : liveLabels_) g_object_unref(mark);
     if (gutterPopover_) gtk_widget_unparent(GTK_WIDGET(gutterPopover_));
@@ -368,6 +436,63 @@ std::string EditorTab::toggleComment() {
 
 void EditorTab::focusEditor() {
     gtk_widget_grab_focus(GTK_WIDGET(view_));
+}
+
+void EditorTab::on_map() {
+    Gtk::ScrolledWindow::on_map();
+    // Another program's window clicked while the pointer rests on a hover: the focus may be elsewhere
+    // in the window, so the view's focus doesn't say.
+    windowActive_.disconnect();
+    if (auto* window = dynamic_cast<Gtk::Window*>(get_root()))
+        windowActive_ = window->property_is_active().signal_changed().connect([this, window] {
+            if (!window->is_active()) closePopups();
+        });
+}
+
+void EditorTab::on_unmap() {
+    windowActive_.disconnect();
+    Gtk::ScrolledWindow::on_unmap();
+}
+
+std::vector<GtkWidget*> EditorTab::popupsShowing() const {
+    // GtkSourceView's popups are GtkSourceAssistants parented to the view (a private type, found by
+    // name): the completion list and its details, the hover. Not the text view's context menu, which
+    // is a child too. (Looked up each time: GObject registers the type with the first popup.)
+    const GType assistant = g_type_from_name("GtkSourceAssistant");
+    std::vector<GtkWidget*> showing;
+    GtkWidget* view = GTK_WIDGET(view_);
+    for (GtkWidget* child = gtk_widget_get_first_child(view); child; child = gtk_widget_get_next_sibling(child))
+        if (assistant && G_TYPE_CHECK_INSTANCE_TYPE(child, assistant) && gtk_widget_get_visible(child))
+            showing.push_back(child);
+    return showing;
+}
+
+void EditorTab::watchPopup(GtkWidget* child) {
+    const GType assistant = g_type_from_name("GtkSourceAssistant");
+    if (!assistant || !G_TYPE_CHECK_INSTANCE_TYPE(child, assistant)) return;
+    GtkEventController* press = GTK_EVENT_CONTROLLER(gtk_gesture_click_new());
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(press), 0);
+    gtk_event_controller_set_propagation_phase(press, GTK_PHASE_CAPTURE);
+    auto onPress = +[](GtkGestureClick* gesture, int, double x, double y, gpointer self) {
+        GtkWidget* popup = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+        if (!gtk_widget_contains(popup, x, y)) static_cast<EditorTab*>(self)->closePopups();
+    };
+    g_signal_connect(press, "pressed", G_CALLBACK(onPress), this);
+    gtk_widget_add_controller(child, press);
+    popupWatches_.push_back(press); // a std::list: the weak pointer's address stays put
+    g_object_add_weak_pointer(G_OBJECT(press), reinterpret_cast<gpointer*>(&popupWatches_.back()));
+}
+
+void EditorTab::closePopups() {
+    const std::vector<GtkWidget*> showing = popupsShowing();
+    // Hiding the list isn't enough: an answer the language server hasn't sent yet would show it again
+    // (GtkSourceView 5.12 shows results when they arrive without checking the focus). Blocking
+    // cancels the request; interactive completion works again as soon as it's unblocked.
+    GtkSourceCompletion* completion = gtk_source_view_get_completion(view_);
+    gtk_source_completion_block_interactive(completion);
+    gtk_source_completion_unblock_interactive(completion);
+    gtk_source_completion_hide(completion);
+    for (GtkWidget* popup : showing) gtk_widget_set_visible(popup, FALSE);
 }
 
 void EditorTab::gotoLine(int line, int column) {

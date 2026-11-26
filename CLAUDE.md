@@ -129,6 +129,22 @@ verified by driving the real app (see "GUI testing").
   Ranking: typed-prefix first, then shortest match, then the server's sortText (otherwise clangd
   buries e.g. `std::cout` in files without `#include <iostream>`). clangd restarts once
   compile_commands.json appears. LSP hover is suppressed while the debugger is paused.
+- **Closing the completion list and the hover** (`EditorTab::closePopups`): GtkSourceView 5.12's popups
+  are non-grabbing popovers (autohide off, so typing stays in the view), and it closes them only on
+  keys, cursor moves out of the word, scrolling and unmap. They stayed over the window, and over other
+  programs' windows, after a click elsewhere. `gtk_source_completion_hide()` only hides: an answer the
+  server sends later is shown whatever has the focus (`complete_cb` never checks), so closePopups
+  cancels with `block_interactive()` + `unblock_interactive()`. Triggers: the view's focus leaving
+  (into its own popups, the hover's lightbulb or the context menu, isn't leaving), a press on the
+  window's surface in the view (presses on a popup's widgets pass through the view too), the window
+  going inactive (a hover with focus elsewhere), Escape with nothing showing (a request still on its
+  way; that watch is on the tab, since the list's own key controller on the view runs first and hides
+  before passing Escape on), and a press on a popup's surface outside its box: the surface is 20 px
+  larger than the box and GTK gave it presses meant for the line being typed. Popups are found by
+  type name (`GtkSourceAssistant`, private) among the view's children, watched with
+  `gtk_widget_observe_children`. GUI tests: a stand-in `clangd` on PATH that holds completion answers
+  back 1.5 s reproduces the late answer; GtkSourceView's first click on a proposal selects it, the
+  second inserts it (an XTest warp-and-click lands on the text instead).
 - **Debugger** = gdb `--interpreter=mi3` with `mi-async on`, `-enable-pretty-printing`, debuginfod
   off, program I/O on a VTE pty (`-inferior-tty-set`). C++ struct children come under
   `public/private/protected` pseudo-children: flattened. Pointers (not char*/void*) show their
@@ -517,6 +533,9 @@ verified by driving the real app (see "GUI testing").
   the pointer onto the popup and the main window loses focus. Run `DISPLAY=:5 metacity --replace
   --sm-disable` inside Xephyr for those tests (always with DISPLAY=:5: never replace the user's WM).
   With it the window is decorated and offset, so take coordinates from a screenshot.
+- Xephyr can be left with Ctrl/Alt held (a press on the real desktop whose release went elsewhere):
+  every click and key then arrives modified (the pointer's mask reads 12). Release the modifiers with
+  XTest KeyRelease before a run.
 - Never trigger file dialogs (Ctrl+O, Browse…) in tests: GTK routes them through the desktop portal,
   so they appear on the user's real screen and block the app. Open projects via the command line.
 - Don't press F10/Open in Browser on web projects in tests (it opens the user's real browser).
