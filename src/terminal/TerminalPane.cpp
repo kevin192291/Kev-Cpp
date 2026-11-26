@@ -72,6 +72,13 @@ TerminalPane::TerminalPane(BaseObjectType* object, const Glib::RefPtr<Gtk::Build
     gdk_rgba_parse(&bg, "#012456");
     vte_terminal_set_colors(terminal_, &fg, &bg, palette, 16);
     g_signal_connect(terminal_, "child-exited", G_CALLBACK(&TerminalPane::onChildExited), this);
+    signal_map().connect([this] {
+        shown_ = true;
+        if (!unseenShell_) return;
+        Launch launch = std::move(*unseenShell_);
+        unseenShell_.reset();
+        request(std::move(launch));
+    });
     scrollbar_->set_adjustment(Glib::wrap(gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(terminal_)), true));
 }
 
@@ -84,7 +91,15 @@ TerminalPane::~TerminalPane() {
 
 void TerminalPane::startShell(const std::filesystem::path& cwd) {
     const char* shell = std::getenv("SHELL");
-    request({{shell && *shell ? shell : "/bin/bash"}, cwd, true, {}});
+    Launch launch{{shell && *shell ? shell : "/bin/bash"}, cwd, true, {}};
+    // An interactive shell reads ~/.bashrc (setting up nvm alone runs dozens of programs), which kept an
+    // old laptop busy while Kev-C++ was starting, twice when a project opened (home, then its folder).
+    // Nobody sees the shell before its tab shows, so it starts then.
+    if (!shown_) {
+        unseenShell_ = std::move(launch);
+        return;
+    }
+    request(std::move(launch));
 }
 
 void TerminalPane::runProgram(const std::vector<std::string>& argv, const std::filesystem::path& cwd,
@@ -94,6 +109,7 @@ void TerminalPane::runProgram(const std::vector<std::string>& argv, const std::f
 
 void TerminalPane::stopChild() {
     pending_.reset();
+    unseenShell_.reset();
     shellMode_ = false; // a deliberately stopped shell is not restarted
     signalChild();
 }

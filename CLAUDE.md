@@ -8,7 +8,7 @@ The project is called Kev-C++ (Kev-Cpp in file and repo names), never Dev-K++.
 ## Build & test
 
 ```sh
-cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 315 tests
+cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build   # 317 tests
 ./install.sh    # Release build in build/release → ~/.local, updates the copy in the applications menu
 ```
 
@@ -117,8 +117,9 @@ verified by driving the real app (see "GUI testing").
   else CMakeLists.txt asks to adopt it; else a `package.json` makes it a TypeScript project kept in
   memory only (`ProjectSession::openWebFolder`, no `.kevc` written); else a plain folder. `data/kev`
   is a shell script installed next to kev-cpp; it runs the IDE under `setsid -f` so the terminal is freed.
-  The Terminal tab puts the folder an installed kev-cpp runs from (one with `kev` beside it) first on
-  its shell's PATH: Debian-based desktops don't read `~/.profile`, so `~/.local/bin` is often missing.
+  The Terminal tab starts its shell the first time it's shown. It puts the folder an installed kev-cpp
+  runs from (one with `kev` beside it) first on its shell's PATH: Debian-based desktops don't read
+  `~/.profile`, so `~/.local/bin` is often missing.
   It sets KEVC_TERMINAL_PATH_ADDED to that folder. Both installers' `link_kev` ignore that entry
   when checking PATH (updates run in the Run tab), and offer a `/usr/local/bin/kev` symlink.
   `KEVC_LINK_DIR` redirects the link for tests.
@@ -332,7 +333,10 @@ verified by driving the real app (see "GUI testing").
   goes into C++ files and headers, .css into CSS/Svelte/HTML, .txt anywhere); a misfit goes into a new
   file, and with nothing open the text goes to the clipboard. The design holds only the last section
   (Save Selection, Open My Boilerplate Folder); `refreshBoilerplate` rebuilds the rest only when
-  `signature()` changes. It watches every folder of both trees with GFileMonitors, not window
+  `signature()` changes. At startup `loadBoilerplate` scans on a BackgroundJob instead, and every
+  (re)build goes into the menus a few entries per idle slice (`fillBoilerplateSlices`; see Startup
+  speed). It watches every folder of both trees with GFileMonitors (for the user's tree before it
+  exists, only that name in `~/.config/kev-cpp`, or each settings save rescanned), not window
   activation: opening a nested submenu deactivates the window on X11, and a rebuild while a menu is open
   closes it, so a rebuild waits while any popover under `menuBar_` is visible. GTK 4.14's menu bar
   often opens the menu left of Boilerplate (Search, Edit) when an item three menus deep is chosen (two
@@ -474,6 +478,20 @@ verified by driving the real app (see "GUI testing").
   it once per start after presenting the main window, transient and modal so window managers centre
   it there (GTK 4 can't place windows). 640 px wide for the CF-19's crocus; closes after 2.2 s or on a
   click or key; `/startup/splash` false turns it off. GUI tests: it covers the window for ~2 s.
+- **Startup speed** (the user's rule: light and fast, usable on old laptops like the CF-19): nothing slow
+  runs before the window shows. Measured on a Ryzen 9 3950X, 2.3 s → 0.35 s to the window. The main
+  window adds itself to the application first thing in its constructor: added after the Boilerplate
+  menu's ~600 entries existed, GTK spent 1.5 s going over them again (2 ms the other way round). The
+  menu bar makes a widget per entry as it's added (~0.3 ms each), so the Boilerplate menu fills in
+  8 ms slices after the window shows, pausing while a menu is open. `Toolchain::detect()` only finds
+  paths; Tools → Toolchain Info asks each tool's `--version` on a thread when it opens (gdb's alone took
+  80 ms). PATH's node is asked its version only when a version manager's node could replace it and isn't
+  it. The Terminal tab's shell (~/.bashrc, nvm) starts the first time the tab is shown. Cached copies of
+  the style scheme and svelte.lang are rewritten only when they differ (each rewrite was two fsyncs).
+  Still slow, not startup: an editor's first right-click takes ~0.9 s (GTK builds the menu, Insert
+  Boilerplate's tree included, before parenting it to the text view). Measuring: perf is unavailable
+  (perf_event_paranoid 4) and there's no valgrind; an LD_PRELOAD sampler (a timer signal on the main
+  thread + backtrace(), symbolized with pyelftools) worked; poll for the mapped window with python-xlib.
 - **git in the Project tab** is read-only: `watchGit()` (on every folder open) asks git for the work tree
   and .git folder, watches .git for index/HEAD rewrites (a commit or add in any terminal), and
   `refreshGitStatus()` also runs after saves, source syncs, window activation and every 5 s while the

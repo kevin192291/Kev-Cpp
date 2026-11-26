@@ -30,7 +30,8 @@ public:
     TerminalPane(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>& builder);
     ~TerminalPane() override;
 
-    // Starts $SHELL in `cwd`, restarting it automatically whenever it exits.
+    // Starts $SHELL in `cwd`, restarting it automatically whenever it exits. Not before the pane is
+    // first shown: until then this only records where it will start.
     void startShell(const std::filesystem::path& cwd);
     // Clears the terminal and runs `argv`; `onExit` receives a description of how it ended.
     void runProgram(const std::vector<std::string>& argv, const std::filesystem::path& cwd, ExitHandler onExit = {});
@@ -74,6 +75,8 @@ private:
     std::filesystem::path shellCwd_;
     ExitHandler onExit_;
     std::optional<Launch> pending_;
+    bool shown_ = false;                 // mapped at least once
+    std::optional<Launch> unseenShell_; // the shell to start when it is
     std::shared_ptr<TerminalPane*> self_;
 };
 

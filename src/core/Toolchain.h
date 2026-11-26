@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -39,14 +40,18 @@ struct NodeSearch {
 // ~/.bashrc adds for terminals: nvm's node, pnpm's and bun's folders. Ubuntu's own node is then too old
 // for Vite. Returns `pathList` with the newest node a version manager installed (nvm, fnm, Volta, asdf,
 // mise, n) put first when the PATH's node is missing or older than `where.minNodeMajor`, and pnpm's
-// and bun's folders added at the end where they exist.
-std::string terminalLikePath(const std::string& pathList, int pathNodeMajor, const NodeSearch& where);
+// and bun's folders added at the end where they exist. `pathNodeMajor` gives the PATH's node's major
+// version (0 without one); it runs node, so it's called only when there's a newer node to put first
+// that isn't the PATH's own.
+std::string terminalLikePath(const std::string& pathList, const std::function<int()>& pathNodeMajor,
+                             const NodeSearch& where);
 
 class Toolchain {
 public:
-    // Resolves every tool against $PATH and records its version.
+    // Resolves every tool against $PATH without running any (versions are left empty: asking each
+    // tool took longer than the rest of startup on old laptops; Tools → Toolchain Info asks them).
     static Toolchain detect();
-    // Resolves against an explicit PATH list without running anything (used by tests).
+    // Resolves against an explicit PATH list, recording versions if asked to.
     static Toolchain detect(const std::string& pathList, bool queryVersions);
 
     const std::vector<ToolInfo>& tools() const { return tools_; }

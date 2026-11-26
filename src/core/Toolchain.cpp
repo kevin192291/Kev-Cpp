@@ -57,14 +57,15 @@ int nodeMajor(const std::string& versionLine) {
     return major;
 }
 
-std::string terminalLikePath(const std::string& pathList, int pathNodeMajor, const NodeSearch& where) {
+std::string terminalLikePath(const std::string& pathList, const std::function<int()>& pathNodeMajor,
+                             const NodeSearch& where) {
     namespace fs = std::filesystem;
     const fs::path& home = where.home;
     const fs::path& nvmDir = where.nvmDir;
     const fs::path& pnpmHome = where.pnpmHome;
     const int minNodeMajor = where.minNodeMajor;
     std::string out = pathList;
-    if (pathNodeMajor < minNodeMajor) {
+    {
         // Where each manager keeps its versions: <dir>/<version>/<binary inside it>.
         const std::pair<fs::path, const char*> layouts[] = {
             {nvmDir.empty() ? home / ".nvm" / "versions/node" : nvmDir / "versions/node", "bin/node"},
@@ -88,11 +89,17 @@ std::string terminalLikePath(const std::string& pathList, int pathNodeMajor, con
                     if (std::isdigit(static_cast<unsigned char>(c))) part = std::max(part, 0) * 10 + (c - '0');
                     else if (part >= 0) version.push_back(std::min(part, 100000)), part = -1;
                 }
-                if (version.empty() || version.front() < minNodeMajor || version.front() <= pathNodeMajor) continue;
+                if (version.empty() || version.front() < minNodeMajor) continue;
                 if (version > bestVersion) best = node, bestVersion = version;
             }
         }
-        if (!best.empty()) out = prependToPath(out, best.parent_path().string());
+        // Asking PATH's node its version starts it (slow on old laptops): not when there's nothing to put
+        // before it, nor when it's that same node (started from a terminal where nvm is set up).
+        std::error_code ec;
+        const auto pathNode = best.empty() ? std::nullopt : findInPath("node", pathList);
+        const bool same = pathNode && fs::equivalent(*pathNode, best, ec);
+        if (!best.empty() && !same && pathNodeMajor() < minNodeMajor)
+            out = prependToPath(out, best.parent_path().string());
     }
     // Package managers' own folders (pnpm and bun install themselves there), last so they shadow nothing.
     for (const fs::path& dir : {pnpmHome.empty() ? home / ".local/share/pnpm" : pnpmHome, home / ".bun/bin"}) {
@@ -133,7 +140,7 @@ std::optional<std::filesystem::path> findInPath(const std::string& name, const s
 
 Toolchain Toolchain::detect() {
     const char* env = std::getenv("PATH");
-    return detect(env ? env : "", true);
+    return detect(env ? env : "", false);
 }
 
 Toolchain Toolchain::detect(const std::string& pathList, bool queryVersions) {

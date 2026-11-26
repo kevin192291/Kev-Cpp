@@ -9,6 +9,7 @@
 #include <gtksourceview/gtksource.h>
 
 #include <csignal>
+#include <cstring>
 
 namespace kevc {
 
@@ -26,6 +27,24 @@ void useCairoWithoutGl() {
     } catch (const Glib::Error&) {
         Glib::setenv("GSK_RENDERER", "cairo");
     }
+}
+
+// Copies a resource to `file` unless it holds that already. g_file_set_contents syncs a file it
+// replaces to disk, twice; doing that for every file at every start is slow on a spinning disk.
+void copyResource(const std::string& resource, const std::string& dir, const std::string& name) {
+    auto bytes = Gio::Resource::lookup_data_global(resource);
+    gsize size = 0;
+    const auto* data = static_cast<const char*>(bytes->get_data(size));
+    const std::string file = Glib::build_filename(dir, name);
+    std::string old;
+    try {
+        old = Glib::file_get_contents(file);
+    } catch (const Glib::Error&) {
+        // Not there yet.
+    }
+    if (old.size() == size && std::memcmp(old.data(), data, size) == 0) return;
+    g_mkdir_with_parents(dir.c_str(), 0700);
+    Glib::file_set_contents(file, data, static_cast<gssize>(size));
 }
 
 } // namespace
@@ -97,10 +116,15 @@ void Application::on_startup() {
     // what the terminal would, for the IDE and everything it runs (Vite, pnpm, the language servers).
     {
         const std::string path = Glib::getenv("PATH");
-        const auto node = findInPath("node", path);
         NodeSearch where{Glib::get_home_dir(), Glib::getenv("NVM_DIR"), Glib::getenv("PNPM_HOME")};
         if (const std::string n = Glib::getenv("N_PREFIX"); !n.empty()) where.nPrefix = std::filesystem::path(n) / "n";
-        const std::string better = terminalLikePath(path, node ? nodeMajor(toolVersion(*node)) : 0, where);
+        const std::string better = terminalLikePath(
+            path,
+            [&path] {
+                const auto node = findInPath("node", path);
+                return node ? nodeMajor(toolVersion(*node)) : 0;
+            },
+            where);
         if (better != path) Glib::setenv("PATH", better, true);
     }
     toolchain_ = Toolchain::detect();
@@ -115,14 +139,10 @@ void Application::setEditorFont(const EditorFont& font) {
 
 void Application::installStyleScheme() {
     // GtkSourceView 5.12 can list a style scheme in a GResource but not read it, so copy ours to
-    // the cache directory (every start, so it follows upgrades) and look for schemes there.
+    // the cache directory (checked at every start, so it follows upgrades) and look for schemes there.
     const std::string dir = Glib::build_filename(Glib::get_user_cache_dir(), "kev-cpp", "styles");
     try {
-        auto bytes = Gio::Resource::lookup_data_global("/org/kevcpp/KevCpp/styles/kevc-slate.xml");
-        gsize size = 0;
-        const auto* data = static_cast<const char*>(bytes->get_data(size));
-        g_mkdir_with_parents(dir.c_str(), 0700);
-        Glib::file_set_contents(Glib::build_filename(dir, "kevc-slate.xml"), data, static_cast<gssize>(size));
+        copyResource("/org/kevcpp/KevCpp/styles/kevc-slate.xml", dir, "kevc-slate.xml");
         gtk_source_style_scheme_manager_append_search_path(gtk_source_style_scheme_manager_get_default(), dir.c_str());
     } catch (const Glib::Error&) {
         // The editor falls back to Adwaita-dark (see EditorTab).
@@ -130,11 +150,7 @@ void Application::installStyleScheme() {
     // Languages GtkSourceView doesn't ship (Svelte), the same way and for the same reason.
     const std::string langs = Glib::build_filename(Glib::get_user_cache_dir(), "kev-cpp", "language-specs");
     try {
-        auto bytes = Gio::Resource::lookup_data_global("/org/kevcpp/KevCpp/language-specs/svelte.lang");
-        gsize size = 0;
-        const auto* data = static_cast<const char*>(bytes->get_data(size));
-        g_mkdir_with_parents(langs.c_str(), 0700);
-        Glib::file_set_contents(Glib::build_filename(langs, "svelte.lang"), data, static_cast<gssize>(size));
+        copyResource("/org/kevcpp/KevCpp/language-specs/svelte.lang", langs, "svelte.lang");
         gtk_source_language_manager_append_search_path(gtk_source_language_manager_get_default(), langs.c_str());
     } catch (const Glib::Error&) {
         // .svelte files open without highlighting.
@@ -147,10 +163,7 @@ void Application::on_activate() {
         return;
     }
     const bool starting = !window_;
-    if (starting) {
-        window_ = MainWindow::create(*this);
-        add_window(*window_);
-    }
+    if (starting) window_ = MainWindow::create(*this); // it adds itself to the application first thing
     window_->present();
     // The splash, once per start (settings /startup/splash: false turns it off).
     if (starting && settings_.get<bool>("/startup/splash", true)) {

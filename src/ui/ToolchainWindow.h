@@ -3,12 +3,13 @@
 #include "ui/ToolchainWindow.ui.h"
 
 #include "core/Toolchain.h"
+#include "process/BackgroundJob.h"
 
 namespace kevc {
 
-// Tools → Toolchain Info: each program Kev-C++ uses, where it was found and its version. Its layout
-// is ToolchainWindow.ui (edit it on Kev-C++'s Design page); this class fills in the rows, one per
-// tool, below the design's headings. It deletes itself when closed.
+// Tools → Toolchain Info: each program Kev-C++ uses, where it was found and its version (asked for
+// when the window opens). Its layout is ToolchainWindow.ui (edit it on Kev-C++'s Design page); this
+// class fills in the rows, one per tool, below the design's headings. It deletes itself when closed.
 class ToolchainWindow : public ToolchainWindowUi {
 public:
     static ToolchainWindow* create(Gtk::Window& parent, const Toolchain& toolchain) {
@@ -19,6 +20,9 @@ public:
 
 protected:
     void on_close_clicked() override;
+
+private:
+    BackgroundJob versions_; // each tool's --version; cancelled before the labels go
 };
 
 } // namespace kevc

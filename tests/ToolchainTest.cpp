@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <functional>
 #include <fstream>
 
 namespace fs = std::filesystem;
@@ -25,6 +26,11 @@ protected:
 
     fs::path dir_;
 };
+
+// The PATH's node's major version, as terminalLikePath asks for it.
+std::function<int()> nodeOnPath(int m) {
+    return [m] { return m; };
+}
 
 } // namespace
 
@@ -96,24 +102,26 @@ TEST_F(ToolchainTest, TerminalLikePathFindsAVersionManagersNode) {
     };
 
     // Node 18 on the PATH (or none at all): the newest nvm node goes first.
-    EXPECT_EQ(kevc::terminalLikePath(session, 18, in(home)), nvm24 + ":" + session);
-    EXPECT_EQ(kevc::terminalLikePath(session, 0, in(home)), nvm24 + ":" + session);
+    EXPECT_EQ(kevc::terminalLikePath(session, nodeOnPath(18), in(home)), nvm24 + ":" + session);
+    EXPECT_EQ(kevc::terminalLikePath(session, nodeOnPath(0), in(home)), nvm24 + ":" + session);
     // A new enough node on the PATH (a terminal launch with nvm active): left alone.
-    EXPECT_EQ(kevc::terminalLikePath(session, 22, in(home)), session);
+    EXPECT_EQ(kevc::terminalLikePath(session, nodeOnPath(22), in(home)), session);
     // $NVM_DIR elsewhere, and fnm's layout.
-    EXPECT_EQ(kevc::terminalLikePath(session, 18, in(dir_ / "nobody", home / ".nvm")), nvm24 + ":" + session);
+    EXPECT_EQ(kevc::terminalLikePath(session, nodeOnPath(18), in(dir_ / "nobody", home / ".nvm")),
+              nvm24 + ":" + session);
     const fs::path fnm = dir_ / "fnmhome/.local/share/fnm/node-versions/v22.3.0/installation/bin";
     fs::create_directories(fnm);
     makeExe(fnm / "node");
-    EXPECT_EQ(kevc::terminalLikePath(session, 18, in(dir_ / "fnmhome")), fnm.string() + ":" + session);
+    EXPECT_EQ(kevc::terminalLikePath(session, nodeOnPath(18), in(dir_ / "fnmhome")), fnm.string() + ":" + session);
     // n's layout, under its prefix.
     const fs::path n = dir_ / "nprefix/versions/node/23.1.0/bin";
     fs::create_directories(n);
     makeExe(n / "node");
-    EXPECT_EQ(kevc::terminalLikePath(session, 18, kevc::NodeSearch{dir_ / "nobody", {}, {}, dir_ / "nprefix"}),
+    EXPECT_EQ(kevc::terminalLikePath(session, nodeOnPath(18),
+                                     kevc::NodeSearch{dir_ / "nobody", {}, {}, dir_ / "nprefix"}),
               n.string() + ":" + session);
     // Nothing newer anywhere: unchanged.
-    EXPECT_EQ(kevc::terminalLikePath(session, 18, in(dir_ / "nobody")), session);
+    EXPECT_EQ(kevc::terminalLikePath(session, nodeOnPath(18), in(dir_ / "nobody")), session);
 }
 
 TEST_F(ToolchainTest, TerminalLikePathAddsPnpmAndBunFolders) {
@@ -122,10 +130,35 @@ TEST_F(ToolchainTest, TerminalLikePathAddsPnpmAndBunFolders) {
     fs::create_directories(home / ".bun/bin");
     const std::string pnpm = (home / ".local/share/pnpm").string(), bun = (home / ".bun/bin").string();
     const kevc::NodeSearch where{home, {}, {}, dir_ / "no-n"};
-    EXPECT_EQ(kevc::terminalLikePath("/usr/bin", 22, where), "/usr/bin:" + pnpm + ":" + bun);
+    EXPECT_EQ(kevc::terminalLikePath("/usr/bin", nodeOnPath(22), where), "/usr/bin:" + pnpm + ":" + bun);
     // Already there: not twice. $PNPM_HOME elsewhere: that one.
-    EXPECT_EQ(kevc::terminalLikePath("/usr/bin:" + pnpm, 22, where), "/usr/bin:" + pnpm + ":" + bun);
+    EXPECT_EQ(kevc::terminalLikePath("/usr/bin:" + pnpm, nodeOnPath(22), where), "/usr/bin:" + pnpm + ":" + bun);
     fs::create_directories(dir_ / "pnpm-home");
-    EXPECT_EQ(kevc::terminalLikePath("/usr/bin", 22, kevc::NodeSearch{home, {}, dir_ / "pnpm-home", dir_ / "no-n"}),
+    EXPECT_EQ(kevc::terminalLikePath("/usr/bin", nodeOnPath(22),
+                                     kevc::NodeSearch{home, {}, dir_ / "pnpm-home", dir_ / "no-n"}),
               "/usr/bin:" + (dir_ / "pnpm-home").string() + ":" + bun);
+}
+
+// Asking node its version starts it, which is slow on old laptops: not when no other node could take
+// its place, nor when the PATH's node is the newest one already.
+TEST_F(ToolchainTest, TerminalLikePathStartsNodeOnlyWhenItMatters) {
+    int asked = 0;
+    auto ask = [&asked] {
+        ++asked;
+        return 18;
+    };
+    EXPECT_EQ(kevc::terminalLikePath("/usr/bin", ask, kevc::NodeSearch{dir_ / "nobody", {}, {}, dir_ / "no-n"}),
+              "/usr/bin");
+    EXPECT_EQ(asked, 0);
+    const fs::path home = dir_ / "home3";
+    const fs::path nvm = home / ".nvm/versions/node/v24.22.1/bin";
+    fs::create_directories(nvm);
+    makeExe(nvm / "node");
+    const kevc::NodeSearch where{home, {}, {}, dir_ / "no-n"};
+    // Started from a terminal where nvm is set up: the PATH's node is that one.
+    EXPECT_EQ(kevc::terminalLikePath(nvm.string() + ":/usr/bin", ask, where), nvm.string() + ":/usr/bin");
+    EXPECT_EQ(asked, 0);
+    // From a menu: the session's node has to be asked.
+    EXPECT_EQ(kevc::terminalLikePath("/usr/bin", ask, where), nvm.string() + ":/usr/bin");
+    EXPECT_EQ(asked, 1);
 }

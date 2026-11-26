@@ -10,6 +10,8 @@
 #include "process/FileManager.h"
 #include "ui/Dialogs.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <set>
 
@@ -46,26 +48,36 @@ std::string join(const std::vector<std::string>& parts, const std::string& separ
     return out;
 }
 
-// A folder's entries as menu sections: a new section (a separator) wherever the section name changes.
+// The steps that put a folder's entries in `menu`, one menu entry each and in order: a new section (a
+// separator) wherever the section name changes, and a submenu attached empty, then filled by the steps
+// after it. With `beforeLast`, sections go ahead of the menu's last one (the design's tools section).
 // `submenus` holds the submenu labels used so far in the whole menu, which must all differ.
-void fillMenu(const Glib::RefPtr<Gio::Menu>& menu, const boilerplate::Entry& folder, std::set<std::string>& submenus) {
+void planMenu(std::vector<std::function<void()>>& steps, const Glib::RefPtr<Gio::Menu>& menu,
+              const boilerplate::Entry& folder, std::set<std::string>& submenus, bool beforeLast) {
     Glib::RefPtr<Gio::Menu> section;
     const std::string* current = nullptr;
     for (const auto& entry : folder.children) {
         if (!current || *current != entry.section) {
             section = Gio::Menu::create();
-            menu->append_section(section);
+            steps.push_back([menu, section, beforeLast] {
+                if (beforeLast) menu->insert_section(std::max(menu->get_n_items() - 1, 0), section);
+                else menu->append_section(section);
+            });
             current = &entry.section;
         }
         if (entry.folder) {
             auto submenu = Gio::Menu::create();
-            fillMenu(submenu, entry, submenus);
-            section->append_submenu(boilerplate::distinctSubmenuLabel(boilerplate::menuLabel(entry.label), submenus),
-                                    submenu);
+            const size_t attach = steps.size();
+            steps.emplace_back();
+            planMenu(steps, submenu, entry, submenus, false);
+            // Labelled after its contents, as the menu always was: which repeat gets the extra spaces.
+            const std::string label =
+                boilerplate::distinctSubmenuLabel(boilerplate::menuLabel(entry.label), submenus);
+            steps[attach] = [section, submenu, label] { section->append_submenu(label, submenu); };
         } else {
             auto item = Gio::MenuItem::create(boilerplate::menuLabel(entry.label), "");
             item->set_action_and_target("win.boilerplate", Glib::Variant<Glib::ustring>::create(entry.key));
-            section->append_item(item);
+            steps.push_back([section, item] { section->append_item(item); });
         }
     }
 }
@@ -125,22 +137,74 @@ void MainWindow::refreshBoilerplate() {
         refreshBoilerplateSoon();
         return;
     }
-    watchBoilerplate();
+    boilerplateJob_.cancel(); // the startup scan, if it's still going: this one is newer
+    watchBoilerplate(boilerplateFolders(boilerplateRoots()));
     // SFML 2 and 3 are written differently (the event loop above all): only the installed one's.
     if (!sfmlMajor_) sfmlMajor_ = sfml::detect().major();
-    boilerplate::Entry tree = boilerplate::forSfml(boilerplate::scan(boilerplateRoots()), sfmlMajor_);
+    showBoilerplate(boilerplate::forSfml(boilerplate::scan(boilerplateRoots()), sfmlMajor_));
+}
+
+void MainWindow::loadBoilerplate() {
+    // Reading the header of each of ~500 snippet files is quick once they're cached, but not on an old
+    // laptop's disk just after it boots; pkg-config is asked which SFML is installed, too.
+    const auto roots = boilerplateRoots();
+    boilerplateJob_.start([this, roots](const std::atomic<bool>&, const BackgroundJob::Post& post) {
+        const int sfml = sfml::detect().major();
+        auto tree = std::make_shared<boilerplate::Entry>(boilerplate::forSfml(boilerplate::scan(roots), sfml));
+        auto folders = std::make_shared<std::vector<BoilerplateFolder>>(boilerplateFolders(roots));
+        // Only what's posted touches the window: it runs on the main loop, and not once the job is cancelled.
+        post([this, sfml, tree, folders] {
+            sfmlMajor_ = sfml;
+            watchBoilerplate(*folders);
+            showBoilerplate(std::move(*tree));
+        });
+    });
+}
+
+void MainWindow::showBoilerplate(boilerplate::Entry tree) {
+    if (anyPopoverOpen(*menuBar_)) { // rebuilding would close it under the pointer
+        refreshBoilerplateSoon();
+        return;
+    }
     std::string sig = boilerplate::signature(tree);
     if (sig == boilerplateSignature_) return;
     boilerplate_ = std::move(tree);
     boilerplateSignature_ = std::move(sig);
     // The design holds the menu's last section (saving and the user's folder); the rest is made here.
     // The editors' right-click menus have the same tree under Insert Boilerplate.
+    auto steps = std::make_shared<std::vector<std::function<void()>>>();
     for (const auto& menu : {boilerplateMenu_, editorBoilerplateMenu_, cppEditorBoilerplateMenu_}) {
         menu->remove_all();
-        std::set<std::string> submenus;
-        fillMenu(menu, boilerplate_, submenus);
         menu->append_section(boilerplateToolsSection_);
+        std::set<std::string> submenus;
+        planMenu(*steps, menu, boilerplate_, submenus, true);
     }
+    fillBoilerplateSlices(steps, 0);
+}
+
+void MainWindow::fillBoilerplateSlices(std::shared_ptr<std::vector<std::function<void()>>> steps, size_t next) {
+    // The menu bar makes a widget for each of the ~600 entries as it's added, 0.3 ms apiece on a fast
+    // desktop: all at once, that held up the window's first appearance. A few milliseconds' worth at a
+    // time between frames instead, paused while a menu is open (entries would move under the pointer).
+    boilerplateFill_.disconnect();
+    boilerplateFill_ = Glib::signal_idle().connect(
+        sigc::track_obj(
+            [this, steps, next]() mutable {
+                if (anyPopoverOpen(*menuBar_)) {
+                    boilerplateFill_ = Glib::signal_timeout().connect(sigc::track_obj(
+                                                                          [this, steps, next] {
+                                                                              fillBoilerplateSlices(steps, next);
+                                                                              return false;
+                                                                          },
+                                                                          *this),
+                                                                      200);
+                    return false;
+                }
+                const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(8);
+                while (next < steps->size() && std::chrono::steady_clock::now() < until) (*steps)[next++]();
+                return next < steps->size();
+            },
+            *this));
 }
 
 void MainWindow::refreshBoilerplateSoon() {
@@ -174,31 +238,40 @@ void MainWindow::afterMenuChoice(std::function<void()> then) {
                                    50);
 }
 
-void MainWindow::watchBoilerplate() {
+std::vector<MainWindow::BoilerplateFolder> MainWindow::boilerplateFolders(const std::vector<fs::path>& roots) {
     // Every folder of both trees (a new one counts once its parent reports it), and for a tree that
     // doesn't exist yet (the user's, before Open My Boilerplate Folder), the folder it would be made in.
-    std::vector<fs::path> dirs;
+    // That one is ~/.config/kev-cpp, where settings.json is saved often: only the tree's own name counts.
+    std::vector<BoilerplateFolder> folders;
     std::error_code ec;
-    for (const auto& root : boilerplateRoots()) {
+    for (const auto& root : roots) {
         if (!fs::is_directory(root, ec)) {
-            if (fs::is_directory(root.parent_path(), ec)) dirs.push_back(root.parent_path());
+            if (fs::is_directory(root.parent_path(), ec))
+                folders.push_back({root.parent_path(), root.filename().string()});
             continue;
         }
-        dirs.push_back(root);
+        folders.push_back({root, {}});
         for (fs::recursive_directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec)) {
             const std::string name = it->path().filename().string();
-            if (it->is_directory(ec) && !name.empty() && name[0] != '.' && name[0] != '_') dirs.push_back(it->path());
+            if (it->is_directory(ec) && !name.empty() && name[0] != '.' && name[0] != '_')
+                folders.push_back({it->path(), {}});
             if (it.depth() > 8) it.disable_recursion_pending();
         }
     }
+    return folders;
+}
+
+void MainWindow::watchBoilerplate(const std::vector<BoilerplateFolder>& folders) {
     boilerplateMonitors_.clear();
-    for (const auto& dir : dirs) {
+    for (const auto& folder : folders) {
         try {
-            auto monitor = Gio::File::create_for_path(dir.string())->monitor_directory();
-            monitor->signal_changed().connect(
-                [this](const Glib::RefPtr<Gio::File>&, const Glib::RefPtr<Gio::File>&, Gio::FileMonitor::Event) {
-                    refreshBoilerplateSoon();
-                });
+            auto monitor = Gio::File::create_for_path(folder.dir.string())->monitor_directory();
+            monitor->signal_changed().connect([this, only = folder.only](const Glib::RefPtr<Gio::File>& file,
+                                                                         const Glib::RefPtr<Gio::File>& other,
+                                                                         Gio::FileMonitor::Event) {
+                auto named = [&only](const Glib::RefPtr<Gio::File>& f) { return f && f->get_basename() == only; };
+                if (only.empty() || named(file) || named(other)) refreshBoilerplateSoon();
+            });
             boilerplateMonitors_.push_back(monitor);
         } catch (const Glib::Error&) {
             // Unwatchable (permissions): its changes show after a restart.

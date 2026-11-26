@@ -91,9 +91,12 @@ MainWindow::MainWindow(BaseObjectType* object, const Glib::RefPtr<Gtk::Builder>&
       lsp_(std::make_unique<LspManager>(app.toolchain(), toolsDir_)),
       formatter_(std::make_unique<CodeFormatter>(*lsp_, app.toolchain(),
                                                  [this](const std::string& status) { setStatus(status); })) {
+    // In the application before any menu is filled: added once the Boilerplate menu's ~600 entries
+    // existed, GTK spent 1.5 s going over them again (2 ms this way round, on the same desktop).
+    app.add_window(*this);
     updateTitle();
     buildActions();
-    refreshBoilerplate();
+    loadBoilerplate();
     // The search field sits in the middle of the menu bar's row, where people look for one first.
     quickSearchSlot_->append(quickSearch_);
     setupToolbar();

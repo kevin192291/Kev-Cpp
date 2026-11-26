@@ -23,6 +23,7 @@
 #include "editor/RoutesPanel.h"
 #include "editor/SymbolsPanel.h"
 #include "lsp/LspManager.h"
+#include "process/BackgroundJob.h"
 #include "ui/DockManager.h"
 #include "ui/DependenciesPanel.h"
 #include "ui/DevServerPanel.h"
@@ -239,10 +240,21 @@ private:
     // (that would close it), but soon after. The folders are watched: a change rescans them.
     void refreshBoilerplate();
     void refreshBoilerplateSoon();
+    // At startup: the same scan on a thread of its own, so reading every snippet file's header doesn't
+    // hold up the window.
+    void loadBoilerplate();
+    // Puts `tree` in the menus if it isn't what they show already, a few entries at a time (see the .cpp).
+    void showBoilerplate(boilerplate::Entry tree);
+    void fillBoilerplateSlices(std::shared_ptr<std::vector<std::function<void()>>> steps, size_t next);
     // Runs `then` once the menu an item was chosen from has gone, closing a menu GTK opens by itself
     // meanwhile (see the .cpp).
     void afterMenuChoice(std::function<void()> then);
-    void watchBoilerplate();
+    struct BoilerplateFolder {
+        std::filesystem::path dir;
+        std::string only; // when set, only changes to this entry of `dir` count (a tree not made yet)
+    };
+    static std::vector<BoilerplateFolder> boilerplateFolders(const std::vector<std::filesystem::path>& roots);
+    void watchBoilerplate(const std::vector<BoilerplateFolder>& folders);
     void insertBoilerplate(const std::string& key);
     void askBoilerplateValues(std::shared_ptr<BoilerplateRequest> request, size_t next);
     void placeBoilerplate(std::shared_ptr<BoilerplateRequest> request);
@@ -393,6 +405,8 @@ private:
     std::string boilerplateSignature_; // of boilerplate_, to rebuild the menu only when it changes
     std::vector<Glib::RefPtr<Gio::FileMonitor>> boilerplateMonitors_;
     sigc::connection boilerplateSoon_;
+    sigc::connection boilerplateFill_; // the menus being filled, a slice at a time
+    BackgroundJob boilerplateJob_;     // the startup scan (loadBoilerplate)
     int sfmlMajor_ = 0; // the installed SFML's (sfml::detect), for which SFML snippets the menu shows
     std::string profile_ = "none";
     bool applyingProfile_ = false; // setting the Debug/Release choice from the project, not the user
